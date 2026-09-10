@@ -3,7 +3,8 @@
 //   node server/bin/director-server.mjs [--port 5175] [--host 0.0.0.0] [--project server/data/project.json]
 //                                       [--media-dir DIR] [--api-only] [--static DIR] [--token SECRET] [--cors ORIGIN] [--demo city-edge|none]
 //                                       [--ark-key-file FILE | ARK_API_KEY=…] [--ark-model seedance-2.5=doubao-seedance-2-5-260628] [--public-url https://host]
-//                                       [--llm-key-file FILE | AIGW_API_KEY=…] [--llm-base https://aigw.sotatts.online/v1] [--llm-model gpt-5.6-sol|deepseek-v4-flash]
+//                                       [--llm-key-file FILE | AIGW_API_KEY=…] [--llm-base URL] [--llm-model ID]
+//                                       [--publish feishu --feishu-token-file FILE --feishu-parent <docx token>]  (v2v reference videos via your own Feishu Drive)
 // Contract: docs/backend-api.md
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +13,7 @@ import { createHost } from "../src/host.mjs";
 import { createApp } from "../src/api.mjs";
 import { createArkAdapter } from "../src/adapters/ark.mjs";
 import { createLlmPlanner } from "../src/adapters/llm.mjs";
+import { createPublisher } from "../src/publish.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -36,12 +38,17 @@ const LLM_KEY = process.env.AIGW_API_KEY || process.env.LLM_API_KEY || (arg("--l
 const LLM_BASE = process.env.LLM_BASE_URL || arg("--llm-base", null);
 const LLM_MODEL = process.env.LLM_MODEL || arg("--llm-model", null);
 const PUBLIC_URL = process.env.DIRECTOR_PUBLIC_URL || arg("--public-url", null); // where Ark can fetch /media/* from (needed for v2v)
+// media publisher for v2v when the backend is not public: --publish feishu --feishu-token-file FILE [--feishu-parent <docx token>]
+const PUBLISH = process.env.DIRECTOR_PUBLISH || arg("--publish", "none");
+const FEISHU_TOKEN_FILE = process.env.FEISHU_TOKEN_FILE || arg("--feishu-token-file", null);
+const FEISHU_PARENT = process.env.FEISHU_PARENT || arg("--feishu-parent", null);
 const ARK_MODELS = Object.fromEntries(args.flatMap((a, i) => (a === "--ark-model" && args[i + 1]?.includes("=") ? [args[i + 1].split("=")] : [])));
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const generation = ARK_KEY ? (ctx) => createArkAdapter({ apiKey: ARK_KEY, baseUrl: process.env.ARK_BASE_URL, models: ARK_MODELS, ...ctx }) : null;
 const llm = LLM_KEY ? (ctx) => createLlmPlanner({ apiKey: LLM_KEY, baseUrl: LLM_BASE, model: LLM_MODEL, ...ctx }) : null;
-const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: PUBLIC_URL, log });
+const publisher = createPublisher({ kind: PUBLISH, feishuTokenFile: FEISHU_TOKEN_FILE, feishuParentNode: FEISHU_PARENT, log });
+const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: PUBLIC_URL, publisher, log });
 const { server } = createApp(host, { static: STATIC, token: TOKEN, cors: CORS, log });
 
 server.listen(PORT, HOST, () => {

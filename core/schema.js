@@ -103,7 +103,7 @@ export const LIGHT_TYPES = ["directional", "spot", "point", "area", "hemisphere"
 
 // Cinematic lighting presets. `lights` are created relative to the world origin; env patches the scene environment.
 export const LIGHT_PRESETS = {
-  // ---- 合并自 handoff/studio 的影棚布光（角度按围绕主体的方位换算成位置，半径 5 m）----
+  // ---- 影棚布光（角度按围绕主体的方位换算成位置，半径 5 m）----
   "softbox-studio": {
     zh: "柔光影棚", en: "soft studio light, large softbox key, gentle fill, clean white cyclorama",
     env: { bg: "#0e0f12", fog: 0.004, ambient: 0.32, sky: "#ffffff", ground: "#3a3a3a", exposure: 1.1, wet: false },
@@ -202,10 +202,10 @@ export const LIGHT_PRESETS = {
 
 export const ENV_PRESETS = Object.fromEntries(Object.entries(LIGHT_PRESETS).map(([k, v]) => [k, v.env]));
 
-// 19 档画幅（合并自 handoff/studio，与原站菜单顺序一致）
+// 19 档画幅
 export const ASPECTS = { "16:9": 16 / 9, "9:16": 9 / 16, "4:3": 4 / 3, "3:4": 3 / 4, "1:1": 1, "3:2": 3 / 2, "2:3": 2 / 3, "4:5": 4 / 5, "9:19.5": 9 / 19.5, "9:21": 9 / 21, "1.33:1": 1.33, "1.37:1": 1.37, "1.43:1": 1.43, "1.66:1": 1.66, "1.85:1": 1.85, "2.00:1": 2, "2.20:1": 2.2, "2.35:1": 2.35, "2.39:1": 2.39 };
 
-// glTF 模型库（合并自 handoff/studio 的 public/models，随前端 vendor 分发）：entity.create {model} / entity.replace-proxy {model}
+// glTF 模型库（随前端 vendor 分发）：entity.create {model} / entity.replace-proxy {model}
 export const MODEL_LIBRARY = {
   person: { name: "人物", zh: "人物", url: "models/Person.glb", type: "character", dims: [0.6, 1.75, 0.4], tags: ["person", "人", "人物", "演员"] },
   humanoid: { name: "人形", zh: "人形", url: "models/Humanoid.glb", type: "character", dims: [0.6, 1.75, 0.4], tags: ["humanoid", "人形"] },
@@ -222,7 +222,7 @@ export const MODEL_LIBRARY = {
   sofa: { name: "沙发", zh: "沙发", url: "models/Sofa.glb", type: "prop", dims: [2, 0.8, 0.9], tags: ["sofa", "沙发"] },
 };
 
-// 摄影棚房间（合并自 studio 的 buildRoom）：scene.room {width, depth, height, pattern, spacing, walls, cyc}
+// 摄影棚房间：scene.room {width, depth, height, pattern, spacing, walls, cyc}
 export const ROOM_PATTERNS = ["standard", "plain", "calibration"];
 
 export const PROVIDERS = {

@@ -358,7 +358,7 @@ register("scene.preset", {
 });
 
 register("scene.room", {
-  doc: `摄影棚房间（合并自 studio）：width/depth/height 米，pattern ${ROOM_PATTERNS.join("/")}（棋盘 / 纯白 / 校准图案），spacing 格距，walls 后墙+侧墙，cyc 圆角回幕；clear=true 拆掉`,
+  doc: `摄影棚房间：width/depth/height 米，pattern ${ROOM_PATTERNS.join("/")}（棋盘 / 纯白 / 校准图案），spacing 格距，walls 后墙+侧墙，cyc 圆角回幕；clear=true 拆掉`,
   params: { width: "number", depth: "number", height: "number", pattern: ROOM_PATTERNS.join("|"), spacing: "number", walls: "boolean", cyc: "boolean", color: "#hex", clear: "boolean" },
   handler({ width, depth, height, pattern, spacing, walls, cyc, color, clear }) {
     store.patch((d) => {
@@ -492,7 +492,7 @@ register("entity.path", {
   },
 });
 
-// Walk path (merged from handoff/studio): waypoints + per-segment seconds, a zero-length segment is a dwell.
+// Walk path: waypoints + per-segment seconds, a zero-length segment is a dwell.
 // Compiles into entity.path keyframes (frame, position, yaw) so playback / prompts / takes need nothing new.
 register("entity.walk", {
   doc: "走位：waypoints [[x,z]|[x,y,z]…] + durations [每段秒数]（同一点重复 = 原地停留）；自动朝向行进方向。startFrame 默认镜头入点或 0；clear=true 清除",

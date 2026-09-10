@@ -125,7 +125,7 @@ curl -s -X POST http://127.0.0.1:5175/api/takes/take_abc/media -H 'content-type:
 | 组 | Action | 备注 |
 |---|---|---|
 | project | new, rename, set-state, set-fidelity, set-fps, set-aspect, set-style, set-shading, set-build-mode, set-view, set-gizmo, select, undo, redo, undo-to, export, load, mark-saved | `set-view` / `set-gizmo` / `select` 在前端本地执行（视图状态） |
-| scene | create, environment, preset, room, demo | `scene.demo {name}` 载入示例工程；`scene.room {width,depth,height,pattern,spacing,walls,cyc}` 摄影棚房间（合并自 handoff） |
+| scene | create, environment, preset, room, demo | `scene.demo {name}` 载入示例工程；`scene.room {width,depth,height,pattern,spacing,walls,cyc}` 摄影棚房间 |
 | entity | create, update, transform, pose, path, walk, duplicate, replace-proxy, delete | 位置是接地点，正面朝 +Z；车辆 dims = [宽, 高, 长]；`entity.walk {id, waypoints, durations}` 走位（重复点 = 原地停留）；`entity.create {model}` / `replace-proxy {model}` 用 glTF 模型库（person / humanoid / character / robot / tree / bush / rock / house / fence / box / chair / table / sofa） |
 | camera | create, update, lens, transform, look-at, rig, pilot, frame, delete | `camera.frame {id,target,size,angle}` 按景别×覆盖角自动放机位 |
 | light | create, update, toggle, keyframe, delete | |

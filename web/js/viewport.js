@@ -182,7 +182,7 @@ function sync(d) {
     ground.material.needsUpdate = true;
     applyShading(d.project.shading || "shaded");
   }
-  // studio room (merged from handoff/studio): floor pattern + walls + cyclorama replace the endless ground
+  // studio room: floor pattern + walls + cyclorama replace the endless ground
   const rsig = JSON.stringify(env.room || null);
   if (rsig !== roomSig) {
     roomSig = rsig;

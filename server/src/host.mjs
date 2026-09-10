@@ -34,6 +34,7 @@ export function createHost(opts = {}) {
       },
       getJob: (id) => store.get().jobs.find((j) => j.id === id) || null,
       publicUrl: opts.publicUrl || null,
+      publisher: opts.publisher || null,
       fallback: R.simulatedAdapter,
       log,
     });
@@ -274,7 +275,7 @@ export function createHost(opts = {}) {
       project: { id: d.project.id, name: d.project.name, version: d.project.version, state: d.project.currentState, scene: d.scene.name, shots: d.shots.length, takes: d.takes.length, jobs: d.jobs.length },
       persistence: { file: projectFile, dirty, lastSavedAt },
       media: { dir: mediaDir },
-      generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated" } : { name: "simulated", models: {} },
+      generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated", publisher: opts.publisher?.kind || "none", publicUrl: opts.publicUrl || null } : { name: "simulated", models: {} },
       llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models, current: d.agent.backend } : { name: "rules", models: [], current: "rules" },
       recording: d.project.recording || null,
       ...extra,

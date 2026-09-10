@@ -30,5 +30,6 @@ director-project.json
 server/data/*
 !server/data/.gitignore
 
-studio/node_modules
-studio/dist
+
+# private working material (never published): test stories, handoff, studio replica
+private/

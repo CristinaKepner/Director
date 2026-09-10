@@ -30,6 +30,7 @@ export function createArkAdapter(opts = {}) {
   const mediaUrl = opts.mediaUrl || ((name) => `/media/${name}`);
   const resolveLocal = opts.resolveLocal || (() => null); // "/media/x.webm" → absolute path (for v2v / i2v inputs)
   const publicUrl = (opts.publicUrl || "").replace(/\/$/, ""); // e.g. https://console.example.com — Ark must be able to fetch reference videos
+  const publisher = opts.publisher || null; // fallback: publish local media to user-owned infrastructure (see publish.mjs)
   const log = opts.log || (() => {});
   const fallback = opts.fallback || null;
   const getJob = opts.getJob || (() => null);
@@ -103,7 +104,13 @@ export function createArkAdapter(opts = {}) {
       let url = null;
       if (m && publicUrl) url = `${publicUrl}/media/${m[1]}`;
       else if (!m && /^https?:\/\//.test(ref) && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(ref)) url = ref;
-      if (!url) throw Object.assign(new Error("v2v needs a web-reachable reference video: start the backend with --public-url https://<host> (Ark fetches /media/<take>.webm from there)"), { code: "NO_PUBLIC_MEDIA_URL" });
+      else if (m && publisher?.enabled) {
+        const abs = resolveLocal(ref);
+        if (!abs || !fs.existsSync(abs)) throw Object.assign(new Error("reference video file missing on the backend"), { code: "NO_REFERENCE_VIDEO" });
+        update(job.id, { progress: 3, adapter: { name: "ark", model, publishing: publisher.kind } });
+        url = (await publisher.publish(abs)).url;
+      }
+      if (!url) throw Object.assign(new Error("v2v needs a web-reachable reference video: start the backend with --public-url https://<host>, or --publish feishu --feishu-token-file FILE (uploads the take to your own Feishu Drive and uses its temporary download link)"), { code: "NO_PUBLIC_MEDIA_URL" });
       content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
     }
     update(job.id, { status: "running", progress: 5, result: null, adapter: { name: "ark", model, seconds, ratio } });
