@@ -111,7 +111,8 @@ test("generation submit validates providers and modes", async () => {
   r = dispatch("generation.submit", { shotId: "shot_03", mode: "v2v", provider: "seedance-2" });
   assert.equal(r.ok, true);
   assert.equal(store.get().project.currentState, "GENERATING");
-  await new Promise((res) => setTimeout(res, 2500));
+  const until = Date.now() + 8000; // simulated queue: ~2 s, poll so a loaded CI box does not flake
+  while (Date.now() < until && store.get().jobs.find((j) => j.id === r.id).status !== "done") await new Promise((res) => setTimeout(res, 100));
   const job = store.get().jobs.find((j) => j.id === r.id);
   assert.equal(job.status, "done");
   assert.equal(store.get().project.currentState, "REVIEW");
