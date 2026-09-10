@@ -46,6 +46,9 @@ node server/bin/director.mjs serve [选项]          # 等价
 | `--static DIR` | — | 仓库根目录 | 静态根；`/` 跳转到 `/web/`，页面通过 `../core/` 引入共享运行时 |
 | `--token SECRET` | `DIRECTOR_TOKEN` | 无 | 开启后除 `/api/health` 外所有 `/api` 需要 `Authorization: Bearer SECRET`（或 `?token=`） |
 | `--cors ORIGIN` | `DIRECTOR_CORS` | `*` | `Access-Control-Allow-Origin` |
+| `--ark-key-file FILE` | `ARK_API_KEY` | 无 | 火山引擎 Ark 密钥；给了就启用真实 Generation Adapter（Seedance 2.5 / 2.0 视频、Seedream 5.0 图片），其余供应商仍走模拟队列 |
+| `--ark-model provider=model` | `ARK_BASE_URL` | 见 §5.1 | 覆盖 provider → Ark 模型 ID 的映射（可多次）；`ARK_BASE_URL` 换区域 |
+| `--public-url https://host` | `DIRECTOR_PUBLIC_URL` | 无 | 本后端对公网可达的地址；v2v 时 Ark 要从 `<public-url>/media/<take>.webm` 拉参考视频（Ark 不接受 data URL 视频） |
 
 进程收到 SIGINT/SIGTERM 时先保存工程再退出。
 
@@ -129,11 +132,33 @@ curl -s -X POST http://127.0.0.1:5175/api/takes/take_abc/media -H 'content-type:
 | take | arm, record, finish, stop, review, delete | 见下 |
 | storyboard | add, update, export | `export {format: json/html/md}` 返回 `content` |
 | annotation | add | |
-| generation | prompt, submit, status, cancel, retry | `submit` 校验供应商与模式；当前为可观察的模拟队列，真实供应商通过 `setHooks({generation})` 接入后端 |
+| generation | prompt, submit, status, cancel, retry | `submit` 校验供应商与模式；带 Ark 密钥时 seedance-2.5 / seedance-2 / seedream-5 走真实生成（§5.1），其余为可观察的模拟队列 |
 | review | compare | |
 | agent | run, plan, confirm, cancel, run-step, set-mode, say | `run {text, mode?, force?}`；`confirm/cancel` 处理 Collaborative 模式待确认方案；`run-step {step}` 单步执行；`say {role,text}` 供外部 LLM 把回复写回会话 |
 | context | scene, project, shot, entity, events, history, capabilities, sequence, schema | 只读 |
 | health | report | |
+
+### 5.1 Generation Adapter：火山引擎 Ark（Seedance / Seedream）
+
+后端启动时带 `--ark-key-file` 或 `ARK_API_KEY`，`generation.submit` 对下列 provider 走真实 API（`server/src/adapters/ark.mjs`），`/api/health` 的 `generation` 字段会报告 `{name:"ark", models}`：
+
+| provider（`generation.submit`） | 模式 | Ark 模型 ID（默认） | 调用 |
+|---|---|---|---|
+| `seedance-2.5` | t2v / i2v / v2v | `doubao-seedance-2-5-260628` | `POST /contents/generations/tasks` 建任务 → 每 5 s `GET /tasks/{id}` 直到 succeeded / failed |
+| `seedance-2` | t2v / i2v / v2v | `doubao-seedance-2-0-260128` | 同上 |
+| `seedream-5` | t2i / i2i | `doubao-seedream-5-0-260128` | `POST /images/generations`（同步返回 URL） |
+| 其他（kling / veo / runway / minimax…） | — | — | 回落到模拟队列 |
+
+约定与细节：
+
+- 提示词来自镜头编译结果（`job.prompt`，可用 `payload.prompt` 覆盖）；视频请求在文本后追加 `--ratio <画幅> --duration <秒> --resolution 720p`，时长取镜头时长并夹在 2–12 s。
+- Seedream 5.0 要求输出 ≥ 3.69 MP：按工程画幅选尺寸（16:9 → 2560×1440，9:16 → 1440×2560，1:1 → 2048×2048，2.39:1 → 2976×1248）。
+- **i2v / i2i** 参考图 = 故事版关键帧（`storyboard.add` 抓的 Program 画面）或 Take 缩略图，以 data URL 传给 Ark（`role: first_frame`）。
+- **v2v** 参考视频 = 圈选 Take 的白模代理视频（后端 `/media/` 里的 webm），以 `role: reference_video` 传给 Ark。**Ark 只接受 web URL**（实测 data URL 被拒：`reference_video must be provided as a web url`），所以后端必须带 `--public-url https://host` 且该地址能被 Ark 访问；否则任务失败并报 `NO_PUBLIC_MEDIA_URL`。没有 Take 视频时报 `NO_REFERENCE_VIDEO`。
+- 结果文件（TOS 签名链接 24 h 过期）会下载到 `--media-dir`，`job.result = {kind, url:"/media/job_x.mp4|jpg", remoteUrl, assetId, model, seed, resolution, duration, usage}`；前端 Generation 表里直接预览。
+- 进度：图片 15 → 85 → 100；视频 5（已提交）→ 10（拿到 task id）→ 按预计时长线性到 85 → 90（下载）→ 100。`generation.cancel` 后适配器停止轮询并尝试 `DELETE /tasks/{id}`。
+- 失败写入 `job.error`（`<Ark code>: <message>`，例如 `OutputAudioSensitiveContentDetected.PolicyViolation`），状态机回到 `REVIEW`；`generation.retry` 重新提交。
+- 密钥只在后端进程里（文件或环境变量），不进工程文件、不进前端。
 
 ### 状态机
 
@@ -221,6 +246,7 @@ node server/bin/director.mjs export --format html --out storyboard.html --projec
 | `BAD_JSON` / `PAYLOAD_TOO_LARGE` / `EMPTY_BODY` / `BAD_PROJECT` | HTTP 层请求问题 |
 | `UNAUTHORIZED` | 缺少或错误的 Bearer token |
 | `NOT_FOUND` / `API_ONLY` | 路由不存在 / 静态托管已关闭 |
+| `job.error`（不是响应错误码） | 真实供应商失败原因：`NO_REFERENCE_VIDEO`、`NO_PUBLIC_MEDIA_URL`、`TIMEOUT`、或 Ark 的 code + message |
 
 ## 11. 测试
 

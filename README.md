@@ -24,6 +24,7 @@ tests/     核心运行时验收（无 UI）   server/tests/ 后端 HTTP 验收 
 ```bash
 cd director-console
 npm run dev                # = node server/bin/director-server.mjs --port 5175（系统 node 18 即可，Node 22 更佳）
+npm run dev -- --ark-key-file ~/.ark-key   # 再带上火山 Ark 密钥 → Seedance 2.5 / Seedream 5.0 真实生成（密钥只留在后端进程）
 # 打开 http://127.0.0.1:5175/web/ （code-server 下用 …/proxy/5175/web/；前端只用相对路径，穿前缀代理无需配置）
 ```
 
@@ -93,7 +94,7 @@ node server/bin/director.mjs capabilities | help camera.frame | context [scene|s
 
 - **Take**：Preflight(`take.arm`) → ARMED → `take.record` 进入 RECORDING。浏览器客户端带 `meta.capture` 调用后自己用 MediaRecorder 录下 Program 画面，`POST /api/takes/{id}/media` 上传 webm，再 `take.finish` → REVIEW → Circle / Reject → 故事版。CLI / 纯 API 调用则无头完成（只有快照）。后端有看门狗：客户端中途关闭也会收尾。
 - **提示词**：`generation.prompt` 由镜头编译（场景、主体语义与连续性、景别、角度、机位高度、焦距、光圈、运镜、灯光组、时长、帧率、保真度）成 Image / Video(T2V·I2V) / V2V / Negative 的中英文本并记版本。V2V 文本包含「大圆柱 = 主角 A：…」的代理体映射。
-- **生成任务**：`generation.submit` 校验供应商与模式（Seedance / Kling / MiniMax H3 / Veo / Runway / Higgsfield / FLUX / GPT Image），任务按 Shot / Take / Prompt Version / Model 归档；当前是可观察的模拟队列，真实供应商在后端通过 `setHooks({ generation: adapter })` 接入，进度经 SSE 推给所有页面。
+- **生成任务**：`generation.submit` 校验供应商与模式，任务按 Shot / Take / Prompt Version / Model 归档，进度经 SSE 推给所有页面。后端带火山引擎 Ark 密钥启动时（`--ark-key-file FILE` 或 `ARK_API_KEY`），`seedance-2.5` / `seedance-2`（t2v · i2v · v2v）和 `seedream-5`（t2i · i2i）走真实生成：提示词来自镜头编译，i2v 用故事版关键帧，v2v 用圈选 Take 的白模视频做参考，结果下载到 `server/data/media/` 并在 Generation 表里预览；其余供应商（Kling / Veo / Runway / MiniMax…）仍是可观察的模拟队列。细节见 `docs/backend-api.md` §5.1。
 
 ## 目录
 
@@ -106,6 +107,7 @@ core/demo.js  core/agent.js      示例工程 · Agent 规划器（scene.demo / 
 core/index.js                    运行时入口（服务端、CLI、测试、页面共用）
 server/src/host.mjs              RuntimeHost：权威运行时、自动保存、SSE 广播（每 Action 一帧）、录制看门狗、媒体存储
 server/src/api.mjs               HTTP 路由：/api/* · /media/* · 静态托管（可关）· CORS · Bearer token
+server/src/adapters/ark.mjs      Generation Adapter：火山 Ark（Seedance 2.5/2.0 视频任务轮询、Seedream 5.0 图片、结果落盘）
 server/bin/director-server.mjs   后端入口      server/bin/director.mjs   CLI（--remote 走后端 / 本地读写 JSON）
 web/index.html  web/css/app.css  页面与样式（vendor/three r170 已内置，无构建）
 web/js/client.js                 前端 ↔ 后端：API 地址解析、SSE 同步、快照回写（保留视图字段）、dispatch 路由、媒体上传、单机降级
@@ -118,4 +120,4 @@ tests/runtime.test.mjs  server/tests/api.test.mjs  tools/smoke.mjs  tools/build-
 
 已落地：引擎无关 Schema、Action + Event + 撤销、状态机、白模/可读双保真、关节人偶、多机位与 13 种运镜预设 + 机位关键帧 + 物体动线、Program/PiP/安全框、Shot/Take(代理视频落后端)/Storyboard、提示词编译、Agent 三模式与工具卡片、CLI 本地与远程、独立后端（REST + SSE + 持久化 + 媒体）、多页面同步。
 
-未落地（Phase 4–5）：真实生成供应商、GLB/USD 导入与资产替换（`entity.replace-proxy` 只记 `assetRef`）、独立 Render Worker、对象锁与冲突合并（现在是后端串行执行 + 全量快照广播）、前端 token 鉴权（受保护后端只对 CLI/API 客户端开放）、assistant-ui 组件、外部 Tracking / 硬件。
+未落地（Phase 4–5）：Ark 之外的真实生成供应商、GLB/USD 导入与资产替换（`entity.replace-proxy` 只记 `assetRef`）、独立 Render Worker、对象锁与冲突合并（现在是后端串行执行 + 全量快照广播）、前端 token 鉴权（受保护后端只对 CLI/API 客户端开放）、assistant-ui 组件、外部 Tracking / 硬件。

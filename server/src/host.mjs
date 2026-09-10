@@ -22,6 +22,27 @@ export function createHost(opts = {}) {
   let broadcastSeq = 0;
   let lastEventId = null;
 
+  // ---- generation adapter (real provider) ----
+  let generation = null;
+  if (typeof opts.generation === "function") {
+    generation = opts.generation({
+      mediaDir,
+      mediaUrl: (name) => `/media/${name}`,
+      resolveLocal: (ref) => {
+        const m = String(ref || "").match(/\/media\/([^/?#]+)/);
+        return m ? path.join(mediaDir, path.basename(m[1])) : null;
+      },
+      getJob: (id) => store.get().jobs.find((j) => j.id === id) || null,
+      publicUrl: opts.publicUrl || null,
+      fallback: R.simulatedAdapter,
+      log,
+    });
+    if (generation) {
+      R.setHooks({ generation });
+      log(`generation adapter: ${generation.name}${generation.models ? " (" + Object.entries(generation.models).map(([k, v]) => `${k}→${v}`).join(", ") + ")" : ""}`);
+    }
+  }
+
   // ---- bootstrap ----
   let loaded = false;
   if (projectFile && fs.existsSync(projectFile)) {
@@ -182,6 +203,7 @@ export function createHost(opts = {}) {
       project: { id: d.project.id, name: d.project.name, version: d.project.version, state: d.project.currentState, scene: d.scene.name, shots: d.shots.length, takes: d.takes.length, jobs: d.jobs.length },
       persistence: { file: projectFile, dirty, lastSavedAt },
       media: { dir: mediaDir },
+      generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated" } : { name: "simulated", models: {} },
       recording: d.project.recording || null,
       ...extra,
     };

@@ -1299,6 +1299,7 @@ register("generation.submit", {
     const P = s.prompts;
     const text = prompt || (mode === "v2v" ? P.v2v[lang] : mode.endsWith("2i") ? P.image[lang] : P.video[lang]);
     const take = d0.takes.find((t) => t.id === (s.selectedTake || s.takes.at(-1)));
+    const card = d0.storyboard.find((c) => c.shotId === sid);
     const seconds = (s.range.outFrame - s.range.inFrame) / d0.project.fps;
     const job = {
       id: uid("job"),
@@ -1313,6 +1314,8 @@ register("generation.submit", {
       compiler: P.compiler,
       seconds: Math.min(seconds, PROVIDERS[provider].maxSeconds || seconds),
       aspect: d0.project.aspect,
+      // reference inputs for adapters: storyboard keyframe / take thumbnail (i2v, i2i) and take proxy video (v2v)
+      inputs: { image: card?.keyframes?.[0] || take?.thumbnail || null, video: take?.videoUrl || null },
       status: "queued",
       progress: 0,
       result: null,
@@ -1433,4 +1436,4 @@ export function capabilities() {
     .map(([name, def]) => ({ name, doc: def.doc, params: def.params, required: def.required || [], undoable: !!def.undoable, allowedIn: STATE_MACHINE.filter((s) => canRun(name, s)) }));
 }
 
-export { registry, compileShot, snapshotScene, refreshUsedBy };
+export { registry, compileShot, snapshotScene, refreshUsedBy, simulatedAdapter };

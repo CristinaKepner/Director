@@ -180,7 +180,9 @@ export const ASPECTS = { "16:9": 16 / 9, "2.39:1": 2.39, "1.85:1": 1.85, "4:3": 
 
 export const PROVIDERS = {
   "minimax-h3": { name: "MiniMax Hailuo 03", modes: ["t2v", "i2v", "v2v"], maxSeconds: 10 },
-  "seedance-2": { name: "Seedance 2.0", modes: ["t2v", "i2v", "v2v"], maxSeconds: 12 },
+  "seedance-2.5": { name: "Seedance 2.5 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 12 },
+  "seedance-2": { name: "Seedance 2.0 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 12 },
+  "seedream-5": { name: "Seedream 5.0 (Ark)", modes: ["t2i", "i2i"], maxSeconds: 0 },
   "kling-2.5": { name: "Kling 2.5", modes: ["t2v", "i2v"], maxSeconds: 10 },
   "veo-3": { name: "Veo 3", modes: ["t2v", "i2v"], maxSeconds: 8 },
   "runway-gen4": { name: "Runway Gen-4", modes: ["i2v", "v2v"], maxSeconds: 10 },

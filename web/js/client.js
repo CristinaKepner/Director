@@ -44,6 +44,7 @@ export async function connect() {
     const h = await api.get("health", { timeout: 3000 });
     if (!h?.ok) throw new Error("bad health");
     client.service = h.service;
+    client.generation = h.generation || null;
   } catch (err) {
     client.lastError = String(err?.message || err);
     setMode("standalone");
@@ -178,7 +179,7 @@ async function uploadBlob(takeId, blobUrl) {
   try {
     const blob = await (await fetch(blobUrl)).blob();
     const r = await api.post(`takes/${takeId}/media`, blob, { headers: { "content-type": blob.type || "video/webm" }, timeout: 120000 });
-    if (r.ok && r.url) return new URL(r.url.replace(/^\//, ""), new URL("../", client.base)).toString();
+    if (r.ok && r.url) return r.url; // relative "/media/<file>" — resolved against the API root when rendered
   } catch (err) {
     console.warn("media upload failed", err);
   }

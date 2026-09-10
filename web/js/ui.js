@@ -159,6 +159,11 @@ function download(name, content, type = "application/json") {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+// "/media/x.mp4" from the backend → absolute URL next to the API root (survives path-prefix proxies)
+function mediaHref(u) {
+  if (!u || /^(https?:|data:|blob:)/.test(u)) return u;
+  return isOnline() && client.base ? new URL(u.replace(/^\//, ""), new URL("../", client.base)).toString() : u;
+}
 function rand(a, b) {
   return +(a + Math.random() * (b - a)).toFixed(2);
 }
@@ -718,14 +723,14 @@ function renderTakes(el, d) {
     ${[...d.takes].reverse().map((t) => {
       const s = d.shots.find((x) => x.id === t.shotId);
       return `<tr class="row ${s?.id === d.project.currentShotId ? "sel" : ""}" data-take="${t.id}">
-        <td>${t.videoUrl ? `<video class="thumb" src="${t.videoUrl}" muted loop playsinline poster="${t.thumbnail || ""}" onmouseenter="this.play()" onmouseleave="this.pause()"></video>` : t.thumbnail ? `<img class="thumb" src="${t.thumbnail}" />` : `<div class="thumb"></div>`}</td>
+        <td>${t.videoUrl ? `<video class="thumb" src="${esc(mediaHref(t.videoUrl))}" muted loop playsinline poster="${t.thumbnail || ""}" onmouseenter="this.play()" onmouseleave="this.pause()"></video>` : t.thumbnail ? `<img class="thumb" src="${t.thumbnail}" />` : `<div class="thumb"></div>`}</td>
         <td><b>${esc(t.name)}</b><div class="muted mono">${t.id}</div></td>
         <td class="mono">${esc(s ? `${s.index} ${s.title}` : t.shotId)}</td>
         <td class="mono">${t.frames}${t.capturedFrames != null ? ` / 实录 ${t.capturedFrames}${t.droppedFrames ? ` (掉 ${t.droppedFrames})` : ""}` : ""}</td>
         <td class="mono">机位 ${t.snapshot.cameras.length} · 物体 ${t.snapshot.entities.length} · 灯 ${t.snapshot.lights.length} · ${esc(t.snapshot.fidelity)}</td>
         <td class="mono">${t.videoUrl ? "webm ✓" : t.status === "recording" ? "录制中…" : "无（无头 / 刷新后失效）"}</td>
         <td class="mono">${new Date(t.createdAt).toLocaleTimeString()}</td><td>${badge(t.status)}</td>
-        <td><div class="actions"><button data-circle="${t.id}">Circle</button><button data-reject="${t.id}">Reject</button><button data-board="${t.shotId}">进故事版</button><button data-restore="${t.id}" title="把场景恢复到这个 Take 的快照">恢复快照</button>${t.videoUrl ? `<a href="${t.videoUrl}" download="${esc(t.name)}.webm"><button>下载</button></a>` : ""}</div></td></tr>`;
+        <td><div class="actions"><button data-circle="${t.id}">Circle</button><button data-reject="${t.id}">Reject</button><button data-board="${t.shotId}">进故事版</button><button data-restore="${t.id}" title="把场景恢复到这个 Take 的快照">恢复快照</button>${t.videoUrl ? `<a href="${esc(mediaHref(t.videoUrl))}" download="${esc(t.name)}.webm"><button>下载</button></a>` : ""}</div></td></tr>`;
     }).join("")}</tbody></table>`;
   el.querySelectorAll("[data-circle]").forEach((b) => (b.onclick = () => dispatch("take.review", { id: b.dataset.circle, status: "circle" })));
   el.querySelectorAll("[data-reject]").forEach((b) => (b.onclick = () => dispatch("take.review", { id: b.dataset.reject, status: "reject" })));
@@ -768,7 +773,7 @@ function renderBoard(el, d) {
     const jobs = d.jobs.filter((j) => j.shotId === c.shotId);
     return `<article class="card ${s?.id === d.project.currentShotId ? "sel" : ""}" data-card="${c.id}">
       <h3><span><span class="idx mono" style="color:var(--accent)">${esc(s?.index)}</span> ${esc(s?.title)}</span>${badge(c.status)}</h3>
-      ${take?.videoUrl ? `<video class="kf" src="${take.videoUrl}" muted loop playsinline poster="${c.keyframes?.[0] || ""}" onmouseenter="this.play()" onmouseleave="this.pause()"></video>` : c.keyframes?.[0] ? `<img class="kf" src="${c.keyframes[0]}" />` : `<div class="kf"></div>`}
+      ${take?.videoUrl ? `<video class="kf" src="${esc(mediaHref(take.videoUrl))}" muted loop playsinline poster="${c.keyframes?.[0] || ""}" onmouseenter="this.play()" onmouseleave="this.pause()"></video>` : c.keyframes?.[0] ? `<img class="kf" src="${c.keyframes[0]}" />` : `<div class="kf"></div>`}
       <div class="muted mono" style="font-size:11px">${Math.round(s.lens.focalLength)} mm · ${esc(MOTION_TYPES[s.motion.type]?.zh || "")} · ${((s.range.outFrame - s.range.inFrame) / d.project.fps).toFixed(1)} s · ${take ? esc(take.name) + " " + take.status : "无 Take"}</div>
       <textarea data-desc="${c.id}" placeholder="动作说明">${esc(c.actionDescription || "")}</textarea>
       <input data-dlg="${c.id}" placeholder="对白" value="${esc(c.dialogue || "")}" />
@@ -821,8 +826,8 @@ function renderGen(el, d) {
         <select data-k="mode">${Object.entries(GEN_MODES).map(([k, v]) => `<option value="${k}" ${k === "v2v" ? "selected" : ""}>${v} ${k}</option>`).join("")}</select>
         <button data-act="submit" class="primary">提交任务</button>
       </div>
-      <div class="muted" style="font-size:11px;margin-bottom:8px">V2V 使用圈选 Take 的白模视频作为运动参考；I2V 使用故事版关键帧。当前为可观察的模拟队列，真实供应商作为 Generation Adapter 接入（setHooks({generation})）。</div>
-      ${d.jobs.length ? `<table class="grid"><thead><tr><th>任务</th><th>镜头</th><th>模式</th><th>供应商</th><th>进度</th><th>状态</th><th></th></tr></thead><tbody>${[...d.jobs].reverse().slice(0, 12).map((j) => `<tr><td class="mono">${j.id}<div class="muted">prompt v${j.promptVersion}</div></td><td class="mono">${esc(d.shots.find((s) => s.id === j.shotId)?.index || j.shotId)}</td><td class="mono">${j.mode}${j.takeId ? " · take" : ""}</td><td>${esc(j.model)}</td><td style="min-width:90px"><div class="progress"><span style="width:${j.progress}%"></span></div></td><td>${badge(j.status)}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}</div></td></tr>`).join("")}</tbody></table>` : `<div class="empty">尚无生成任务。</div>`}
+      <div class="muted" style="font-size:11px;margin-bottom:8px">V2V 使用圈选 Take 的白模视频作为运动参考；I2V 使用故事版关键帧。${isOnline() && client.generation?.name && client.generation.name !== "simulated" ? `后端 Generation Adapter：<b>${esc(client.generation.name)}</b>（${esc(Object.keys(client.generation.models || {}).join(" / "))}），其余供应商走模拟队列。` : "当前为可观察的模拟队列，真实供应商在后端作为 Generation Adapter 接入（如 --ark-key-file）。"}</div>
+      ${d.jobs.length ? `<table class="grid"><thead><tr><th>任务</th><th>镜头</th><th>模式</th><th>供应商</th><th>进度</th><th>状态</th><th></th></tr></thead><tbody>${[...d.jobs].reverse().slice(0, 12).map((j) => `<tr><td class="mono">${j.id}<div class="muted">prompt v${j.promptVersion}</div></td><td class="mono">${esc(d.shots.find((s) => s.id === j.shotId)?.index || j.shotId)}</td><td class="mono">${j.mode}${j.takeId ? " · take" : ""}</td><td>${esc(j.model)}</td><td style="min-width:90px"><div class="progress"><span style="width:${j.progress}%"></span></div></td><td>${badge(j.status)}${j.error ? `<div class="muted" style="font-size:10px;max-width:220px" title="${esc(j.error)}">${esc(String(j.error).slice(0, 80))}</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}${j.result?.url ? `<a href="${esc(mediaHref(j.result.url))}" target="_blank" rel="noopener"><button>查看</button></a>` : ""}</div>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb" src="${esc(mediaHref(j.result.url))}" style="margin-top:4px" />` : `<video class="thumb" src="${esc(mediaHref(j.result.url))}" muted loop playsinline style="margin-top:4px" onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : ""}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">尚无生成任务。</div>`}
     </div></div>`;
   el.querySelectorAll("[data-pm]").forEach((b) => (b.onclick = () => {
     promptTab.mode = b.dataset.pm;
