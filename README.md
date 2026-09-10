@@ -25,6 +25,7 @@ tests/     核心运行时验收（无 UI）   server/tests/ 后端 HTTP 验收 
 cd director-console
 npm run dev                # = node server/bin/director-server.mjs --port 5175（系统 node 18 即可，Node 22 更佳）
 npm run dev -- --ark-key-file ~/.ark-key   # 再带上火山 Ark 密钥 → Seedance 2.5 / Seedream 5.0 真实生成（密钥只留在后端进程）
+npm run dev -- --llm-key-file ~/.aigw-key  # 再带上 AIGW 网关密钥 → Agent Director 由 GPT-5.6 / DeepSeek V4 规划（面板左上角可切模型或回到 rules）
 # 打开 http://127.0.0.1:5175/web/ （code-server 下用 …/proxy/5175/web/；前端只用相对路径，穿前缀代理无需配置）
 ```
 
@@ -69,7 +70,7 @@ npm run smoke     # frontend：无头 Chromium 连接 5175 的后端，通过 AP
 所有入口都落到 `core/actions.js` 的 Action Registry（`GET /api/capabilities` 可列出参数与状态机许可）：
 
 ```bash
-# 1. 页面内 Agent 会话（规则规划器：中文 / 英文 → Action 计划，在后端执行，所有页面同步看到工具卡片）
+# 1. 页面内 Agent 会话（后端配了 LLM 就由 GPT-5.6 / DeepSeek V4 规划，否则内置规则规划器；计划在后端执行，所有页面同步看到工具卡片）
 把 Program 机位降到 0.4m 并 look-at 主角 / 03 镜改成环绕 120 度 5 秒 / 让对手举枪 / 换成日落逆光
 新建镜头「对峙」6秒 手持 看向对手 / 录制 shot_02 / 圈选 / 全部进故事版 / 提交 shot_03 视频生视频 seedance
 
@@ -88,7 +89,7 @@ node server/bin/director.mjs export --format html --out storyboard.html --projec
 node server/bin/director.mjs capabilities | help camera.frame | context [scene|shot|project|events|schema]
 ```
 
-每个 Action：参数校验、状态机检查（EDIT/BLOCKING/REHEARSAL/ARMED/RECORDING/REVIEW/GENERATING/APPROVED）、`--dry-run`、`--json`、幂等键、事件日志（source / actorId / before / after / ms）、撤销（`project.undo`、`project.undo-to <eventId>`）。Agent 的每一步都带子代理角色（scene-builder / cinematography / motion / lighting / continuity / storyboard / generation / review）；`agent.confirm / agent.cancel / agent.run-step / agent.set-mode / agent.say` 让外部 LLM 也能接管会话。
+每个 Action：参数校验、状态机检查（EDIT/BLOCKING/REHEARSAL/ARMED/RECORDING/REVIEW/GENERATING/APPROVED）、`--dry-run`、`--json`、幂等键、事件日志（source / actorId / before / after / ms）、撤销（`project.undo`、`project.undo-to <eventId>`）。Agent 的每一步都带子代理角色（scene-builder / cinematography / motion / lighting / continuity / storyboard / generation / review）；`agent.confirm / agent.cancel / agent.run-step / agent.set-mode / agent.set-backend / agent.say` 让外部 LLM 也能接管会话。
 
 ## 录制与生成
 
@@ -108,6 +109,7 @@ core/index.js                    运行时入口（服务端、CLI、测试、�
 server/src/host.mjs              RuntimeHost：权威运行时、自动保存、SSE 广播（每 Action 一帧）、录制看门狗、媒体存储
 server/src/api.mjs               HTTP 路由：/api/* · /media/* · 静态托管（可关）· CORS · Bearer token
 server/src/adapters/ark.mjs      Generation Adapter：火山 Ark（Seedance 2.5/2.0 视频任务轮询、Seedream 5.0 图片、结果落盘）
+server/src/adapters/llm.mjs      LLM 规划器：OpenAI 兼容网关（GPT-5.6 / DeepSeek V4）→ JSON 计划 → 仍经 Action Registry 执行，失败回退规则规划器
 server/bin/director-server.mjs   后端入口      server/bin/director.mjs   CLI（--remote 走后端 / 本地读写 JSON）
 web/index.html  web/css/app.css  页面与样式（vendor/three r170 已内置，无构建）
 web/js/client.js                 前端 ↔ 后端：API 地址解析、SSE 同步、快照回写（保留视图字段）、dispatch 路由、媒体上传、单机降级

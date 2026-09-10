@@ -73,6 +73,7 @@ export function bindUI() {
   };
   // agent
   $("agentMode").onchange = (e) => dispatch("agent.set-mode", { mode: e.target.value });
+  $("agentBackend").onchange = (e) => dispatch("agent.set-backend", { backend: e.target.value });
   $("agentSend").onclick = sendAgent;
   $("agentInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -275,6 +276,11 @@ function render(d) {
   $("playBtn").textContent = d.project.playing ? "❚❚ 暂停" : "▶ 播放";
   $("hudTc").textContent = timecode(d.project.playhead, d.project.fps);
   $("agentMode").value = d.agent.mode;
+  const be = $("agentBackend");
+  const models = ["rules", ...(client.llm?.models || [])];
+  if (be.options.length !== models.length) be.innerHTML = models.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  be.value = models.includes(d.agent.backend) ? d.agent.backend : "rules";
+  be.title = client.llm?.name === "llm" ? `LLM 网关 ${client.llm.baseUrl}` : "后端未配置 LLM，只有内置规则规划器";
   const bp = $("bridgePill");
   bp.textContent = `backend · ${d.health.bridge || "offline"}`;
   bp.className = `pill ${d.health.bridge === "online" ? "ok" : ""}`;
@@ -573,7 +579,7 @@ function renderThread(d) {
       const dl = m.download ? `<div class="tool-actions"><button data-dl="${m.id}">下载 ${esc(m.download.name)}</button></div>` : "";
       return `<div class="msg ${m.role}" data-mid="${m.id}"><div class="who"><span>${m.role === "user" ? "you" : "agent"}</span></div>${esc(m.text)}${dl}</div>`;
     })
-    .join("");
+    .join("") + (d.agent.busy ? `<div class="msg agent"><div class="who"><span>agent · ${esc(d.agent.backend || "")}</span></div>思考中…</div>` : "");
   el.querySelectorAll("[data-locate]").forEach((b) => (b.onclick = () => locate(b.dataset.locate)));
   el.querySelectorAll("[data-undo-to]").forEach((b) => (b.onclick = () => report(dispatch("project.undo-to", { eventId: b.dataset.undoTo }))));
   el.querySelectorAll("[data-confirm]").forEach((b) => (b.onclick = () => report(dispatch("agent.confirm"))));

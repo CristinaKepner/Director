@@ -100,7 +100,7 @@ export function createApp(host, opts = {}) {
       const body = await readJson(req);
       if (!body.action && !Array.isArray(body.batch)) return json(res, 400, { ok: false, error: "MISSING_ACTION", hint: "{action, payload, meta} or {batch:[{action,payload}], meta}" });
       const t0 = Date.now();
-      const out = host.invoke(body);
+      const out = await host.invokeAsync(body);
       if (body.withState || url.searchParams.get("state") === "1") out.snapshot = host.snapshot();
       log(`${body.action || `batch[${body.batch.length}]`} ← ${body.meta?.source || "api"}/${body.meta?.actorId || body.meta?.actor || "-"} → ${out.ok ? "ok" : out.error} (${Date.now() - t0} ms)`);
       return json(res, 200, out);
@@ -108,14 +108,14 @@ export function createApp(host, opts = {}) {
     mm = p.match(/^\/api\/actions\/([a-z.-]+)$/);
     if (mm && m === "POST") {
       const body = await readJson(req);
-      const out = host.invoke({ action: mm[1], payload: body.payload ?? body, meta: body.meta || {} });
+      const out = await host.invokeAsync({ action: mm[1], payload: body.payload ?? body, meta: body.meta || {} });
       if (url.searchParams.get("state") === "1") out.snapshot = host.snapshot();
       return json(res, 200, out);
     }
     if (p === "/api/agent" && m === "POST") {
       const body = await readJson(req);
       if (!body.text) return json(res, 400, { ok: false, error: "MISSING_TEXT" });
-      const out = host.invoke({ action: body.planOnly ? "agent.plan" : "agent.run", payload: { text: body.text, mode: body.mode || "lead", force: body.force !== false }, meta: { source: "agent", actorId: body.actor || "remote-agent" } });
+      const out = await host.invokeAsync({ action: body.planOnly ? "agent.plan" : "agent.run", payload: { text: body.text, mode: body.mode || "lead", force: body.force !== false, backend: body.backend }, meta: { source: "agent", actorId: body.actor || "remote-agent" } });
       if (out.ok && !body.planOnly) out.agentSays = host.store.get().agent.messages.filter((x) => x.role === "agent").slice(-1).map((x) => x.text);
       if (body.withState) out.snapshot = host.snapshot();
       return json(res, 200, out);

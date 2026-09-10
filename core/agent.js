@@ -477,7 +477,6 @@ export function runAgent(text, opts = {}) {
   if (!raw) return null;
   say("user", raw);
   const d = store.get();
-  const mode = opts.mode || d.agent.mode;
   const p = plan(raw, d);
   if (p.notes.includes("help") || (!p.steps.length && !p.notes.length)) {
     say("agent", helpText());
@@ -485,6 +484,18 @@ export function runAgent(text, opts = {}) {
   }
   if (!p.steps.length) {
     say("agent", `${p.notes.join("；")}。\n${helpText(true)}`);
+    return { plan: p };
+  }
+  return runPlan(p, opts);
+}
+
+// Execute / stage a plan (from the rule planner or an external LLM planner) according to the agent mode:
+// manual → only show it; collaborative → ask for confirmation when needed; lead → run now.
+export function runPlan(p, opts = {}) {
+  const d = store.get();
+  const mode = opts.mode || d.agent.mode;
+  if (!p.steps.length) {
+    say("agent", p.reply || (p.notes.length ? `${p.notes.join("；")}。` : helpText(true)));
     return { plan: p };
   }
   if (mode === "manual") {
@@ -497,7 +508,7 @@ export function runAgent(text, opts = {}) {
     return { plan: p, pending: true };
   }
   const out = executePlan(p, opts.source || "agent");
-  say("agent", summaryText(p, out));
+  say("agent", (p.reply ? p.reply + "\n" : "") + summaryText(p, out));
   return { plan: p, ...out };
 }
 
@@ -604,6 +615,18 @@ register("agent.set-mode", {
   handler: ({ mode }) => {
     store.patch((x) => (x.agent.mode = mode));
     return { ok: true, mode };
+  },
+});
+
+register("agent.set-backend", {
+  doc: "选择 Agent 规划后端：rules（内置规则规划器）或后端配置的 LLM 模型名（见 /api/health 的 llm.models）",
+  params: { backend: "rules | <model id>" },
+  required: ["backend"],
+  undoable: false,
+  handler: ({ backend }) => {
+    store.patch((x) => (x.agent.backend = String(backend)));
+    store.light((x) => (x.health.llm = String(backend)));
+    return { ok: true, backend };
   },
 });
 

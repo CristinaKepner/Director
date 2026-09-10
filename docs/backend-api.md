@@ -49,6 +49,9 @@ node server/bin/director.mjs serve [选项]          # 等价
 | `--ark-key-file FILE` | `ARK_API_KEY` | 无 | 火山引擎 Ark 密钥；给了就启用真实 Generation Adapter（Seedance 2.5 / 2.0 视频、Seedream 5.0 图片），其余供应商仍走模拟队列 |
 | `--ark-model provider=model` | `ARK_BASE_URL` | 见 §5.1 | 覆盖 provider → Ark 模型 ID 的映射（可多次）；`ARK_BASE_URL` 换区域 |
 | `--public-url https://host` | `DIRECTOR_PUBLIC_URL` | 无 | 本后端对公网可达的地址；v2v 时 Ark 要从 `<public-url>/media/<take>.webm` 拉参考视频（Ark 不接受 data URL 视频） |
+| `--llm-key-file FILE` | `AIGW_API_KEY` / `LLM_API_KEY` | 无 | OpenAI 兼容网关密钥；给了就启用 LLM 规划器（Agent Director 由 GPT-5.6 / DeepSeek V4 规划，见 §5.2） |
+| `--llm-base URL` | `LLM_BASE_URL` | `https://aigw.sotatts.online/v1` | 网关地址 |
+| `--llm-model ID` | `LLM_MODEL` | `gpt-5.6-sol` | 默认模型；运行时可用 `agent.set-backend` 切换 |
 
 进程收到 SIGINT/SIGTERM 时先保存工程再退出。
 
@@ -94,7 +97,7 @@ Action 结果通用字段：`ok`、`action`、`eventId`、`ms`，以及各 Actio
 | POST | `/api/actions` | 执行一个 Action（信封见 §3）或 `{"batch":[{action,payload,meta}…], "meta":{…}}` 批量顺序执行；`withState:true` 或 `?state=1` 时附带 `snapshot` |
 | POST | `/api/actions/{action}` | 同上的简写：请求体即 payload（或 `{payload, meta}`） |
 | POST | `/api/invoke` | `/api/actions` 的兼容别名 |
-| POST | `/api/agent` | `{text, mode?, force?, actor?, planOnly?, withState?}`：自然语言 → Agent 规划并执行（`agent.run`）；`planOnly:true` 只返回计划。结果附 `agentSays`（Agent 的回复文本） |
+| POST | `/api/agent` | `{text, mode?, force?, actor?, backend?, planOnly?, withState?}`：自然语言 → Agent 规划并执行（`agent.run`；配置了 LLM 时由模型规划，`backend` 可指定模型或 `rules`）；`planOnly:true` 只返回规则规划器的计划。结果附 `agentSays`（Agent 的回复文本） |
 | GET | `/api/events` | SSE 事件流（见 §7） |
 | GET | `/api/project[?download=1]` | 导出工程 JSON（`persistable` 形态）；`download=1` 加下载头 |
 | PUT/POST | `/api/project` | 导入工程 JSON（`{data}` 或直接是工程对象），等价于 `project.load` |
@@ -134,7 +137,7 @@ curl -s -X POST http://127.0.0.1:5175/api/takes/take_abc/media -H 'content-type:
 | annotation | add | |
 | generation | prompt, submit, status, cancel, retry | `submit` 校验供应商与模式；带 Ark 密钥时 seedance-2.5 / seedance-2 / seedream-5 走真实生成（§5.1），其余为可观察的模拟队列 |
 | review | compare | |
-| agent | run, plan, confirm, cancel, run-step, set-mode, say | `run {text, mode?, force?}`；`confirm/cancel` 处理 Collaborative 模式待确认方案；`run-step {step}` 单步执行；`say {role,text}` 供外部 LLM 把回复写回会话 |
+| agent | run, plan, confirm, cancel, run-step, set-mode, set-backend, say | `run {text, mode?, force?}`；`confirm/cancel` 处理 Collaborative 模式待确认方案；`run-step {step}` 单步执行；`say {role,text}` 供外部 LLM 把回复写回会话 |
 | context | scene, project, shot, entity, events, history, capabilities, sequence, schema | 只读 |
 | health | report | |
 
@@ -159,6 +162,23 @@ curl -s -X POST http://127.0.0.1:5175/api/takes/take_abc/media -H 'content-type:
 - 进度：图片 15 → 85 → 100；视频 5（已提交）→ 10（拿到 task id）→ 按预计时长线性到 85 → 90（下载）→ 100。`generation.cancel` 后适配器停止轮询并尝试 `DELETE /tasks/{id}`。
 - 失败写入 `job.error`（`<Ark code>: <message>`，例如 `OutputAudioSensitiveContentDetected.PolicyViolation`），状态机回到 `REVIEW`；`generation.retry` 重新提交。
 - 密钥只在后端进程里（文件或环境变量），不进工程文件、不进前端。
+
+### 5.2 Agent Director 的 LLM 规划器（AIGW 网关：GPT-5.6 / DeepSeek V4）
+
+后端带 `--llm-key-file` 或 `AIGW_API_KEY` 启动后，`agent.run`（页面聊天、`POST /api/agent`、CLI `agent "…"`）改由 LLM 规划（`server/src/adapters/llm.mjs`）；`agent.backend = "rules"` 时仍用内置规则规划器。`/api/health` 的 `llm` 字段报告 `{name:"llm", baseUrl, model, models[], current}`。
+
+| 项 | 说明 |
+|---|---|
+| 网关 | OpenAI 兼容 `POST {base}/chat/completions`；实测可用模型：`gpt-5.6-sol` / `gpt-5.6-luna` / `gpt-5.6-terra` / `gpt-5.5` / `gpt-5.4` / `deepseek-v4-flash` / `deepseek-v4-chat` / `deepseek-v4-pro`（网关上没有 gpt-6） |
+| 切换模型 | `agent.set-backend {backend:"deepseek-v4-flash"}`（页面 Agent 面板左上角下拉），或单次 `POST /api/agent {text, backend}` |
+| 提示 | system prompt = 可规划的 Action 清单（名字、参数、必填、说明）+ `summarize()` 的当前 context + 最近 8 条对话；要求只输出 JSON `{steps:[{action,payload,label}], notes[], reply, needsConfirm}` |
+| 执行 | 模型只提案；每一步仍走 Action Registry（校验、状态机、Event Log、可撤销），未知或不允许的 Action 被过滤并写入 notes；随后按 Agent 模式处理：manual 只展示 / collaborative 需要时确认 / lead 直接执行 |
+| 只问不改 | steps 为空时把 `reply` 作为 Agent 回复（例如「现在几个镜头、各用什么运镜」） |
+| 可规划范围 | scene / entity / camera / light / shot / motion / take.arm·record·review·delete / storyboard / annotation / generation / review / context 读取 / project 的 rename·set-state·set-fidelity·set-fps·set-aspect·set-style·set-shading·set-build-mode·undo·redo·undo-to；纯视图动作与 project.new/load 不给模型 |
+| 失败回退 | 网关超时/报错时 Agent 会话里写一条说明并改用规则规划器，结果带 `fallback:true` |
+| 响应 | `{ok, backend, ms, usage, reply, plan[], notes[], results[], pending}`；期间快照 `agent.busy=true`（页面显示「思考中…」） |
+| JSON 模式 | `deepseek-v4-chat` 不支持 `response_format: json_object`，适配器自动降级为文本解析 |
+| 实测耗时 | 3–7 s / 次，约 6k tokens（context + Action 清单） |
 
 ### 状态机
 

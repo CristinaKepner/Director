@@ -45,6 +45,7 @@ export async function connect() {
     if (!h?.ok) throw new Error("bad health");
     client.service = h.service;
     client.generation = h.generation || null;
+    client.llm = h.llm || null;
   } catch (err) {
     client.lastError = String(err?.message || err);
     setMode("standalone");
@@ -129,7 +130,7 @@ export async function dispatch(name, payload = {}, meta = {}) {
   const body = { action: name, payload, meta: { source: meta.source || "human", actorId: meta.actorId || "console", dryRun: !!meta.dryRun, idempotencyKey: meta.idempotencyKey, silent: !!meta.silent, capture: name === "take.record" || name === "take.stop" }, withState: true };
   let r;
   try {
-    r = await api.post("actions", body);
+    r = await api.post("actions", body, { timeout: name.startsWith("agent.") ? 120000 : 20000 }); // LLM planning can take a while
   } catch (err) {
     return { ok: false, error: "BACKEND_UNREACHABLE", action: name, message: String(err?.message || err) };
   }

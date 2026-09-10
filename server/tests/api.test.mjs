@@ -73,6 +73,19 @@ test("agent endpoint plans and executes", async () => {
   assert.equal(shot.motion.type, "orbit");
 });
 
+test("agent backend selection and health.llm without a gateway", async () => {
+  const h = await get("/api/health");
+  assert.equal(h.llm.name, "rules");
+  const r = await post("/api/actions", { action: "agent.set-backend", payload: { backend: "deepseek-v4-flash" } });
+  assert.equal(r.ok, true);
+  assert.equal((await get("/api/state?events=0")).snapshot.agent.backend, "deepseek-v4-flash");
+  // no planner configured → agent.run still uses the rule planner
+  const a = await post("/api/agent", { text: "让对手举枪" });
+  assert.equal(a.ok, true);
+  assert.equal(a.results[0].action, "entity.pose");
+  await post("/api/actions", { action: "agent.set-backend", payload: { backend: "rules" } });
+});
+
 test("take protocol: client capture → media upload → finish", async () => {
   const t = await post("/api/actions", { action: "take.record", payload: { shotId: "shot_02" }, meta: { capture: true } });
   assert.equal(t.ok, true);

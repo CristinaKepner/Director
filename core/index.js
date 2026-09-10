@@ -5,4 +5,4 @@ export { dispatch, batch, register, listActions, capabilities, summarize, setHoo
 export { compileShot, attachPrompts, COMPILER_VERSION } from "./prompts.js";
 export { cameraStateAt, entityStateAt, lightStateAt, sampleKeyframes, sequenceLayout, gaitOffsets } from "./motion.js";
 export { buildCityEdge, buildFastPursuit, DEMOS } from "./demo.js";
-export { runAgent, plan, executePlan, confirmPlan, cancelPlan, runStep } from "./agent.js";
+export { runAgent, runPlan, plan, executePlan, confirmPlan, cancelPlan, runStep, say } from "./agent.js";

@@ -43,6 +43,17 @@ export function createHost(opts = {}) {
     }
   }
 
+  // ---- LLM planner (Agent Director backend) ----
+  let planner = null;
+  if (typeof opts.llm === "function") {
+    planner = opts.llm({ log });
+    if (planner) {
+      log(`llm planner: ${planner.name} @ ${planner.baseUrl} default ${planner.model} (${(planner.models || []).join(", ")})`);
+      store.patch((x) => (x.agent.backend = planner.model));
+      store.light((x) => (x.health.llm = planner.model));
+    }
+  }
+
   // ---- bootstrap ----
   let loaded = false;
   if (projectFile && fs.existsSync(projectFile)) {
@@ -146,6 +157,43 @@ export function createHost(opts = {}) {
     return { ...run(msg.action, msg.payload || {}, msg.meta || {}), version: version() };
   }
 
+  // agent.run through the LLM planner (async). Falls back to the rule planner on any failure.
+  async function runAgentLlm(payload, meta) {
+    const text = String(payload.text || "").trim();
+    if (!text) return { ok: false, error: "MISSING_PARAM", missing: ["text"] };
+    const d = store.get();
+    const model = payload.backend || d.agent.backend;
+    const mode = payload.mode || d.agent.mode;
+    const history = d.agent.messages.filter((m) => m.role === "user" || m.role === "agent").slice(-8).map((m) => ({ role: m.role, text: m.text }));
+    R.say("user", text);
+    store.patch((x) => (x.agent.busy = true));
+    const t0 = Date.now();
+    let p;
+    try {
+      p = await planner.plan(text, { capabilities: capabilities(), summary: R.summarize(), history, model });
+    } catch (err) {
+      log(`llm failed (${err.code || ""} ${err.message}); falling back to rules`);
+      store.patch((x) => (x.agent.busy = false));
+      R.say("agent", `LLM（${model}）调用失败：${String(err.message).slice(0, 160)}。改用内置规则规划器。`);
+      const rp = R.plan(text, store.get());
+      const out = R.runPlan({ ...rp, text }, { mode, force: payload.force === true, source: "agent" });
+      return { ok: true, backend: "rules", fallback: true, error_llm: err.message, plan: out?.plan?.steps, notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+    }
+    store.patch((x) => (x.agent.busy = false));
+    const planObj = { text, steps: p.steps, notes: p.notes, needsConfirm: p.needsConfirm, reply: p.reply, model: p.model };
+    const out = R.runPlan(planObj, { mode, force: payload.force === true, source: "agent" });
+    return { ok: true, backend: p.model, ms: Date.now() - t0, usage: p.usage, reply: p.reply, plan: p.steps.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: p.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+  }
+
+  async function invokeAsync(msg) {
+    if (msg.action === "agent.run" && planner && (msg.payload?.backend || store.get().agent.backend) !== "rules") {
+      const m = normalizeMeta(msg.meta || {}, { source: "agent" });
+      const r = await runAgentLlm(msg.payload || {}, m);
+      return { ...clean(r), action: "agent.run", version: version() };
+    }
+    return invoke(msg);
+  }
+
   // A capturing client must finish the take within shot length + grace; otherwise the host finishes it headless.
   function armWatchdog(takeId, frames, fps, meta) {
     disarmWatchdog(takeId);
@@ -204,6 +252,7 @@ export function createHost(opts = {}) {
       persistence: { file: projectFile, dirty, lastSavedAt },
       media: { dir: mediaDir },
       generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated" } : { name: "simulated", models: {} },
+      llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models, current: d.agent.backend } : { name: "rules", models: [], current: "rules" },
       recording: d.project.recording || null,
       ...extra,
     };
@@ -214,6 +263,7 @@ export function createHost(opts = {}) {
     store,
     run,
     invoke,
+    invokeAsync,
     snapshot,
     version,
     save,
