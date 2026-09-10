@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Director Console · 导演台</title>
+    <link rel="icon" href="./public/favicon.svg" />
+    <link rel="stylesheet" href="./css/app.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.js",
+          "three/addons/": "./vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="mark">DC</span>
+          <div>
+            <strong>Director Console</strong>
+            <small>创作从这一帧开始</small>
+          </div>
+        </div>
+        <div class="project-meta">
+          <input id="projectName" class="ghost" title="工程名" />
+          <span class="sep">·</span>
+          <span id="sceneName" class="muted">场景</span>
+          <span class="sep">·</span>
+          <span id="saveHint" class="muted">本地自动保存</span>
+        </div>
+        <div class="top-actions">
+          <label class="pill-select">保真度
+            <select id="fidelity">
+              <option value="blockout">白模语义</option>
+              <option value="stylized">形态可读</option>
+            </select>
+          </label>
+          <label class="pill-select">着色
+            <select id="shading">
+              <option value="shaded">SHADED</option>
+              <option value="clay">CLAY</option>
+              <option value="wire">WIRE</option>
+            </select>
+          </label>
+          <label class="pill-select">画幅
+            <select id="aspect"></select>
+          </label>
+          <div class="seg" id="buildMode">
+            <button data-build="set" class="on">布景</button>
+            <button data-build="blocking">调度</button>
+          </div>
+          <select id="statePill" class="state edit" title="导演状态机"></select>
+          <span id="camPill" class="pill">PROGRAM · —</span>
+          <span id="recPill" class="pill">IDLE</span>
+          <button id="undoBtn" title="撤销 (Ctrl+Z)">↶</button>
+          <button id="redoBtn" title="重做 (Ctrl+Shift+Z)">↷</button>
+          <button id="exportBtn" title="导出工程 JSON">导出</button>
+          <button id="importBtn" title="导入工程 JSON">导入</button>
+          <input id="importFile" type="file" accept="application/json" hidden />
+          <select id="demoSelect" title="示例工程">
+            <option value="">示例…</option>
+          </select>
+        </div>
+      </header>
+
+      <aside class="left">
+        <div class="panel-head">
+          <h2>Outliner</h2>
+          <div class="row-actions">
+            <button id="addEntity" title="添加语义物体">+ 物体</button>
+            <button id="addCamera" title="添加机位">+ 机位</button>
+            <button id="addLight" title="添加灯光">+ 灯</button>
+          </div>
+        </div>
+        <div id="outliner" class="outliner"></div>
+        <div class="panel-head tight"><h2 id="inspectorTitle">Inspector</h2><button id="deleteSel" class="danger" title="删除 (Del)">删除</button></div>
+        <div id="inspector" class="inspector"></div>
+      </aside>
+
+      <main class="stage">
+        <div id="viewport"></div>
+        <div class="hud hud-top">
+          <div class="hud-block">
+            <div class="hud-title">导演视图 <span id="hudView">自由观察</span></div>
+            <div id="hudMeta" class="hud-line">SHADED · 16:9 安全画幅</div>
+          </div>
+          <div class="hud-block right">
+            <div class="hud-title">PROGRAM <span id="hudFocal">40 mm</span></div>
+            <div id="hudCam" class="hud-line">—</div>
+          </div>
+        </div>
+        <div class="hud hud-bottom">
+          <div id="hudScene" class="hud-scene">SCENE 01 · 城市边缘 · 形态 · 姿态 · 光影</div>
+          <div class="hud-actions">
+            <div class="seg">
+              <button id="viewFree" class="on">自由观察</button>
+              <button id="viewProgram">Program</button>
+            </div>
+            <div class="seg" id="gizmoSeg">
+              <button data-gizmo="translate" class="on" title="移动 (W)">移</button>
+              <button data-gizmo="rotate" title="旋转 (E)">转</button>
+              <button data-gizmo="scale" title="缩放 (R)">缩</button>
+            </div>
+            <button id="playBtn" title="播放/暂停 (Space)">▶ 播放</button>
+            <button id="loopBtn" title="循环">⟳</button>
+            <span id="hudTc" class="tc">00:00:00:00</span>
+            <button id="recordBtn" class="rec" title="录制当前镜头 Take">● 录制 Take</button>
+            <button id="newShotBtn" title="从当前 Program 机位新建镜头">+ 新建镜头</button>
+          </div>
+        </div>
+      </main>
+
+      <aside class="right">
+        <div class="panel-head">
+          <h2>Agent Director</h2>
+          <select id="agentMode" title="协作模式">
+            <option value="collaborative">Collaborative</option>
+            <option value="lead">Agent Lead</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div id="agentThread" class="thread"></div>
+        <div class="composer">
+          <div class="chips" id="chips"></div>
+          <textarea id="agentInput" placeholder="用自然语言指挥导演台：把 Program 机位降到 0.4m 并 look-at 主角 / 03 镜改成环绕 120 度 / 让对手举枪 / 给 02 镜生成 V2V 提示词 / 录制 shot_01"></textarea>
+          <div class="composer-row">
+            <span id="bridgePill" class="pill">bridge · offline</span>
+            <button id="agentSend" class="primary">执行</button>
+          </div>
+        </div>
+      </aside>
+
+      <footer class="bottom">
+        <div class="bottom-tabs">
+          <button data-bottom="shots" class="on">镜头条</button>
+          <button data-bottom="timeline">Timeline</button>
+          <button data-bottom="takes">Takes</button>
+          <button data-bottom="board">Storyboard</button>
+          <button data-bottom="gen">Generation</button>
+          <button data-bottom="log">Events</button>
+          <button data-bottom="health">Health</button>
+        </div>
+        <div id="bottomBody" class="bottom-body"></div>
+      </footer>
+    </div>
+    <script type="module" src="./js/main.js"></script>
+  </body>
+</html>

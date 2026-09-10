@@ -1,0 +1,16 @@
+{
+  "name": "director-console",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "description": "Director Console · 导演台 — 3D director console + agent-operated Action Runtime (Director OS preview)",
+  "bin": { "director": "bin/director.mjs" },
+  "scripts": {
+    "dev": "node bin/director-server.mjs --port 5175",
+    "start": "node bin/director-server.mjs --port 5175",
+    "test": "node --test tests/runtime.test.mjs",
+    "smoke": "node tools/smoke.mjs",
+    "cli": "node bin/director.mjs"
+  },
+  "engines": { "node": ">=18" }
+}
