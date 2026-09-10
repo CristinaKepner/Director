@@ -1,9 +1,10 @@
 // UI binding layer. Renders from the store; every mutation goes through dispatch() (same registry as CLI/Agent).
-import { store, persistable, historyInfo } from "./store.js";
-import { dispatch, timecode, getHooks } from "./actions.js";
-import { runAgent, confirmPlan, cancelPlan, runStep } from "./agent.js";
-import { DEMOS } from "./demo.js";
-import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, FIDELITY } from "./schema.js";
+// dispatch() comes from client.js: it routes state-changing Actions to the backend and view-only Actions to the local replica.
+import { store, persistable, historyInfo } from "../../core/store.js";
+import { timecode, getHooks } from "../../core/actions.js";
+import { DEMOS } from "../../core/demo.js";
+import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, FIDELITY } from "../../core/schema.js";
+import { dispatch, client, isOnline } from "./client.js";
 import { focusSelected, resetView } from "./viewport.js";
 
 const $ = (id) => document.getElementById(id);
@@ -23,8 +24,8 @@ export function bindUI() {
   $("aspect").onchange = (e) => dispatch("project.set-aspect", { aspect: e.target.value });
   $("buildMode").querySelectorAll("[data-build]").forEach((b) => (b.onclick = () => dispatch("project.set-build-mode", { mode: b.dataset.build })));
   $("statePill").innerHTML = STATE_MACHINE.map((s) => `<option>${s}</option>`).join("");
-  $("statePill").onchange = (e) => {
-    const r = dispatch("project.set-state", { state: e.target.value });
+  $("statePill").onchange = async (e) => {
+    const r = await dispatch("project.set-state", { state: e.target.value });
     if (!r.ok) toast(r.error, true);
   };
   $("undoBtn").onclick = () => report(dispatch("project.undo"));
@@ -71,7 +72,7 @@ export function bindUI() {
     store.patch((x) => (x.project.bottomTab = "shots"));
   };
   // agent
-  $("agentMode").onchange = (e) => store.patch((d) => (d.agent.mode = e.target.value));
+  $("agentMode").onchange = (e) => dispatch("agent.set-mode", { mode: e.target.value });
   $("agentSend").onclick = sendAgent;
   $("agentInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -93,7 +94,8 @@ export function bindUI() {
     if (info?.light) renderLight(d);
     else {
       render(d);
-      scheduleSave();
+      if (isOnline()) $("saveHint").textContent = `已同步 · 后端 v${d.project.version}${d.project.savedAt ? " · 保存于 " + new Date(d.project.savedAt).toLocaleTimeString() : ""}`;
+      else scheduleSave();
     }
   });
   render(store.get());
@@ -129,8 +131,10 @@ function scheduleSave() {
 }
 
 // ---------- helpers ----------
+// dispatch() may resolve asynchronously (backend round-trip); report() surfaces failures either way.
 function report(r) {
   if (!r) return r;
+  if (typeof r.then === "function") return r.then(report);
   if (!r.ok) toast(`${r.error}${r.hint ? " · " + r.hint : ""}${r.issues ? " · " + r.issues.join("；") : ""}${r.missing ? " · 缺少 " + r.missing.join(",") : ""}`, true);
   return r;
 }
@@ -163,7 +167,7 @@ function sendAgent() {
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
-  runAgent(text);
+  report(dispatch("agent.run", { text }, { source: "human", actorId: "console" }));
 }
 function togglePlay() {
   const d = store.get();
@@ -175,7 +179,7 @@ async function recordCurrent() {
   const d = store.get();
   if (d.project.recording) return report(dispatch("take.stop"));
   if (!d.project.currentShotId) return toast("先选择镜头", true);
-  const arm = dispatch("take.arm", { shotId: d.project.currentShotId });
+  const arm = await dispatch("take.arm", { shotId: d.project.currentShotId });
   if (!arm.ok) return report(arm);
   await new Promise((r) => setTimeout(r, 350)); // let the program view settle before rolling
   report(dispatch("take.record", { shotId: d.project.currentShotId }));
@@ -248,7 +252,7 @@ function render(d) {
   rec.className = `pill ${d.project.recording ? "rec" : ""}`;
   $("recordBtn").textContent = d.project.recording ? "■ 停止录制" : "● 录制 Take";
   $("recordBtn").classList.toggle("live", !!d.project.recording);
-  const h = historyInfo();
+  const h = isOnline() ? d.history || { undo: 0, redo: 0, labels: [] } : historyInfo();
   $("undoBtn").disabled = !h.undo;
   $("redoBtn").disabled = !h.redo;
   $("undoBtn").title = h.labels[0] ? `撤销：${h.labels[0]}` : "撤销";
@@ -267,8 +271,9 @@ function render(d) {
   $("hudTc").textContent = timecode(d.project.playhead, d.project.fps);
   $("agentMode").value = d.agent.mode;
   const bp = $("bridgePill");
-  bp.textContent = `bridge · ${d.health.bridge || "offline"}`;
+  bp.textContent = `backend · ${d.health.bridge || "offline"}`;
   bp.className = `pill ${d.health.bridge === "online" ? "ok" : ""}`;
+  bp.title = d.health.bridge === "online" ? `${client.service || ""} @ ${client.base}` : d.health.bridge === "standalone" ? `后端不可达（${client.base}），页面在单机模式运行，工程保存在 localStorage` : "";
   document.querySelectorAll("[data-bottom]").forEach((b) => b.classList.toggle("on", b.dataset.bottom === d.project.bottomTab));
 
   renderOutliner(d);
@@ -536,9 +541,10 @@ async function addToBoard(shotId) {
   if (cap) {
     const d = store.get();
     const wasShot = d.project.currentShotId;
-    if (wasShot !== shotId) dispatch("shot.select", { id: shotId }, { silent: true });
+    if (wasShot !== shotId) await dispatch("shot.select", { id: shotId }, { silent: true });
+    await new Promise((r) => setTimeout(r, 60));
     keyframes = [await cap()];
-    if (wasShot && wasShot !== shotId) dispatch("shot.select", { id: wasShot }, { silent: true });
+    if (wasShot && wasShot !== shotId) await dispatch("shot.select", { id: wasShot }, { silent: true });
   }
   report(dispatch("storyboard.add", { shotId, keyframes }));
   store.patch((x) => (x.project.bottomTab = "board"));
@@ -565,13 +571,13 @@ function renderThread(d) {
     .join("");
   el.querySelectorAll("[data-locate]").forEach((b) => (b.onclick = () => locate(b.dataset.locate)));
   el.querySelectorAll("[data-undo-to]").forEach((b) => (b.onclick = () => report(dispatch("project.undo-to", { eventId: b.dataset.undoTo }))));
-  el.querySelectorAll("[data-confirm]").forEach((b) => (b.onclick = confirmPlan));
-  el.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = cancelPlan));
+  el.querySelectorAll("[data-confirm]").forEach((b) => (b.onclick = () => report(dispatch("agent.confirm"))));
+  el.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => report(dispatch("agent.cancel"))));
   el.querySelectorAll("[data-run-step]").forEach((b) => (b.onclick = () => {
     const [mid, i] = b.dataset.runStep.split(":");
     const m = store.get().agent.messages.find((x) => x.id === mid);
     const step = m?.plan?.steps.filter((s) => !s.quiet)[Number(i)];
-    if (step) report(runStep(step));
+    if (step) report(dispatch("agent.run-step", { step }));
   }));
   el.querySelectorAll("[data-dl]").forEach((b) => (b.onclick = () => {
     const m = store.get().agent.messages.find((x) => x.id === b.dataset.dl);
@@ -638,12 +644,12 @@ function renderShots(el, d) {
     for (const s of d.shots) await addToBoard(s.id);
   };
   $("promptAll").onclick = () => d.shots.forEach((s) => dispatch("generation.prompt", { shotId: s.id }));
-  $("exportBoard").onclick = () => {
-    const r = dispatch("storyboard.export", { format: "html" });
+  $("exportBoard").onclick = async () => {
+    const r = await dispatch("storyboard.export", { format: "html" });
     if (r.ok) download("storyboard.html", r.content, "text/html");
   };
-  $("exportBoardMd").onclick = () => {
-    const r = dispatch("storyboard.export", { format: "md" });
+  $("exportBoardMd").onclick = async () => {
+    const r = await dispatch("storyboard.export", { format: "md" });
     if (r.ok) download("storyboard.md", r.content, "text/markdown");
   };
 }
@@ -732,21 +738,21 @@ function renderTakes(el, d) {
   }));
 }
 
-function restoreTake(id) {
+async function restoreTake(id) {
   const t = store.get().takes.find((x) => x.id === id);
   if (!t || !confirm(`把机位 / 物体 / 灯光恢复到「${t.name}」的快照？（可撤销）`)) return;
   const snap = t.snapshot;
   const meta = { source: "human", actorId: "review" };
   for (const c of snap.cameras) {
-    dispatch("camera.transform", { id: c.id, position: c.pose.position, rotation: c.pose.rotation }, meta);
-    dispatch("camera.lens", { id: c.id, focalLength: c.lens.focalLength, aperture: c.lens.aperture }, meta);
-    if (c.target) dispatch("camera.look-at", { id: c.id, target: c.target }, meta);
+    await dispatch("camera.transform", { id: c.id, position: c.pose.position, rotation: c.pose.rotation }, meta);
+    await dispatch("camera.lens", { id: c.id, focalLength: c.lens.focalLength, aperture: c.lens.aperture }, meta);
+    if (c.target) await dispatch("camera.look-at", { id: c.id, target: c.target }, meta);
   }
   for (const e of snap.entities) {
-    dispatch("entity.transform", { id: e.id, position: e.transform.position, rotation: e.transform.rotation, scale: e.transform.scale }, meta);
-    if (e.joints) dispatch("entity.pose", { id: e.id, joints: e.joints }, meta);
+    await dispatch("entity.transform", { id: e.id, position: e.transform.position, rotation: e.transform.rotation, scale: e.transform.scale }, meta);
+    if (e.joints) await dispatch("entity.pose", { id: e.id, joints: e.joints }, meta);
   }
-  for (const l of snap.lights) dispatch("light.update", { id: l.id, color: l.color, intensity: l.intensity, enabled: l.enabled, position: l.position }, meta);
+  for (const l of snap.lights) await dispatch("light.update", { id: l.id, color: l.color, intensity: l.intensity, enabled: l.enabled, position: l.position }, meta);
   toast(`已恢复到 ${t.name}`);
 }
 
@@ -828,8 +834,8 @@ function renderGen(el, d) {
   }));
   el.querySelector('[data-act="compile"]').onclick = () => report(dispatch("generation.prompt", { shotId: shot.id }));
   el.querySelector('[data-act="copy"]').onclick = () => navigator.clipboard?.writeText(text).then(() => toast("已复制"));
-  el.querySelector('[data-act="submit"]').onclick = () => {
-    const r = dispatch("generation.submit", { shotId: shot.id, mode: el.querySelector('[data-k="mode"]').value, provider: el.querySelector('[data-k="provider"]').value, lang: promptTab.lang });
+  el.querySelector('[data-act="submit"]').onclick = async () => {
+    const r = await dispatch("generation.submit", { shotId: shot.id, mode: el.querySelector('[data-k="mode"]').value, provider: el.querySelector('[data-k="provider"]').value, lang: promptTab.lang });
     report(r);
     if (r.ok) toast(`已提交 ${r.id} → ${r.provider} ${r.mode}`);
   };
@@ -844,8 +850,8 @@ function renderEvents(el, d) {
 }
 
 function renderHealth(el, d) {
-  const h = d.health, hi = historyInfo();
-  const kv = [["FPS", h.fps], ["Draw calls", h.drawCalls], ["Triangles", h.triangles], ["Last command", `${h.lastCommandMs ?? 0} ms`], ["Commands", h.commands || 0], ["Recorder", h.recorder], ["Bridge", h.bridge], ["Undo / Redo", `${hi.undo} / ${hi.redo}`], ["State", d.project.currentState], ["Version", d.project.version], ["Entities", d.entities.length], ["Cameras", d.cameras.length], ["Lights", d.lights.length], ["Shots", d.shots.length], ["Takes", d.takes.length], ["Jobs", d.jobs.length], ["Events", d.events.length], ["Saved", d.project.savedAt ? new Date(d.project.savedAt).toLocaleTimeString() : "—"]];
+  const h = d.health, hi = isOnline() ? d.history || { undo: 0, redo: 0 } : historyInfo();
+  const kv = [["FPS", h.fps], ["Draw calls", h.drawCalls], ["Triangles", h.triangles], ["Last command", `${h.lastCommandMs ?? 0} ms`], ["Commands", h.commands || 0], ["Recorder", h.recorder], ["Backend", `${h.bridge}${isOnline() ? " · " + client.base : ""}`], ["Undo / Redo", `${hi.undo} / ${hi.redo}`], ["State", d.project.currentState], ["Version", d.project.version], ["Entities", d.entities.length], ["Cameras", d.cameras.length], ["Lights", d.lights.length], ["Shots", d.shots.length], ["Takes", d.takes.length], ["Jobs", d.jobs.length], ["Events", d.events.length], ["Saved", d.project.savedAt ? new Date(d.project.savedAt).toLocaleTimeString() : "—"]];
   el.innerHTML = `<div class="kv">${kv.map(([k, v]) => `<div><b>${k}</b><span>${esc(v ?? "—")}</span></div>`).join("")}</div>
-    <div class="muted" style="margin-top:10px;font-size:12px">Agent / CLI 控制入口：启动 <code>node bin/director-server.mjs</code> 后，<code>node bin/director.mjs --remote &lt;url&gt; camera.look-at --id cam_program --target hero</code> 会通过桥接在这个页面里执行同一个 Action。</div>`;
+    <div class="muted" style="margin-top:10px;font-size:12px">后端是 Source of Truth：<code>POST /api/actions {action, payload}</code> 或 <code>node server/bin/director.mjs --remote &lt;url&gt; camera.look-at --id cam_program --target hero</code> 改的是同一份工程，这个页面通过 <code>/api/events</code>（SSE）实时同步。单机模式下（后端不可达）所有 Action 在本页执行并存到 localStorage。</div>`;
 }

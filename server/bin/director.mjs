@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // director — command-line client of the Director Runtime.
-//   Local mode  (default): loads a project JSON, runs the action in-process, saves it back. No UI needed.
-//   Remote mode (--remote URL): sends the action to a running console page through the dev server bridge.
+//   Local mode  (default): loads a project JSON, runs the action in-process (core runtime), saves it back. No server needed.
+//   Remote mode (--remote URL): sends the action to the Director backend (POST /api/actions). No browser needed.
 //
 //   director context.scene --json
 //   director scene.demo --name city-edge --project ./stage.json
@@ -46,7 +46,7 @@ const remote = flags.remote || process.env.DIRECTOR_REMOTE || null;
 const projectFile = path.resolve(flags.project || process.env.DIRECTOR_PROJECT || "director-project.json");
 const source = flags.source || "cli";
 const actor = flags.actor || undefined;
-for (const k of ["json", "dry-run", "remote", "project", "source", "actor", "out", "format", "idempotency-key"]) delete flags[k];
+for (const k of ["json", "dry-run", "remote", "project", "source", "actor", "out", "format", "idempotency-key", "token"]) delete flags[k];
 
 // camelCase keys, coerce values, and expand a few CLI aliases used in the spec
 const ALIAS = { camera: "cameraId", shot: "shotId", take: "takeId", "semantic-name": "displayName", "focal-length": "focalLength", asset: "asset", state: "state" };
@@ -95,6 +95,7 @@ else if (command === "demo") {
 } else if (command === "save") action = "project.export";
 else if (command === "help") action = "__help";
 else if (command === "serve") {
+  process.argv.splice(2, 1); // drop "serve"; remaining flags go to the server
   await import("./director-server.mjs");
   await new Promise(() => {});
 }
@@ -113,7 +114,7 @@ print(result);
 process.exit(result && result.ok === false ? 1 : 0);
 
 async function runLocal(action, payload) {
-  const R = await import(path.join(here, "..", "js", "runtime.js"));
+  const R = await import(path.join(here, "..", "..", "core", "index.js"));
   if (action === "__help") return help(R, positional[0]);
   const meta = { source, actorId: actor, dryRun, idempotencyKey: argvFlag("idempotency-key") };
   let loaded = false;
@@ -153,11 +154,23 @@ async function runLocal(action, payload) {
 
 async function runRemote(action, payload) {
   const base = remote.replace(/\/$/, "");
-  if (action === "__help") return { ok: true, hint: "use `director capabilities --remote URL` to list actions of the running console" };
-  const body = { action, payload, meta: { source, actorId: actor, dryRun, idempotencyKey: argvFlag("idempotency-key") } };
+  const headers = { "content-type": "application/json" };
+  const token = process.env.DIRECTOR_TOKEN || argvFlag("token");
+  if (token) headers.authorization = `Bearer ${token}`;
   try {
-    const res = await fetch(`${base}/api/invoke`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (action === "__help") {
+      const res = await fetch(`${base}/api/capabilities${positional[0] ? "/" + positional[0] : ""}`, { headers });
+      const out = await res.json();
+      if (out.data) return { ok: true, actions: out.data.map((c) => `${c.name.padEnd(26)} ${c.doc}`) };
+      return out;
+    }
+    const body = { action, payload, meta: { source, actorId: actor, dryRun, idempotencyKey: argvFlag("idempotency-key") } };
+    const res = await fetch(`${base}/api/actions`, { method: "POST", headers, body: JSON.stringify(body) });
     const out = await res.json();
+    if (action === "agent.run" && out.ok && !out.agentSays) {
+      const st = await (await fetch(`${base}/api/state?events=0`, { headers })).json();
+      out.agentSays = (st.snapshot?.agent?.messages || []).filter((m) => m.role === "agent").slice(-1).map((m) => m.text);
+    }
     if (action === "storyboard.export" && out.ok && argvFlag("out")) {
       fs.writeFileSync(argvFlag("out"), out.content);
       out.wrote = argvFlag("out");
@@ -165,7 +178,7 @@ async function runRemote(action, payload) {
     }
     return out;
   } catch (err) {
-    return { ok: false, error: "REMOTE_UNREACHABLE", remote: base, message: err.message, hint: "start `node bin/director-server.mjs` and open the page in a browser" };
+    return { ok: false, error: "REMOTE_UNREACHABLE", remote: base, message: err.message, hint: "start `node server/bin/director-server.mjs` (no browser needed)" };
   }
 }
 
@@ -229,9 +242,9 @@ function usage() {
   director agent "把 A 机降到 0.4m 并 look-at 主角"     natural language → actions
   director plan  "..."             only show the plan
   director export --format html --out storyboard.html
-  director serve [--port 5175]     static site + agent bridge
+  director serve [--port 5175]     start the backend (API + static web/)
 
   keys: kebab-case → camelCase (--focal-length → focalLength); --camera/--shot/--take → cameraId/shotId/takeId;
         "0,0,3" → [0,0,3]; JSON literals accepted; --idempotency-key, --source, --actor.
-  env:  DIRECTOR_PROJECT, DIRECTOR_REMOTE`);
+  env:  DIRECTOR_PROJECT, DIRECTOR_REMOTE, DIRECTOR_TOKEN (--token for a protected backend)`);
 }

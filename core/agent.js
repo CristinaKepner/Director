@@ -557,8 +557,64 @@ register("agent.run", {
   required: ["text"],
   undoable: false,
   handler({ text, mode, force }, meta) {
-    const out = runAgent(text, { mode: mode || "lead", force: force !== false, source: "agent" });
+    const out = runAgent(text, { mode: mode || store.get().agent.mode || "lead", force: force === true, source: "agent" });
     return { ok: true, plan: out?.plan?.steps?.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+  },
+});
+
+register("agent.confirm", {
+  doc: "确认并执行 Collaborative 模式下待确认的方案",
+  undoable: false,
+  handler: () => {
+    const out = confirmPlan();
+    if (!out) return { ok: false, error: "NO_PENDING_PLAN" };
+    return { ok: true, okCount: out.okCount, failed: out.failed, results: out.results.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })) };
+  },
+});
+
+register("agent.cancel", {
+  doc: "取消待确认的方案（不做任何改动）",
+  undoable: false,
+  handler: () => {
+    if (!store.get().agent.pendingPlan) return { ok: false, error: "NO_PENDING_PLAN" };
+    cancelPlan();
+    return { ok: true };
+  },
+});
+
+register("agent.run-step", {
+  doc: "执行方案中的单独一步（Manual 模式逐条执行）：step = {action, payload, label, role}",
+  params: { step: "object", messageId: "string", index: "number" },
+  undoable: false,
+  handler: ({ step, messageId, index }) => {
+    let st = step;
+    if (!st && messageId !== undefined) st = store.get().agent.messages.find((m) => m.id === messageId)?.plan?.steps?.[Number(index)];
+    if (!st || !st.action) return { ok: false, error: "NO_STEP" };
+    const r = runStep(st);
+    return { ok: !!r.ok, result: r };
+  },
+});
+
+register("agent.set-mode", {
+  doc: "设置 Agent 工作模式：collaborative 出方案再确认 / lead 直接执行 / manual 只出方案",
+  params: { mode: "collaborative|lead|manual" },
+  required: ["mode"],
+  undoable: false,
+  validate: ({ mode }) => (["collaborative", "lead", "manual"].includes(mode) ? null : { error: "BAD_MODE" }),
+  handler: ({ mode }) => {
+    store.patch((x) => (x.agent.mode = mode));
+    return { ok: true, mode };
+  },
+});
+
+register("agent.say", {
+  doc: "向 Agent 会话追加一条消息（外部 LLM 后端把回复写回会话用）",
+  params: { role: "agent|user|plan", text: "string" },
+  required: ["text"],
+  undoable: false,
+  handler: ({ role, text }) => {
+    say(role || "agent", text);
+    return { ok: true };
   },
 });
 

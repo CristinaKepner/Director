@@ -5,10 +5,11 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { RectAreaLightHelper } from "three/addons/helpers/RectAreaLightHelper.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { store } from "./store.js";
-import { dispatch, setHooks } from "./actions.js";
-import { cameraStateAt, entityStateAt, lightStateAt, gaitOffsets, sequenceLayout, subjectPoint } from "./motion.js";
-import { ASPECTS } from "./schema.js";
+import { store } from "../../core/store.js";
+import { setHooks } from "../../core/actions.js";
+import { dispatch } from "./client.js";
+import { cameraStateAt, entityStateAt, lightStateAt, gaitOffsets, sequenceLayout, subjectPoint } from "../../core/motion.js";
+import { ASPECTS } from "../../core/schema.js";
 
 const HELPER_LAYER = 1; // grid, labels, camera markers, light helpers, paths — visible in free view only
 let renderer, scene, world, helpers, freeCam, programCam, orbit, gizmo, gizmoHelper, clock, canvas, host, raycaster;

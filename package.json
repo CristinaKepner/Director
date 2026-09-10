@@ -1,16 +1,20 @@
 {
   "name": "director-console",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
-  "description": "Director Console · 导演台 — 3D director console + agent-operated Action Runtime (Director OS preview)",
-  "bin": { "director": "bin/director.mjs" },
+  "description": "Director Console · 导演台 — decoupled 3D director console: core runtime (core/), HTTP/SSE backend (server/), static Three.js frontend (web/)",
+  "bin": { "director": "server/bin/director.mjs" },
   "scripts": {
-    "dev": "node bin/director-server.mjs --port 5175",
-    "start": "node bin/director-server.mjs --port 5175",
+    "dev": "node server/bin/director-server.mjs --port 5175",
+    "start": "node server/bin/director-server.mjs --port 5175",
+    "start:api": "node server/bin/director-server.mjs --port 5175 --api-only",
+    "build:web": "node tools/build-web.mjs",
     "test": "node --test tests/runtime.test.mjs",
+    "test:api": "node --test server/tests/api.test.mjs",
+    "test:all": "node --test tests/runtime.test.mjs server/tests/api.test.mjs",
     "smoke": "node tools/smoke.mjs",
-    "cli": "node bin/director.mjs"
+    "cli": "node server/bin/director.mjs"
   },
   "engines": { "node": ">=18" }
 }

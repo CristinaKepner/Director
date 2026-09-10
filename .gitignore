@@ -27,3 +27,5 @@ dist-ssr
 .smoke/
 .server.log
 director-project.json
+server/data/*
+!server/data/.gitignore

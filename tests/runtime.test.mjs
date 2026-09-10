@@ -1,7 +1,7 @@
 // Phase 0 acceptance: no UI, no Three.js — project, scene, entities, cameras, shots, takes, prompts, undo, state machine, agent.
 import test from "node:test";
 import assert from "node:assert/strict";
-import * as R from "../js/runtime.js";
+import * as R from "../core/index.js";
 
 const { dispatch, store, summarize } = R;
 

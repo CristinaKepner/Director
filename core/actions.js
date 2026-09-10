@@ -1002,9 +1002,10 @@ function finishTakeInternal(d, id, extra = {}) {
     if (!s.takes.includes(id)) s.takes.push(id);
     s.status = "recorded";
   }
+  if (d.project.recording && d.project.recording.takeId !== id) return;
   d.project.recording = null;
   d.project.playing = false;
-  d.project.currentState = "REVIEW";
+  if (["RECORDING", "ARMED"].includes(d.project.currentState) || d.project.currentState === "REVIEW") d.project.currentState = "REVIEW";
 }
 
 register("take.arm", {
@@ -1076,6 +1077,9 @@ register("take.record", {
       hooks.recorder.start(take, s);
       return { ok: true, id, recording: true, hint: "录制中，结束后自动 take.finish" };
     }
+    // meta.capture: the caller (a browser client of the API server) records the proxy video itself and will
+    // upload it, then dispatch take.finish. The runtime stays in RECORDING until then (the host applies a watchdog).
+    if (meta.capture) return { ok: true, id, recording: true, awaiting: "client", frames: take.frames, fps: take.fps, hint: "client records; call take.finish when done" };
     store.patch((d) => finishTakeInternal(d, id, { log: [...take.log, { t: take.frames, msg: "headless finish" }] }));
     return { ok: true, id, recording: false };
   },
@@ -1087,6 +1091,7 @@ register("take.finish", {
   required: ["id"],
   undoable: false,
   handler({ id, videoUrl, thumbnail, frames, droppedFrames, log }) {
+    if (!D().takes.some((t) => t.id === id)) return { ok: false, error: "TAKE_NOT_FOUND" };
     store.patch((d) => finishTakeInternal(d, id, { videoUrl: videoUrl || null, thumbnail: thumbnail || null, capturedFrames: frames, droppedFrames: droppedFrames || 0, log: log || undefined }));
     return { ok: true, id };
   },
@@ -1096,11 +1101,12 @@ register("take.stop", {
   doc: "停止录制",
   params: { id: "string" },
   undoable: false,
-  handler({ id }) {
+  handler({ id }, meta = {}) {
     const rec = D().project.recording;
     const tid = id || rec?.takeId;
     if (!tid) return { ok: false, error: "NOT_RECORDING" };
     if (hooks.recorder) hooks.recorder.stop(tid);
+    else if (meta.capture) return { ok: true, id: tid, awaiting: "client", hint: "client stops its recorder and calls take.finish" };
     else store.patch((d) => finishTakeInternal(d, tid));
     return { ok: true, id: tid };
   },
