@@ -32,6 +32,9 @@ await page.addInitScript(() => localStorage.clear());
 await page.goto(`${BASE}/web/`, { waitUntil: "domcontentloaded" });
 await page.waitForFunction(() => window.__dc?.ready && window.__dc?.viewportReady, null, { timeout: 30000 });
 await page.waitForTimeout(1500);
+await page.screenshot({ path: path.join(OUT, "00-guide.png") });
+await page.evaluate(() => document.querySelector("#guide [data-skip]")?.click());
+await page.waitForTimeout(300);
 
 const mode = await page.evaluate(() => window.__dc.client.mode);
 const ctx = await page.evaluate(() => window.__dc.local("context.scene").data);

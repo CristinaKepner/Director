@@ -41,7 +41,7 @@ export async function connect() {
   client.base = resolveApiBase();
   setMode("connecting");
   try {
-    const h = await api.get("health", { timeout: 3000 });
+    const h = await api.get("health", { timeout: 8000 });
     if (!h?.ok) throw new Error("bad health");
     client.service = h.service;
     client.generation = h.generation || null;
@@ -49,10 +49,31 @@ export async function connect() {
   } catch (err) {
     client.lastError = String(err?.message || err);
     setMode("standalone");
+    scheduleReprobe();
     return false;
   }
   await openStream();
+  if (client.mode !== "online") scheduleReprobe();
   return client.mode === "online";
+}
+
+// standalone is a fallback, not a destination: keep knocking, switch over as soon as the backend answers
+let reprobe = null;
+function scheduleReprobe() {
+  clearTimeout(reprobe);
+  reprobe = setTimeout(async () => {
+    if (client.mode === "online") return;
+    try {
+      const h = await api.get("health", { timeout: 8000 });
+      if (h?.ok) {
+        client.service = h.service;
+        client.generation = h.generation || null;
+        client.llm = h.llm || null;
+        await openStream();
+      }
+    } catch {}
+    if (client.mode !== "online") scheduleReprobe();
+  }, 10000);
 }
 
 let es = null, retry = 1000;

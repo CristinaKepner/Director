@@ -108,6 +108,29 @@ export function createHost(opts = {}) {
     }
   }
 
+  // generation jobs → conversation: one message per finished job, media attached
+  const announced = new Map();
+  store.subscribe((d, info) => {
+    if (info?.light) return;
+    for (const j of d.jobs) {
+      const prev = announced.get(j.id);
+      if (prev === undefined) {
+        announced.set(j.id, j.status);
+        continue;
+      }
+      if (prev === j.status) continue;
+      announced.set(j.id, j.status);
+      if (!["done", "failed"].includes(j.status)) continue;
+      const shot = d.shots.find((s) => s.id === j.shotId);
+      const label = `${shot ? shot.index + " " + shot.title : j.shotId} · ${j.model} · ${j.mode}`;
+      queueMicrotask(() => {
+        if (j.status === "done" && j.result?.url) R.say("agent", `${label} 生成完成。看完直接说要改什么：人物外观、站位、灯光、运镜，我改好后可以再生成一次。`, { media: { url: j.result.url, kind: j.result.kind || "video" }, jobId: j.id, shotId: j.shotId });
+        else if (j.status === "done") R.say("agent", `${label} 结束（模拟队列，没有输出）。`, { jobId: j.id });
+        else R.say("agent", `${label} 生成失败：${String(j.error || "").slice(0, 200)}`, { jobId: j.id, shotId: j.shotId });
+      });
+    }
+  });
+
   function compactEvent(e) {
     return { id: e.id, action: e.action, source: e.source, actorId: e.actorId, ok: e.ok, targetIds: e.targetIds, timestamp: e.timestamp, ms: e.ms, undoable: e.undoable };
   }

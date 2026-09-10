@@ -61,7 +61,7 @@ export function createEmptyProject() {
       messages: [
         {
           role: "agent",
-          text: "导演台已上线。人类和 Agent 共用同一套 Action Runtime，所有改动都进 Event Log，可撤销。\n试试：「搭建夜景追车片」「把 A 机降到 0.4m 并 look-at 主角车」「换成日落逆光」「让车手举枪」「录制 shot_002」「给 shot_003 生成 V2V 提示词」。",
+          text: "说一句你要的镜头、机位、动作或光。每一步都可撤销。",
         },
       ],
     },

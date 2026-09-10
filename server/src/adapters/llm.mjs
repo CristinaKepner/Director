@@ -56,6 +56,7 @@ export function createLlmPlanner(opts = {}) {
 - 用户只是提问/闲聊/要建议时 steps 为空，把回答写在 reply。
 - 会大幅改动工程（scene.demo、project.new、删除多个对象、批量生成）时 needsConfirm=true。
 - label 用用户的语言（中文指令就中文）。
+- 用户对生成结果提意见（人物不对、位置不对、想换光、重新摆）时：先用 entity.update（continuity.look / color / role）、entity.transform、entity.pose、scene.preset、camera.* 改场景，再 generation.prompt 重新编译，最后 generation.submit 用同一 provider / mode 再生成一次；把改了什么写进 reply。
 
 可用 Action：
 ${tools}

@@ -5,7 +5,7 @@ import "../../core/index.js"; // registers scene.demo / agent.* actions on the l
 import { store } from "../../core/store.js";
 import { dispatch as localDispatch } from "../../core/actions.js";
 import { initViewport } from "./viewport.js";
-import { bindUI, loadSaved, toast } from "./ui.js";
+import { bindUI, loadSaved, toast, maybeShowGuide } from "./ui.js";
 import { connect, dispatch, client, onMode } from "./client.js";
 import { say } from "../../core/agent.js";
 
@@ -19,12 +19,12 @@ initViewport(document.getElementById("viewport"));
 const online = await connect();
 if (online) {
   const d = store.get();
-  toast(`已连接后端 ${client.service || ""} · ${d.project.name} · ${d.shots.length} 个镜头`);
+  toast(`已连接后端 · ${d.project.name}`);
 } else {
   const restored = loadSaved();
   if (!restored) localDispatch("scene.demo", { name: "city-edge" }, { source: "system", actorId: "scene-builder" });
   else say("agent", `已从本地恢复工程「${store.get().project.name}」（${store.get().scene.name}，${store.get().shots.length} 个镜头）。可以继续，或从顶栏「示例…」重置。`);
-  toast(restored ? "单机模式：后端不可达，已恢复本地工程" : "单机模式：后端不可达，已载入示例场景「城市边缘」");
+  toast("单机模式：后端不可达", true);
 }
 onMode((m) => {
   if (m === "reconnecting") toast("后端连接断开，重连中…", true);
@@ -36,3 +36,4 @@ window.__dc.dispatch = dispatch; // async: routes to backend when online
 window.__dc.local = localDispatch; // sync: local replica only (tests / debugging)
 window.__dc.client = client;
 window.__dc.ready = true;
+if (!new URLSearchParams(location.search).has("noguide")) maybeShowGuide();
