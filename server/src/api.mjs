@@ -182,8 +182,11 @@ export function createApp(host, opts = {}) {
       if (!staticRoot) return json(res, 404, { ok: false, error: "API_ONLY", hint: "frontend is served elsewhere; API lives under /api" });
       // static frontend: repo root is served so web/ can import ../core/ ; "/" opens the console
       if (p === "/" || p === "") {
-        res.writeHead(302, { location: `${url.pathname.replace(/\/?$/, "")}/web/` });
-        return res.end();
+        // client-side redirect relative to the address the browser actually used, so it survives
+        // path-prefix proxies (code-server /proxy/<port>/) and a missing trailing slash alike
+        const html = `<!doctype html><meta charset="utf-8"><title>Director Console</title><script>location.replace(new URL("web/", location.href.endsWith("/") ? location.href : location.href + "/"))</script><a href="web/">Director Console → web/</a>`;
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        return res.end(html);
       }
       let file = path.normalize(decodeURIComponent(p)).replace(/^(\.\.[/\\])+/, "");
       if (file.endsWith("/") || file.endsWith("\\")) file += "index.html";
