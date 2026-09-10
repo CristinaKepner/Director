@@ -40,6 +40,7 @@ import {
   FIDELITY,
 } from "./schema.js";
 import { attachPrompts, compileShot } from "./prompts.js";
+import { MODEL_LIBRARY, ROOM_PATTERNS } from "./schema.js";
 import { cameraStateAt, entityStateAt, sequenceLayout } from "./motion.js";
 
 export const RUNTIME_VERSION = "director-runtime/0.4";
@@ -356,12 +357,31 @@ register("scene.preset", {
   },
 });
 
+register("scene.room", {
+  doc: `摄影棚房间（合并自 studio）：width/depth/height 米，pattern ${ROOM_PATTERNS.join("/")}（棋盘 / 纯白 / 校准图案），spacing 格距，walls 后墙+侧墙，cyc 圆角回幕；clear=true 拆掉`,
+  params: { width: "number", depth: "number", height: "number", pattern: ROOM_PATTERNS.join("|"), spacing: "number", walls: "boolean", cyc: "boolean", color: "#hex", clear: "boolean" },
+  handler({ width, depth, height, pattern, spacing, walls, cyc, color, clear }) {
+    store.patch((d) => {
+      if (clear) {
+        delete d.scene.environment.room;
+        return;
+      }
+      const cur = d.scene.environment.room || { width: 8, depth: 12, height: 4, pattern: "standard", spacing: 1, walls: true, cyc: true, color: "#e9e9ec" };
+      d.scene.environment.room = { ...cur, ...(width !== undefined && { width: Number(width) }), ...(depth !== undefined && { depth: Number(depth) }), ...(height !== undefined && { height: Number(height) }), ...(pattern && ROOM_PATTERNS.includes(pattern) && { pattern }), ...(spacing !== undefined && { spacing: Number(spacing) }), ...(walls !== undefined && { walls: !!walls }), ...(cyc !== undefined && { cyc: !!cyc }), ...(color && { color }) };
+    });
+    return { ok: true, room: D().scene.environment.room || null };
+  },
+});
+
 // ============ entity.* ============
 register("entity.create", {
   doc: `创建语义物体。type: ${SEMANTIC_TYPES.join("/")}；proxy 几何 box/sphere/cylinder/capsule/cone/plane；position=接地点`,
   params: { id: "string", type: "semanticType", displayName: "string", proxy: "geometry", color: "#hex", dimensions: "[w,h,d]", position: "[x,y,z]", yaw: "radians", role: "string", aliases: "string[]", continuity: "object", agentMemory: "string[]", pose: Object.keys(POSES).join("|"), assetRef: "string" },
   validate: (p, d) => (p.id && d.entities.some((e) => e.id === p.id) ? { error: "DUPLICATE_ID" } : null),
   handler(p) {
+    // glTF model from the library: sets semantic type, default dimensions and assetRef
+    const lib = p.model && MODEL_LIBRARY[p.model];
+    if (lib) p = { ...p, type: p.type || p.semanticType || lib.type, dimensions: p.dimensions || lib.dims, assetRef: lib.url, displayName: p.displayName || lib.zh };
     const type = SEMANTIC_PROXY[p.type || p.semanticType] ? p.type || p.semanticType : "prop";
     const def = SEMANTIC_PROXY[type];
     const id = p.id || uid(type.slice(0, 3));
@@ -472,6 +492,57 @@ register("entity.path", {
   },
 });
 
+// Walk path (merged from handoff/studio): waypoints + per-segment seconds, a zero-length segment is a dwell.
+// Compiles into entity.path keyframes (frame, position, yaw) so playback / prompts / takes need nothing new.
+register("entity.walk", {
+  doc: "走位：waypoints [[x,z]|[x,y,z]…] + durations [每段秒数]（同一点重复 = 原地停留）；自动朝向行进方向。startFrame 默认镜头入点或 0；clear=true 清除",
+  params: { id: "string", waypoints: "[[x,z]|[x,y,z]]", durations: "[seconds per segment]", startFrame: "number", faceDirection: "boolean (default true)", clear: "boolean" },
+  required: ["id"],
+  validate: ({ id, waypoints, clear }, d) => (!d.entities.some((e) => e.id === id) ? { error: "NOT_FOUND" } : !clear && (!Array.isArray(waypoints) || waypoints.length < 1) ? { error: "NEED_WAYPOINTS" } : null),
+  handler({ id, waypoints, durations = [], startFrame, faceDirection = true, clear }) {
+    const d0 = D();
+    const fps = d0.project.fps || 24;
+    const e0 = d0.entities.find((x) => x.id === id);
+    if (clear) {
+      store.patch((d) => {
+        const e = d.entities.find((x) => x.id === id);
+        e.path = null;
+        e.walk = null;
+        e.version += 1;
+      });
+      return { ok: true, id, cleared: true };
+    }
+    const pts = waypoints.map((w) => {
+      const v = parseVec(w);
+      return v.length === 2 ? [v[0], e0.transform.position[1] || 0, v[1]] : [v[0], v[1] ?? 0, v[2] ?? 0];
+    });
+    const shot = d0.shots.find((s) => s.id === d0.project.currentShotId);
+    let frame = startFrame !== undefined ? Number(startFrame) : shot ? shot.range.inFrame : 0;
+    let yaw = e0.transform.rotation[1];
+    const path = [{ frame, position: pts[0], yaw }];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const dx = b[0] - a[0], dz = b[2] - a[2];
+      const dist = Math.hypot(dx, dz);
+      const secs = durations[i - 1] !== undefined ? Number(durations[i - 1]) : dist / 1.3; // default walking speed 1.3 m/s
+      if (faceDirection && dist > 1e-4) yaw = Math.atan2(dx, dz);
+      if (dist > 1e-4) path[path.length - 1].yaw = yaw; // turn toward the next point before moving
+      path[path.length - 1].ease = "linear"; // constant walking speed between waypoints
+      frame += Math.max(1, Math.round(secs * fps));
+      path.push({ frame, position: b, yaw });
+    }
+    store.patch((d) => {
+      const e = d.entities.find((x) => x.id === id);
+      e.path = path;
+      e.walk = { waypoints: pts, durations: durations.map(Number), startFrame: path[0].frame };
+      e.transform.position = [...pts[0]];
+      e.version += 1;
+    });
+    const total = (path[path.length - 1].frame - path[0].frame) / fps;
+    return { ok: true, id, keyframes: path.length, seconds: +total.toFixed(2), endFrame: path[path.length - 1].frame };
+  },
+});
+
 register("entity.duplicate", {
   doc: "复制物体",
   params: { id: "string", newId: "string" },
@@ -492,14 +563,18 @@ register("entity.duplicate", {
 });
 
 register("entity.replace-proxy", {
-  doc: "用资产替换代理体（保留语义 ID、变换、镜头引用）",
-  params: { id: "string", asset: "string (glb ref)", geometry: "geometry" },
+  doc: `用资产替换代理体（保留语义 ID、变换、镜头引用）。model: 模型库 ${Object.keys(MODEL_LIBRARY).join("/")}；asset: 任意 glb URL；asset=null 回到白模`,
+  params: { id: "string", model: Object.keys(MODEL_LIBRARY).join("|"), asset: "string (glb url) | null", geometry: "geometry" },
   required: ["id"],
-  handler({ id, asset, geometry }) {
+  validate: ({ model }) => (model && !MODEL_LIBRARY[model] ? { error: "UNKNOWN_MODEL", allowed: Object.keys(MODEL_LIBRARY) } : null),
+  handler({ id, model, asset, geometry }) {
     store.patch((d) => {
       const e = d.entities.find((x) => x.id === id);
       if (!e) return;
-      if (asset !== undefined) e.assetRef = asset;
+      if (model) {
+        e.assetRef = MODEL_LIBRARY[model].url;
+        if (!e.proxy.dimensions) e.proxy.dimensions = MODEL_LIBRARY[model].dims;
+      } else if (asset !== undefined) e.assetRef = asset || null;
       if (geometry) e.proxy.geometry = geometry;
       e.version += 1;
     });

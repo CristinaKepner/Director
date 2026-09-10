@@ -4,7 +4,7 @@
 import { store, persistable, historyInfo } from "../../core/store.js";
 import { timecode, getHooks } from "../../core/actions.js";
 import { DEMOS } from "../../core/demo.js";
-import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY } from "../../core/schema.js";
+import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
 import { dispatch, client, isOnline } from "./client.js";
 import { focusSelected, resetView } from "./viewport.js";
 
@@ -453,6 +453,13 @@ function inspectScene(el, d) {
     ${field("名称", `<input data-k="sceneName" value="${esc(d.scene.name)}" />`)}
     ${field("光", `<select data-k="preset">${options(Object.keys(LIGHT_PRESETS), env.preset, Object.fromEntries(Object.entries(LIGHT_PRESETS).map(([k, v]) => [k, v.zh])))}</select>`)}
     ${field("风格", `<input data-k="style" value="${esc(d.project.style || "")}" placeholder="photoreal cinematic…" />`)}
+    ${more("房间 · 影棚", `
+      ${field("房间", `<select data-room="on"><option value="">无（无限地面）</option><option value="1" ${env.room ? "selected" : ""}>摄影棚房间</option></select>`)}
+      ${env.room ? `${field("尺寸", xyz("room", [env.room.width, env.room.depth, env.room.height]))}
+      ${field("地面", `<select data-room="pattern">${options(ROOM_PATTERNS, env.room.pattern, { standard: "棋盘格", plain: "纯色", calibration: "校准图案" })}</select>`)}
+      ${field("格距", slider("room:spacing", env.room.spacing ?? 1, 0.25, 3, 0.25))}
+      ${field("墙 · 回幕", `<span><input type="checkbox" data-room="walls" ${env.room.walls !== false ? "checked" : ""} /> 墙 <input type="checkbox" data-room="cyc" ${env.room.cyc !== false ? "checked" : ""} /> 圆角回幕</span>`)}
+      ${field("颜色", `<input type="color" data-room="color" value="${env.room.color || "#e9e9ec"}" />`)}` : ""}`, !!env.room)}
     ${more("环境", `
       ${field("背景", `<input type="color" data-env="bg" value="${env.bg || "#07080d"}" />`)}
       ${field("雾", slider("env:fog", env.fog ?? 0.02, 0, 0.08, 0.001))}
@@ -472,6 +479,13 @@ function inspectScene(el, d) {
   });
   el.querySelector('[data-k="style"]').onchange = (ev) => dispatch("project.set-style", { style: ev.target.value });
   el.querySelector('[data-k="styleZh"]').onchange = (ev) => dispatch("project.set-style", { styleZh: ev.target.value });
+  el.querySelector('[data-room="on"]').onchange = (ev) => dispatch("scene.room", ev.target.value ? {} : { clear: true });
+  bindXyz(el, "room", (v) => dispatch("scene.room", { width: v[0], depth: v[1], height: v[2] }));
+  el.querySelector('[data-room="pattern"]')?.addEventListener("change", (ev) => dispatch("scene.room", { pattern: ev.target.value }));
+  el.querySelector('[data-room="walls"]')?.addEventListener("change", (ev) => dispatch("scene.room", { walls: ev.target.checked }));
+  el.querySelector('[data-room="cyc"]')?.addEventListener("change", (ev) => dispatch("scene.room", { cyc: ev.target.checked }));
+  el.querySelector('[data-room="color"]')?.addEventListener("change", (ev) => dispatch("scene.room", { color: ev.target.value }));
+  el.querySelector('[data-slider="room:spacing"]')?.addEventListener("change", (ev) => dispatch("scene.room", { spacing: Number(ev.target.value) }));
 }
 
 function inspectEntity(el, e, d) {
@@ -483,6 +497,7 @@ function inspectEntity(el, e, d) {
     ${field("朝向", slider("yaw", e.transform.rotation[1], -3.1416, 3.1416, 0.01))}
     ${isChar ? field("姿势", `<select data-k="pose">${options([...Object.keys(POSES), "custom"], e.pose)}</select>`) : ""}
     ${field("外观", `<input data-cont="look" value="${esc(e.continuity?.look || "")}" placeholder="long dark coat…" />`)}
+    ${field("模型", `<select data-k="model"><option value="">白模代理</option>${Object.entries(MODEL_LIBRARY).map(([k, m]) => `<option value="${k}" ${e.assetRef === m.url ? "selected" : ""}>${esc(m.zh)}</option>`).join("")}${e.assetRef && !Object.values(MODEL_LIBRARY).some((m) => m.url === e.assetRef) ? `<option value="__custom" selected>${esc(e.assetRef)}</option>` : ""}</select>`)}
     <div class="btn-row"><button data-act="lookat">Program 看向它</button><button data-act="focus">聚焦</button><button data-act="dup">复制</button></div>
     ${more("形体", `
       ${field("类型", `<input value="${e.semanticType} · ${e.proxy.geometry}" disabled />`)}
@@ -491,8 +506,10 @@ function inspectEntity(el, e, d) {
       ${field("颜色", `<input type="color" data-k="color" value="${e.proxy.color || "#888888"}" />`)}
       ${field("色彩", `<input data-cont="color" value="${esc(e.continuity?.color || "")}" />`)}`)}
     ${isChar ? more("关节", `<div class="joints">${JOINT_NAMES.map((j) => `<div class="field"><span>${j}</span>${slider(`joint:${j}`, e.joints?.[j] ?? 0, JOINT_LIMITS[j][0], JOINT_LIMITS[j][1], 0.01)}</div>`).join("")}</div>`) : ""}
-    ${more("动线 · 备注", `
-      <div class="btn-row"><button data-act="pathKey">在播放头加动线点</button><button data-act="pathClear">清除动线</button></div>
+    ${more("走位 · 动线 · 备注", `
+      ${field("路点", `<textarea data-k="waypoints" rows="3" placeholder="每行一个点 x,z（或 x,y,z）；重复上一点 = 原地停留">${esc((e.walk?.waypoints || []).map((p) => p.map((v) => +v.toFixed(2)).join(",")).join("\n"))}</textarea>`)}
+      ${field("每段秒", `<input data-k="durations" value="${esc((e.walk?.durations || []).join(","))}" placeholder="3,3,5,3（留空按 1.3 m/s）" />`)}
+      <div class="btn-row"><button data-act="walk" class="primary">生成走位</button><button data-act="pathKey">在播放头加动线点</button><button data-act="pathClear">清除动线</button></div>
       ${(e.agentMemory || []).length ? `<p class="prompt">${esc(e.agentMemory.join("\n"))}</p>` : ""}
       ${field("备注", `<input data-k="remember" placeholder="回车追加" />`)}`)}`;
   el.querySelector('[data-k="displayName"]').onchange = (ev) => dispatch("entity.update", { id: e.id, displayName: ev.target.value });
@@ -511,8 +528,15 @@ function inspectEntity(el, e, d) {
   el.querySelector('[data-k="pose"]')?.addEventListener("change", (ev) => ev.target.value !== "custom" && dispatch("entity.pose", { id: e.id, pose: ev.target.value }));
   el.querySelectorAll("[data-cont]").forEach((inp) => (inp.onchange = () => dispatch("entity.update", { id: e.id, continuity: { [inp.dataset.cont]: inp.value } })));
   el.querySelector('[data-k="remember"]').onchange = (ev) => ev.target.value && dispatch("entity.update", { id: e.id, remember: ev.target.value });
+  el.querySelector('[data-k="model"]').onchange = (ev) => (ev.target.value === "__custom" ? null : report(dispatch("entity.replace-proxy", ev.target.value ? { id: e.id, model: ev.target.value } : { id: e.id, asset: null })));
+  el.querySelector('[data-act="walk"]').onclick = () => {
+    const waypoints = el.querySelector('[data-k="waypoints"]').value.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => l.split(/[,\s]+/).map(Number));
+    const durations = el.querySelector('[data-k="durations"]').value.split(/[,\s]+/).filter(Boolean).map(Number);
+    if (!waypoints.length) return toast("先填路点", true);
+    report(dispatch("entity.walk", { id: e.id, waypoints, durations }));
+  };
   el.querySelector('[data-act="pathKey"]').onclick = () => dispatch("entity.path", { id: e.id, append: { frame: d.project.playhead, position: [...e.transform.position], yaw: e.transform.rotation[1] } });
-  el.querySelector('[data-act="pathClear"]').onclick = () => dispatch("entity.path", { id: e.id, clear: true });
+  el.querySelector('[data-act="pathClear"]').onclick = () => dispatch("entity.walk", { id: e.id, clear: true });
   el.querySelector('[data-act="dup"]').onclick = () => dispatch("entity.duplicate", { id: e.id });
   el.querySelector('[data-act="focus"]').onclick = focusSelected;
   el.querySelector('[data-act="lookat"]').onclick = () => d.project.programCameraId && report(dispatch("camera.look-at", { id: d.project.programCameraId, target: e.id }));

@@ -180,6 +180,13 @@ export function createApp(host, opts = {}) {
         return serveFile(res, abs, true);
       }
       if (!staticRoot) return json(res, 404, { ok: false, error: "API_ONLY", hint: "frontend is served elsewhere; API lives under /api" });
+      // merged TapNow-studio replica (studio/, built with bun → studio/dist) at /studio/
+      if (p === "/studio" || p.startsWith("/studio/")) {
+        const rel = decodeURIComponent(p.replace(/^\/studio\/?/, "")) || "index.html";
+        const abs = path.join(staticRoot, "studio", "dist", path.normalize(rel).replace(/^(\.\.[/\\])+/, ""));
+        if (!abs.startsWith(path.join(staticRoot, "studio", "dist"))) return json(res, 403, { ok: false, error: "FORBIDDEN" });
+        return fs.existsSync(abs) && fs.statSync(abs).isFile() ? serveFile(res, abs, abs.includes(`${path.sep}assets${path.sep}`) || abs.includes(`${path.sep}models${path.sep}`)) : serveFile(res, path.join(staticRoot, "studio", "dist", "index.html"));
+      }
       // static frontend: repo root is served so web/ can import ../core/ ; "/" opens the console
       if (p === "/" || p === "") {
         // client-side redirect relative to the address the browser actually used, so it survives
@@ -192,7 +199,7 @@ export function createApp(host, opts = {}) {
       if (file.endsWith("/") || file.endsWith("\\")) file += "index.html";
       const abs = path.join(staticRoot, file);
       if (!abs.startsWith(staticRoot)) return json(res, 403, { ok: false, error: "FORBIDDEN" });
-      if (/[\\/](server|docs|tests|tools|node_modules|\.git)([\\/]|$)/.test(abs.slice(staticRoot.length))) return json(res, 404, { ok: false, error: "NOT_FOUND" });
+      if (/[\\/](server|docs|tests|tools|node_modules|studio|\.git)([\\/]|$)/.test(abs.slice(staticRoot.length))) return json(res, 404, { ok: false, error: "NOT_FOUND" });
       return serveFile(res, abs, abs.includes(`${path.sep}vendor${path.sep}`));
     } catch (err) {
       const code = err.code && Number.isInteger(err.code) ? err.code : 500;

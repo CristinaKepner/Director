@@ -29,3 +29,6 @@ dist-ssr
 director-project.json
 server/data/*
 !server/data/.gitignore
+
+studio/node_modules
+studio/dist

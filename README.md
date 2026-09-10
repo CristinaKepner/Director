@@ -2,7 +2,7 @@
 
 > 创作从这一帧开始。面向生成式影视预演的浏览器 3D 导演台：人类、CLI 和 Agent 操作**同一套 Director Runtime、同一份场景、同一套镜头数据和同一套 Action**。
 
-对照文档：`docs/backend-api.md`（后端接口契约）、`director-console-development-spec.md`（Director OS 规格）、`PRODUCT.md`（精细化 vs 白模 + prompt 的产品决策）。
+对照文档：`docs/backend-api.md`（后端接口契约）、`docs/handoff-merge.md`（合并进来的 TapNow 3D 片场复刻 `studio/` 与两边数据模型对照）、`docs/tvc/`（一次完整走通的 60 s TVC 测试：LLM 分镜 → 白模预演 → 逐镜 Take → 故事版 → 真实生成）、`director-console-development-spec.md`（Director OS 规格）、`PRODUCT.md`（精细化 vs 白模 + prompt 的产品决策）。
 
 ## 结构：前后端解耦
 
@@ -10,7 +10,8 @@
 core/      Director Runtime —— 引擎无关、无 DOM：schema · store · actions(≈95 个 Action) · motion · prompts · demo · agent
 server/    后端 —— 持有权威运行时（Source of Truth）+ REST/SSE API + 工程持久化 + Take 媒体存储 + CLI；零依赖 Node
 web/       前端 —— 静态 Three.js 站点；本地保留一份 core 副本做渲染，所有改动工程的 Action 发往后端，后端快照实时回推
-docs/      backend-api.md：接口、Action 分组、快照结构、SSE、录制协议、部署形态、错误码
+docs/      backend-api.md：接口契约 · handoff-merge.md：合并说明 · handoff/：原站探查 · tvc/：端到端测试记录
+studio/    合并进来的 TapNow 3D 片场复刻（走位 / 关键帧 / 镜头轨 / glTF），`npm run build:studio` 后由后端挂在 /studio/
 tests/     核心运行时验收（无 UI）   server/tests/ 后端 HTTP 验收   tools/ 浏览器冒烟 · 前端打包
 ```
 

@@ -103,6 +103,32 @@ export const LIGHT_TYPES = ["directional", "spot", "point", "area", "hemisphere"
 
 // Cinematic lighting presets. `lights` are created relative to the world origin; env patches the scene environment.
 export const LIGHT_PRESETS = {
+  // ---- 合并自 handoff/studio 的影棚布光（角度按围绕主体的方位换算成位置，半径 5 m）----
+  "softbox-studio": {
+    zh: "柔光影棚", en: "soft studio light, large softbox key, gentle fill, clean white cyclorama",
+    env: { bg: "#0e0f12", fog: 0.004, ambient: 0.32, sky: "#ffffff", ground: "#3a3a3a", exposure: 1.1, wet: false },
+    lights: [
+      { id: "sb_key", name: "主光 Softbox", type: "area", color: "#fff6e8", intensity: 9, position: [2.9, 4.2, 4.1], width: 2.6, height: 1.8, group: "key", castShadow: true },
+      { id: "sb_fill", name: "补光", type: "area", color: "#e8f0ff", intensity: 4, position: [-4.1, 2.6, 2.9], width: 2.4, height: 1.6, group: "fill" },
+      { id: "sb_rim", name: "轮廓光", type: "spot", color: "#ffffff", intensity: 6, position: [2.5, 3.4, -4.3], group: "rim" },
+    ],
+  },
+  "hard-side": {
+    zh: "单侧硬光", en: "single hard side light, deep shadows, minimal bounce",
+    env: { bg: "#08090b", fog: 0.003, ambient: 0.08, sky: "#cfd8e8", ground: "#1a1a1a", exposure: 1.0, wet: false },
+    lights: [
+      { id: "hs_key", name: "硬光", type: "spot", color: "#ffffff", intensity: 16, position: [4.7, 4.5, 1.7], angle: 0.5, penumbra: 0.05, group: "key", castShadow: true },
+      { id: "hs_bounce", name: "反射补光", type: "area", color: "#cfd8e8", intensity: 1.6, position: [-4.9, 1.8, -0.9], width: 2, height: 1.4, group: "fill" },
+    ],
+  },
+  "noon-daylight": {
+    zh: "正午日光", en: "hard overhead noon sunlight, bright sky fill, crisp shadows",
+    env: { bg: "#9fc4e8", fog: 0.002, ambient: 0.55, sky: "#dff1ff", ground: "#8a8f96", exposure: 1.0, wet: false },
+    lights: [
+      { id: "noon_sun", name: "太阳", type: "directional", color: "#fff8ea", intensity: 2.8, position: [3, 14, 2], group: "key", castShadow: true },
+      { id: "noon_sky", name: "天光", type: "hemisphere", color: "#dff1ff", intensity: 0.7, position: [0, 20, 0], group: "fill" },
+    ],
+  },
   "night-neon": {
     zh: "夜景霓虹", en: "night city neon, wet asphalt reflections",
     env: { bg: "#07080d", fog: 0.028, ambient: 0.12, sky: "#26304a", ground: "#150c0c", exposure: 1.3, wet: true },
@@ -176,7 +202,28 @@ export const LIGHT_PRESETS = {
 
 export const ENV_PRESETS = Object.fromEntries(Object.entries(LIGHT_PRESETS).map(([k, v]) => [k, v.env]));
 
-export const ASPECTS = { "16:9": 16 / 9, "2.39:1": 2.39, "1.85:1": 1.85, "4:3": 4 / 3, "9:16": 9 / 16, "1:1": 1 };
+// 19 档画幅（合并自 handoff/studio，与原站菜单顺序一致）
+export const ASPECTS = { "16:9": 16 / 9, "9:16": 9 / 16, "4:3": 4 / 3, "3:4": 3 / 4, "1:1": 1, "3:2": 3 / 2, "2:3": 2 / 3, "4:5": 4 / 5, "9:19.5": 9 / 19.5, "9:21": 9 / 21, "1.33:1": 1.33, "1.37:1": 1.37, "1.43:1": 1.43, "1.66:1": 1.66, "1.85:1": 1.85, "2.00:1": 2, "2.20:1": 2.2, "2.35:1": 2.35, "2.39:1": 2.39 };
+
+// glTF 模型库（合并自 handoff/studio 的 public/models，随前端 vendor 分发）：entity.create {model} / entity.replace-proxy {model}
+export const MODEL_LIBRARY = {
+  person: { name: "人物", zh: "人物", url: "models/Person.glb", type: "character", dims: [0.6, 1.75, 0.4], tags: ["person", "人", "人物", "演员"] },
+  humanoid: { name: "人形", zh: "人形", url: "models/Humanoid.glb", type: "character", dims: [0.6, 1.75, 0.4], tags: ["humanoid", "人形"] },
+  character: { name: "角色", zh: "角色", url: "models/Character.glb", type: "character", dims: [0.6, 1.7, 0.4], tags: ["character", "角色"] },
+  robot: { name: "机器人", zh: "机器人", url: "models/Robot.glb", type: "character", dims: [0.8, 1.8, 0.6], tags: ["robot", "机器人"] },
+  tree: { name: "树", zh: "树", url: "models/Tree.glb", type: "environment", dims: [3, 5, 3], tags: ["tree", "树", "植物"] },
+  bush: { name: "灌木", zh: "灌木", url: "models/Bush.glb", type: "environment", dims: [1.2, 1, 1.2], tags: ["bush", "灌木", "绿植", "盆栽"] },
+  rock: { name: "岩石", zh: "岩石", url: "models/Rock.glb", type: "environment", dims: [1.2, 0.8, 1], tags: ["rock", "岩石", "石头"] },
+  house: { name: "房子", zh: "房子", url: "models/House.glb", type: "building", dims: [8, 6, 8], tags: ["house", "房子", "屋"] },
+  fence: { name: "围栏", zh: "围栏", url: "models/Fence.glb", type: "environment", dims: [2, 1, 0.2], tags: ["fence", "围栏", "栅栏"] },
+  box: { name: "木箱", zh: "木箱", url: "models/Box.glb", type: "prop", dims: [1, 1, 1], tags: ["box", "crate", "木箱", "箱子"] },
+  chair: { name: "椅子", zh: "椅子", url: "models/Chair.glb", type: "prop", dims: [0.6, 0.9, 0.6], tags: ["chair", "椅子"] },
+  table: { name: "桌子", zh: "桌子", url: "models/Table.glb", type: "prop", dims: [1.6, 0.75, 0.8], tags: ["table", "桌子"] },
+  sofa: { name: "沙发", zh: "沙发", url: "models/Sofa.glb", type: "prop", dims: [2, 0.8, 0.9], tags: ["sofa", "沙发"] },
+};
+
+// 摄影棚房间（合并自 studio 的 buildRoom）：scene.room {width, depth, height, pattern, spacing, walls, cyc}
+export const ROOM_PATTERNS = ["standard", "plain", "calibration"];
 
 export const PROVIDERS = {
   "minimax-h3": { name: "MiniMax Hailuo 03", modes: ["t2v", "i2v", "v2v"], maxSeconds: 10 },

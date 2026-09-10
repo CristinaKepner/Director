@@ -5,6 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { RectAreaLightHelper } from "three/addons/helpers/RectAreaLightHelper.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { store } from "../../core/store.js";
 import { setHooks } from "../../core/actions.js";
 import { dispatch } from "./client.js";
@@ -14,6 +15,9 @@ import { ASPECTS } from "../../core/schema.js";
 const HELPER_LAYER = 1; // grid, labels, camera markers, light helpers, paths — visible in free view only
 let renderer, scene, world, helpers, freeCam, programCam, orbit, gizmo, gizmoHelper, clock, canvas, host, raycaster;
 let hemi, ground, grid, fogObj;
+let roomObj = null, roomSig = "";
+const gltfLoader = new GLTFLoader();
+const gltfCache = new Map(); // url → Promise<scene>
 const entityMap = new Map(), lightMap = new Map(), camMap = new Map();
 let pathLines = { motion: null, keys: null, entity: [] };
 let pipFrame, safeFrame, lastRect = { x: 0, y: 0, w: 1, h: 1 };
@@ -178,6 +182,21 @@ function sync(d) {
     ground.material.needsUpdate = true;
     applyShading(d.project.shading || "shaded");
   }
+  // studio room (merged from handoff/studio): floor pattern + walls + cyclorama replace the endless ground
+  const rsig = JSON.stringify(env.room || null);
+  if (rsig !== roomSig) {
+    roomSig = rsig;
+    if (roomObj) {
+      world.remove(roomObj);
+      roomObj = null;
+    }
+    if (env.room) {
+      roomObj = buildRoom(env.room);
+      world.add(roomObj);
+    }
+    ground.visible = !env.room;
+    grid.visible = !env.room;
+  }
   // entities
   const live = new Set();
   for (const ent of d.entities) {
@@ -186,7 +205,7 @@ function sync(d) {
     let rec = entityMap.get(ent.id);
     if (!rec || rec.sig !== esig) {
       if (rec) world.remove(rec.obj);
-      const obj = d.project.fidelity === "stylized" ? buildStylized(ent) : buildBlockout(ent);
+      const obj = ent.assetRef ? buildAsset(ent) : d.project.fidelity === "stylized" ? buildStylized(ent) : buildBlockout(ent);
       obj.userData = { id: ent.id, kind: "entity" };
       const lab = label(ent.displayName, ent.semanticType);
       lab.position.y = (ent.proxy.dimensions?.[1] || 1) * (ent.semanticType === "building" ? 1.02 : 1) + 0.35;
@@ -652,6 +671,132 @@ function buildBlockout(ent) {
   // orientation tick so blocking still shows where a person / car is facing
   if (t === "character") g.add(mesh(new THREE.BoxGeometry(0.08, 0.08, 0.1), mat("#2a2622"), [0, h * 0.86, w / 2]));
   if (t === "vehicle") g.add(mesh(new THREE.BoxGeometry(w * 0.6, 0.06, 0.12), new THREE.MeshBasicMaterial({ color: "#fff2c4" }), [0, h * 0.35, dd / 2 + 0.01]));
+  return g;
+}
+
+// glTF model (library or any URL). The blockout stays as a translucent placeholder until the model arrives,
+// then the model is scaled to the entity's height and grounded — semantic id / transform / shot refs never change.
+function buildAsset(ent) {
+  const g = buildBlockout(ent);
+  g.traverse((o) => {
+    if (o.isMesh && o.material) {
+      o.material = o.material.clone();
+      o.material.transparent = true;
+      o.material.opacity = 0.25;
+    }
+  });
+  const url = /^(https?:|\/|data:)/.test(ent.assetRef) ? ent.assetRef : new URL(`../vendor/${ent.assetRef}`, import.meta.url).toString();
+  if (!gltfCache.has(url)) gltfCache.set(url, new Promise((res, rej) => gltfLoader.load(url, (gltf) => res(gltf.scene), undefined, rej)));
+  gltfCache
+    .get(url)
+    .then((proto) => {
+      const model = proto.clone(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const [w, h] = ent.proxy.dimensions || [1, 1, 1];
+      const s = size.y > 1e-6 ? h / size.y : 1;
+      model.scale.setScalar(s);
+      const box2 = new THREE.Box3().setFromObject(model);
+      const c = new THREE.Vector3();
+      box2.getCenter(c);
+      model.position.set(-c.x, -box2.min.y, -c.z);
+      model.traverse((o) => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = true;
+          o.userData.pickId = ent.id;
+        }
+      });
+      // drop the placeholder meshes, keep the label
+      [...g.children].filter((o) => o.isMesh).forEach((o) => g.remove(o));
+      g.add(model);
+      g.userData.asset = url;
+    })
+    .catch((err) => console.warn("glTF load failed", url, err));
+  return g;
+}
+
+function patternTexture(pattern, spacing, w, d, color) {
+  const px = 64;
+  const cw = Math.max(64, Math.round((w / spacing) * px)), ch = Math.max(64, Math.round((d / spacing) * px));
+  const cv = document.createElement("canvas");
+  cv.width = Math.min(4096, cw);
+  cv.height = Math.min(4096, ch);
+  const ctx = cv.getContext("2d");
+  const nx = Math.round(w / spacing), nz = Math.round(d / spacing);
+  const sx = cv.width / nx, sz = cv.height / nz;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  if (pattern === "standard") {
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) if ((i + j) % 2) {
+      ctx.fillStyle = "#c9c9ce";
+      ctx.fillRect(i * sx, j * sz, sx, sz);
+    }
+  } else if (pattern === "calibration") {
+    ctx.strokeStyle = "#8a8a92";
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= nx; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * sx, 0);
+      ctx.lineTo(i * sx, cv.height);
+      ctx.stroke();
+    }
+    for (let j = 0; j <= nz; j++) {
+      ctx.beginPath();
+      ctx.moveTo(0, j * sz);
+      ctx.lineTo(cv.width, j * sz);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#e0453a";
+    ctx.beginPath();
+    ctx.arc(cv.width / 2, cv.height / 2, Math.min(sx, sz) * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function buildRoom(room) {
+  const w = Math.max(1, room.width || 8), dd = Math.max(1, room.depth || 12), h = Math.max(1, room.height || 4);
+  const color = room.color || "#e9e9ec";
+  const g = new THREE.Group();
+  const floorMat = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.85, metalness: 0.02, map: patternTexture(room.pattern || "standard", Math.max(0.05, room.spacing || 1), w, dd, color) });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, dd), floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  g.add(floor);
+  const wallMat = new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0, side: THREE.DoubleSide });
+  if (room.walls !== false) {
+    if (room.cyc !== false) {
+      // cyclorama: quarter-round between floor and back wall so the horizon disappears
+      const r = Math.min(1.2, h * 0.3);
+      const cyc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 24, 1, true, 0, Math.PI / 2), wallMat);
+      cyc.rotation.z = Math.PI / 2;
+      cyc.rotation.y = Math.PI;
+      cyc.position.set(0, r, -dd / 2 + r);
+      cyc.receiveShadow = true;
+      g.add(cyc);
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(w, h - r), wallMat);
+      back.position.set(0, r + (h - r) / 2, -dd / 2);
+      back.receiveShadow = true;
+      g.add(back);
+    } else {
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat);
+      back.position.set(0, h / 2, -dd / 2);
+      g.add(back);
+    }
+    for (const sx of [-1, 1]) {
+      const side = new THREE.Mesh(new THREE.PlaneGeometry(dd, h), wallMat);
+      side.rotation.y = sx > 0 ? -Math.PI / 2 : Math.PI / 2;
+      side.position.set((sx * w) / 2, h / 2, 0);
+      side.receiveShadow = true;
+      g.add(side);
+    }
+  }
+  g.traverse((o) => (o.userData.room = true));
   return g;
 }
 

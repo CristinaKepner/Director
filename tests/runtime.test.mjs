@@ -151,6 +151,40 @@ test("agent plans Chinese instructions into actions", () => {
   assert.ok(ev, "agent events are tagged");
 });
 
+test("merged studio features: walk path with dwell, room, model library", () => {
+  dispatch("project.set-state", { state: "EDIT" });
+  const w = dispatch("entity.walk", { id: "hero", waypoints: [[-1.5, -4.2], [-0.9, -2.2], [-0.2, -0.2], [-0.2, -0.2], [1.6, 3.4]], durations: [3, 3, 5, 3], startFrame: 0 });
+  assert.equal(w.ok, true, JSON.stringify(w));
+  assert.equal(w.keyframes, 5);
+  assert.equal(w.seconds, 14);
+  const hero = store.get().entities.find((e) => e.id === "hero");
+  assert.deepEqual(hero.path.map((k) => k.frame), [0, 72, 144, 264, 336]);
+  assert.equal(hero.path[2].position[2], -0.2);
+  assert.equal(hero.path[3].position[2], -0.2, "dwell keeps the position");
+  assert.ok(Math.abs(hero.path[0].yaw - Math.atan2(0.6, 2)) < 1e-6, "faces the first segment");
+  const mid = R.entityStateAt(hero, 200);
+  assert.ok(Math.abs(mid.position[2] + 0.2) < 1e-6, "stays put during the dwell segment");
+  assert.equal(dispatch("entity.walk", { id: "hero", clear: true }).cleared, true);
+  assert.equal(store.get().entities.find((e) => e.id === "hero").path, null);
+  const r = dispatch("scene.room", { width: 6, depth: 10, pattern: "calibration" });
+  assert.equal(r.room.width, 6);
+  assert.equal(r.room.pattern, "calibration");
+  assert.equal(store.get().scene.environment.room.depth, 10);
+  dispatch("scene.room", { clear: true });
+  assert.equal(store.get().scene.environment.room, undefined);
+  const m = dispatch("entity.create", { id: "tree1", model: "tree", position: [4, 0, -3] });
+  assert.equal(m.ok, true, JSON.stringify(m));
+  const tree = store.get().entities.find((e) => e.id === "tree1");
+  assert.equal(tree.assetRef, "models/Tree.glb");
+  assert.equal(tree.semanticType, "environment");
+  assert.equal(dispatch("entity.replace-proxy", { id: "hero", model: "nope" }).error, "UNKNOWN_MODEL");
+  assert.equal(dispatch("entity.replace-proxy", { id: "hero", model: "person" }).ok, true);
+  assert.equal(store.get().entities.find((e) => e.id === "hero").assetRef, "models/Person.glb");
+  dispatch("entity.replace-proxy", { id: "hero", asset: null });
+  assert.equal(Object.keys(R.ASPECTS).length, 19);
+  assert.equal(dispatch("scene.preset", { preset: "softbox-studio" }).ok, true);
+});
+
 test("capabilities expose every action with state permissions", () => {
   const caps = R.capabilities();
   assert.ok(caps.length > 60);

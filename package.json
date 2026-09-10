@@ -10,6 +10,7 @@
     "start": "node server/bin/director-server.mjs --port 5175",
     "start:api": "node server/bin/director-server.mjs --port 5175 --api-only",
     "build:web": "node tools/build-web.mjs",
+    "build:studio": "cd studio && bun install && bun run build",
     "test": "node --test tests/runtime.test.mjs",
     "test:api": "node --test server/tests/api.test.mjs",
     "test:all": "node --test tests/runtime.test.mjs server/tests/api.test.mjs",

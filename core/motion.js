@@ -41,7 +41,9 @@ export function sampleKeyframes(keys, frame, fields = ["position"]) {
     const av = a[f], bv = b[f];
     if (av == null && bv == null) continue;
     if (Array.isArray(av) && Array.isArray(bv)) {
-      if (f === "position" && ks.length >= 3) {
+      const same = av.length === bv.length && av.every((v, k) => Math.abs(v - bv[k]) < 1e-9);
+      if (same) out[f] = [...av]; // dwell: hold, never let the spline drift through a rest
+      else if (f === "position" && ks.length >= 3 && a.ease !== "linear") {
         const p0 = ks[Math.max(0, i - 1)].position, p3 = ks[Math.min(ks.length - 1, i + 2)].position;
         out[f] = catmull(p0, av, bv, p3, t);
       } else out[f] = V.lerp(av, bv, t);

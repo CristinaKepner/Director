@@ -6,7 +6,7 @@ export const LLM_DEFAULTS = {
   model: "gpt-5.6-sol",
   models: ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4", "deepseek-v4-flash", "deepseek-v4-chat", "deepseek-v4-pro"],
   timeoutMs: 90_000,
-  maxTokens: 1500,
+  maxTokens: 6000,
   temperature: 0.2,
 };
 
