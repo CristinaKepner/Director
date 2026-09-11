@@ -49,6 +49,7 @@ node server/bin/director.mjs serve [选项]          # 等价
 | `--ark-key-file FILE` | `ARK_API_KEY` | 无 | 火山引擎 Ark 密钥；给了就启用真实 Generation Adapter（Seedance 2.5 / 2.0 视频、Seedream 5.0 图片），其余供应商仍走模拟队列 |
 | `--ark-model provider=model` | `ARK_BASE_URL` | 见 §5.1 | 覆盖 provider → Ark 模型 ID 的映射（可多次）；`ARK_BASE_URL` 换区域 |
 | `--public-url https://host` | `DIRECTOR_PUBLIC_URL` | 无 | 本后端对公网可达的地址；v2v 时 Ark 要从 `<public-url>/media/<take>.webm` 拉参考视频（Ark 不接受 data URL 视频） |
+| `--publish feishu --feishu-token-file FILE [--feishu-parent <docx token>]` | `DIRECTOR_PUBLISH` / `FEISHU_TOKEN` | none | 后端不对外时的替代：v2v 前把 Take 视频上传到**你自己的**飞书云盘（挂在指定文档下），取临时下载链接（无需鉴权，实测 Ark 可拉）给 Ark。只上传到你自有的空间，不用第三方公网托管；飞书用户 token 约 2 小时有效 |
 | `--llm-key-file FILE` | `AIGW_API_KEY` / `LLM_API_KEY` | 无 | OpenAI 兼容网关密钥；给了就启用 LLM 规划器（Agent Director 由 GPT-5.6 / DeepSeek V4 规划，见 §5.2） |
 | `--llm-base URL` | `LLM_BASE_URL` | `https://aigw.sotatts.online/v1` | 网关地址 |
 | `--llm-model ID` | `LLM_MODEL` | `gpt-5.6-sol` | 默认模型；运行时可用 `agent.set-backend` 切换 |
@@ -135,10 +136,11 @@ curl -s -X POST http://127.0.0.1:5175/api/takes/take_abc/media -H 'content-type:
 | take | arm, record, finish, stop, review, delete | 见下 |
 | storyboard | add, update, export | `export {format: json/html/md}` 返回 `content` |
 | annotation | add | |
-| generation | prompt, submit, status, cancel, retry | `submit` 校验供应商与模式；带 Ark 密钥时 seedance-2.5 / seedance-2 / seedream-5 走真实生成（§5.1），其余为可观察的模拟队列 |
+| asset | add, approve, delete | 参考资产（§5.3） |
+| generation | prompt, submit, reference, status, cancel, retry | `submit` 校验供应商与模式；带 Ark 密钥时 seedance-2.5 / seedance-2 / seedream-5 走真实生成（§5.1），其余为可观察的模拟队列 |
 | review | compare | |
 | agent | run, plan, confirm, cancel, run-step, set-mode, set-backend, say | `run {text, mode?, force?}`；`confirm/cancel` 处理 Collaborative 模式待确认方案；`run-step {step}` 单步执行；`say {role,text}` 供外部 LLM 把回复写回会话 |
-| context | scene, project, shot, entity, events, history, capabilities, sequence, schema | 只读 |
+| context | scene, project, shot, entity, assets, events, history, capabilities, sequence, schema | 只读 |
 | health | report | |
 
 ### 5.1 Generation Adapter：火山引擎 Ark（Seedance / Seedream）
@@ -162,6 +164,19 @@ curl -s -X POST http://127.0.0.1:5175/api/takes/take_abc/media -H 'content-type:
 - 进度：图片 15 → 85 → 100；视频 5（已提交）→ 10（拿到 task id）→ 按预计时长线性到 85 → 90（下载）→ 100。`generation.cancel` 后适配器停止轮询并尝试 `DELETE /tasks/{id}`。
 - 失败写入 `job.error`（`<Ark code>: <message>`，例如 `OutputAudioSensitiveContentDetected.PolicyViolation`），状态机回到 `REVIEW`；`generation.retry` 重新提交。
 - 密钥只在后端进程里（文件或环境变量），不进工程文件、不进前端。
+
+### 5.3 资产与一致性（参考图）
+
+跨镜头生成同一个人、同一件产品，靠的是**已批准的参考资产**，不是靠提示词碰运气：
+
+| 步骤 | Action / 接口 | 说明 |
+|---|---|---|
+| 1. 出参考图 | `generation.reference {entityId, view: front/three-quarter/profile/turntable, provider?}` | 按实体的 continuity（look / wardrobe / color）和工程风格，用 Seedream 5.0 生成中性背景的定妆照 / 产品图（人物 3:4，产品 1:1，turntable 16:9）；完成后自动登记为该实体的 **未批准** 资产（`assets[]`，`kind:"reference"`） |
+| 2. 批准 | `asset.approve {id, approved}` | 导演在「资产」标签里看图批准；不满意就「再生成一张」或 `asset.delete` |
+| 3. 生成时自动带上 | `generation.submit` | 后端按镜头收集参考：机位 look-at 的主体优先，其次 `targetIds`，再是场景里的角色 / 车 / 道具，每镜最多 4 张（`job.inputs.references`）。Seedream：多参考 `image[]`；Seedance：每张一条 `role: reference_image`，提示词末尾追加「Reference images: [1] 主角 A — 外观…（match identity, wardrobe, material and color exactly）」 |
+| 其它 | `asset.add {entityId, url \| fromJob}`、`context.assets` | 把任意生成结果 / 上传图登记为参考；查看清单 |
+
+Ark 的一条硬规则（实测）：**视频请求不能同时带首帧（first_frame）和参考图**。有已批准参考时后端以身份一致为先：跳过故事版关键帧首帧，只送参考图（`job.adapter.referenceMode` 会写明）。快照的 `assets[]` 与 `summarize().assets` 让 LLM 规划器知道哪些实体已有参考，用户说"人物 / 产品不一致"时它会先走 `generation.reference` → 批准 → 再生成。
 
 ### 5.2 Agent Director 的 LLM 规划器（AIGW 网关：GPT-5.6 / DeepSeek V4）
 

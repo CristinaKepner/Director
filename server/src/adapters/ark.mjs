@@ -76,11 +76,21 @@ export function createArkAdapter(opts = {}) {
     return !j || j.status === "cancelled";
   };
 
+  // approved reference assets → data URLs + a prompt suffix naming them (the model sees which image is which)
+  function references(job) {
+    const refs = (job.inputs?.references || []).map((r) => ({ ...r, data: toDataUrl(r.url, "image/jpeg") })).filter((r) => r.data);
+    const suffix = refs.length ? ` Reference images: ${refs.map((r, i) => `[${i + 1}] ${r.name}${r.look ? " — " + r.look : ""} (match identity, wardrobe, material and color exactly)`).join("; ")}.` : "";
+    return { refs, suffix };
+  }
+
   async function submitImage(job, update, model) {
     const size = ARK_DEFAULTS.imageSizes[job.aspect] || ARK_DEFAULTS.imageSizes["16:9"];
-    const body = { model, prompt: job.prompt, size, response_format: "url", watermark: false };
+    const { refs, suffix } = references(job);
+    const body = { model, prompt: job.prompt + suffix, size, response_format: "url", watermark: false };
     if (job.mode === "i2i" && job.inputs?.image) body.image = toDataUrl(job.inputs.image, "image/png") || job.inputs.image;
-    update(job.id, { status: "running", progress: 15, result: null, adapter: { name: "ark", model, size } });
+    if (refs.length) body.image = [...(body.image ? [body.image] : []), ...refs.map((r) => r.data)].slice(0, 5); // Seedream multi-reference
+    if (job.kind === "reference") body.size = { "3:4": "1728x2304", "1:1": "2048x2048", "16:9": "2560x1440" }[job.aspect] || size;
+    update(job.id, { status: "running", progress: 15, result: null, adapter: { name: "ark", model, size: body.size, references: refs.length } });
     const out = await call("/images/generations", body);
     const url = out.data?.[0]?.url;
     if (!url) throw new Error("no image url in response");
@@ -92,10 +102,14 @@ export function createArkAdapter(opts = {}) {
   async function submitVideo(job, update, model) {
     const seconds = Math.max(2, Math.min(12, Math.round(job.seconds || 5)));
     const ratio = /^\d+:\d+$/.test(job.aspect) ? job.aspect : "16:9";
-    const hasImage = job.mode === "i2v" && !!job.inputs?.image;
+    const { refs, suffix } = references(job);
+    // Ark refuses first/last-frame content mixed with reference images: when approved references exist,
+    // identity wins and the storyboard keyframe is skipped (the shot's composition still comes from the prompt).
+    const hasImage = job.mode === "i2v" && !!job.inputs?.image && !refs.length;
     // Ark: with a first frame the output ratio follows the image (passing --ratio is rejected)
-    const content = [{ type: "text", text: `${job.prompt}${hasImage ? "" : ` --ratio ${ratio}`} --duration ${seconds} --resolution ${job.resolution || ARK_DEFAULTS.resolution}` }];
+    const content = [{ type: "text", text: `${job.prompt}${suffix}${hasImage ? "" : ` --ratio ${ratio}`} --duration ${seconds} --resolution ${job.resolution || ARK_DEFAULTS.resolution}` }];
     if (hasImage) content.push({ type: "image_url", image_url: { url: toDataUrl(job.inputs.image, "image/png") || job.inputs.image }, role: "first_frame" });
+    for (const r of refs) content.push({ type: "image_url", image_url: { url: r.data }, role: "reference_image" });
     if (job.mode === "v2v") {
       // Ark only accepts a web URL for reference_video (no data URLs): local take proxies need a public base URL
       const ref = job.inputs?.video;
@@ -113,7 +127,7 @@ export function createArkAdapter(opts = {}) {
       if (!url) throw Object.assign(new Error("v2v needs a web-reachable reference video: start the backend with --public-url https://<host>, or --publish feishu --feishu-token-file FILE (uploads the take to your own Feishu Drive and uses its temporary download link)"), { code: "NO_PUBLIC_MEDIA_URL" });
       content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
     }
-    update(job.id, { status: "running", progress: 5, result: null, adapter: { name: "ark", model, seconds, ratio } });
+    update(job.id, { status: "running", progress: 5, result: null, adapter: { name: "ark", model, seconds, ratio, references: refs.length, referenceMode: refs.length ? "identity (first frame skipped)" : hasImage ? "first frame" : "text" } });
     const created = await call("/contents/generations/tasks", { model, content });
     const taskId = created.id;
     log(`ark task ${taskId} ← ${job.id} (${model}, ${seconds}s ${ratio})`);

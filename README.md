@@ -100,7 +100,8 @@ node server/bin/director.mjs capabilities | help camera.frame | context [scene|s
 
 - **Take**：Preflight(`take.arm`) → ARMED → `take.record` 进入 RECORDING。浏览器客户端带 `meta.capture` 调用后自己用 MediaRecorder 录下 Program 画面，`POST /api/takes/{id}/media` 上传 webm，再 `take.finish` → REVIEW → Circle / Reject → 故事版。CLI / 纯 API 调用则无头完成（只有快照）。后端有看门狗：客户端中途关闭也会收尾。
 - **提示词**：`generation.prompt` 由镜头编译（场景、主体语义与连续性、景别、角度、机位高度、焦距、光圈、运镜、灯光组、时长、帧率、保真度）成 Image / Video(T2V·I2V) / V2V / Negative 的中英文本并记版本。V2V 文本包含「大圆柱 = 主角 A：…」的代理体映射。
-- **生成任务**：`generation.submit` 校验供应商与模式，任务按 Shot / Take / Prompt Version / Model 归档，进度经 SSE 推给所有页面。后端带火山引擎 Ark 密钥启动时（`--ark-key-file FILE` 或 `ARK_API_KEY`），`seedance-2.5` / `seedance-2`（t2v · i2v · v2v）和 `seedream-5`（t2i · i2i）走真实生成：提示词来自镜头编译，i2v 用故事版关键帧，v2v 用圈选 Take 的白模视频做参考，结果下载到 `server/data/media/` 并在 Generation 表里预览；其余供应商（Kling / Veo / Runway / MiniMax…）仍是可观察的模拟队列。细节见 `docs/backend-api.md` §5.1。
+- **一致性**：角色 / 产品先 `generation.reference` 出定妆照 / 产品图 → 「资产」里批准 → 之后它出现的每个镜头生成时自动带上参考（Seedream 多参考、Seedance reference_image）。Agent 听到「人物不一致」会自己走这条路。
+- **生成任务**：`generation.submit` 校验供应商与模式，任务按 Shot / Take / Prompt Version / Model 归档，进度经 SSE 推给所有页面。后端带火山引擎 Ark 密钥启动时（`--ark-key-file FILE` 或 `ARK_API_KEY`），`seedance-2.5` / `seedance-2`（t2v · i2v · v2v）和 `seedream-5`（t2i · i2i）走真实生成：提示词来自镜头编译，i2v 用故事版关键帧，v2v 用圈选 Take 的白模视频做参考，结果下载到 `server/data/media/` 并在 Generation 表里预览；其余供应商（Kling / Veo / Runway / MiniMax…）仍是可观察的模拟队列。v2v 需要 Ark 能访问参考视频：`--public-url` 或 `--publish feishu`（传到你自己的飞书云盘取临时链接）。细节见 `docs/backend-api.md` §5.1–5.3。
 
 ## 目录
 

@@ -11,7 +11,7 @@ export const LLM_DEFAULTS = {
 };
 
 // actions the model may plan; UI-only / dangerous-in-bulk ones are left to humans
-const PLANNABLE = /^(scene|entity|camera|light|shot|motion|timeline\.set-range|take\.(arm|record|review|delete)|storyboard|annotation|generation|review|context\.(scene|shot|entity|sequence)|project\.(rename|set-state|set-fidelity|set-fps|set-aspect|set-style|set-shading|set-build-mode|undo|redo|undo-to))/;
+const PLANNABLE = /^(scene|entity|camera|light|shot|motion|timeline\.set-range|take\.(arm|record|review|delete)|storyboard|annotation|generation|asset|review|context\.(scene|shot|entity|sequence|assets)|project\.(rename|set-state|set-fidelity|set-fps|set-aspect|set-style|set-shading|set-build-mode|undo|redo|undo-to))/;
 const ROLE_OF = (action) => ({ scene: "scene-builder", entity: "continuity", camera: "cinematography", light: "lighting", shot: "cinematography", motion: "motion", timeline: "motion", take: "review", storyboard: "storyboard", annotation: "review", generation: "generation", review: "review", context: "director-planner", project: "director-planner" })[action.split(".")[0]] || "director-planner";
 
 export function createLlmPlanner(opts = {}) {
@@ -56,6 +56,7 @@ export function createLlmPlanner(opts = {}) {
 - 用户只是提问/闲聊/要建议时 steps 为空，把回答写在 reply。
 - 会大幅改动工程（scene.demo、project.new、删除多个对象、批量生成）时 needsConfirm=true。
 - label 用用户的语言（中文指令就中文）。
+- 一致性：角色 / 产品要跨镜头一致时，先 generation.reference {entityId} 生成参考图（context.assets 可查），导演批准（asset.approve）后再 generation.submit；已批准的参考会自动随该实体出现的镜头一起提交。用户说"人物 / 产品不一致"就走这条路。
 - 用户对生成结果提意见（人物不对、位置不对、想换光、重新摆）时：先用 entity.update（continuity.look / color / role）、entity.transform、entity.pose、scene.preset、camera.* 改场景，再 generation.prompt 重新编译，最后 generation.submit 用同一 provider / mode 再生成一次；把改了什么写进 reply。
 
 可用 Action：

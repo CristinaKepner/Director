@@ -374,13 +374,13 @@ function renderShotStrip(d) {
   });
 }
 function renderTabs(d) {
-  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, gen: !!d.project.currentShotId, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
+  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, gen: !!d.project.currentShotId, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
   document.querySelectorAll("[data-bottom]").forEach((b) => {
     const k = b.dataset.bottom;
     b.hidden = !has[k];
     b.classList.toggle("on", ui.drawer && ui.tab === k);
-    const n = { takes: d.takes.length, board: d.storyboard.length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length }[k];
-    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", gen: "生成", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
+    const n = { takes: d.takes.length, board: d.storyboard.length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
+    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", gen: "生成", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
   });
   if (ui.drawer && !has[ui.tab]) ui.tab = "shots";
 }
@@ -499,6 +499,7 @@ function inspectEntity(el, e, d) {
     ${field("外观", `<input data-cont="look" value="${esc(e.continuity?.look || "")}" placeholder="long dark coat…" />`)}
     ${field("模型", `<select data-k="model"><option value="">白模代理</option>${Object.entries(MODEL_LIBRARY).map(([k, m]) => `<option value="${k}" ${e.assetRef === m.url ? "selected" : ""}>${esc(m.zh)}</option>`).join("")}${e.assetRef && !Object.values(MODEL_LIBRARY).some((m) => m.url === e.assetRef) ? `<option value="__custom" selected>${esc(e.assetRef)}</option>` : ""}</select>`)}
     <div class="btn-row"><button data-act="lookat">Program 看向它</button><button data-act="focus">聚焦</button><button data-act="dup">复制</button></div>
+    ${["character", "vehicle", "weapon", "prop"].includes(e.semanticType) ? `<div class="btn-row"><button data-act="ref" class="primary">生成参考图</button>${(d.assets || []).filter((a) => a.entityId === e.id && a.approved).map((a) => `<img class="thumb clickable" style="width:48px" data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" title="${esc(a.label)}" />`).join("")}${(d.assets || []).some((a) => a.entityId === e.id && !a.approved) ? `<button data-act="assets">待批准</button>` : ""}</div>` : ""}
     ${more("形体", `
       ${field("类型", `<input value="${e.semanticType} · ${e.proxy.geometry}" disabled />`)}
       ${field("角色", `<input data-k="role" value="${esc(e.role || "")}" placeholder="hero / partner / antagonist" />`)}
@@ -528,6 +529,12 @@ function inspectEntity(el, e, d) {
   el.querySelector('[data-k="pose"]')?.addEventListener("change", (ev) => ev.target.value !== "custom" && dispatch("entity.pose", { id: e.id, pose: ev.target.value }));
   el.querySelectorAll("[data-cont]").forEach((inp) => (inp.onchange = () => dispatch("entity.update", { id: e.id, continuity: { [inp.dataset.cont]: inp.value } })));
   el.querySelector('[data-k="remember"]').onchange = (ev) => ev.target.value && dispatch("entity.update", { id: e.id, remember: ev.target.value });
+  el.querySelector('[data-act="ref"]')?.addEventListener("click", async () => {
+    const r = await report(dispatch("generation.reference", { entityId: e.id, view: e.semanticType === "character" ? "front" : "three-quarter" }));
+    if (r?.ok) toast("参考图生成中 → 「资产」里批准");
+  });
+  el.querySelector('[data-act="assets"]')?.addEventListener("click", () => openDrawer("assets"));
+  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, e.displayName)));
   el.querySelector('[data-k="model"]').onchange = (ev) => (ev.target.value === "__custom" ? null : report(dispatch("entity.replace-proxy", ev.target.value ? { id: e.id, model: ev.target.value } : { id: e.id, asset: null })));
   el.querySelector('[data-act="walk"]').onclick = () => {
     const waypoints = el.querySelector('[data-k="waypoints"]').value.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => l.split(/[,\s]+/).map(Number));
@@ -723,6 +730,7 @@ function renderChips(d) {
   const list = [];
   const cur = d.project.currentShotId || d.shots[0]?.id;
   if (!d.shots.length) list.push("载入示例「城市边缘」", "新建镜头「对峙」6秒 手持");
+  else if (d.entities.some((e) => e.semanticType === "character") && !(d.assets || []).some((a) => a.approved)) list.push("给主角和产品各生成一张参考图", `录制 ${cur}`, "换成日落逆光");
   else if (!d.takes.length) list.push(`录制 ${cur}`, "把 Program 机位降到 0.4m 并 look-at 主角", "换成日落逆光");
   else if (!d.storyboard.length) list.push("全部进故事版", "让对手举枪", "03 镜改成环绕 120 度");
   else if (!d.jobs.length) list.push(`提交 ${cur} 视频生视频 seedance-2.5`, `给 ${cur} 生成提示词`);
@@ -803,6 +811,7 @@ function renderBottom(d) {
   if (tab === "takes") return renderTakes(el, d);
   if (tab === "board") return renderBoard(el, d);
   if (tab === "gen") return renderGen(el, d);
+  if (tab === "assets") return renderAssets(el, d);
   if (tab === "log") return renderEvents(el, d);
   return renderHealth(el, d);
 }
@@ -1008,7 +1017,7 @@ function renderGen(el, d) {
         <button data-act="submit" class="primary">提交</button>
       </div>
       ${!real.length ? `<div class="empty" style="padding:8px 0;justify-content:flex-start">${isOnline() ? "后端未配置生成密钥：任务只是模拟。" : "单机模式：任务只是模拟，不会真的生成。"}</div>` : ""}
-      ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}</div></td></tr>`).join("")}</tbody></table>` : ""}
+      ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}${(j.inputs?.references || []).length ? `<div class="prompt">参考 ${j.inputs.references.length}</div>` : ""}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}</div></td></tr>`).join("")}</tbody></table>` : ""}
     </div></div>`;
   el.querySelectorAll("[data-pm]").forEach((b) => (b.onclick = () => {
     promptTab.mode = b.dataset.pm;
@@ -1028,6 +1037,27 @@ function renderGen(el, d) {
   el.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => dispatch("generation.cancel", { id: b.dataset.cancel })));
   el.querySelectorAll("[data-retry]").forEach((b) => (b.onclick = () => dispatch("generation.retry", { id: b.dataset.retry })));
   el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, `${shot.index} ${shot.title}`)));
+}
+
+// assets: one approved reference per entity is what keeps faces / products the same across generations
+function renderAssets(el, d) {
+  const assets = d.assets || [];
+  if (!assets.length) {
+    el.innerHTML = emptyState("还没有参考资产。在角色 / 产品的属性里点「生成参考图」，批准后它出现的每个镜头都会带上。");
+    return;
+  }
+  const byEnt = new Map();
+  for (const a of assets) byEnt.set(a.entityId, [...(byEnt.get(a.entityId) || []), a]);
+  el.innerHTML = `<div class="cards">${[...byEnt.entries()].map(([eid, list]) => {
+    const e = d.entities.find((x) => x.id === eid);
+    return `<article class="card"><h3><span>${esc(e?.displayName || eid || "未绑定")}</span>${list.some((a) => a.approved) ? badge("approved") : badge("draft")}</h3>
+      ${list.map((a) => `<div class="row" style="align-items:flex-start">${a.mediaKind === "video" ? `<video class="thumb clickable" data-preview="${esc(a.url)}" data-kind="video" src="${esc(mediaHref(a.url))}" muted loop playsinline></video>` : `<img class="thumb clickable" data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" />`}<div style="flex:1;min-width:0"><div>${esc(a.label)}</div><div class="prompt">${esc(a.model || a.kind)}</div><div class="row" style="margin-top:4px"><button data-approve="${a.id}" class="${a.approved ? "on" : ""}">${a.approved ? "已批准" : "批准"}</button><button data-del="${a.id}">删除</button></div></div></div>`).join("")}
+      <div class="row"><button data-more="${eid}">再生成一张</button></div></article>`;
+  }).join("")}</div>`;
+  el.querySelectorAll("[data-approve]").forEach((b) => (b.onclick = () => report(dispatch("asset.approve", { id: b.dataset.approve, approved: !b.classList.contains("on") }))));
+  el.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => confirm("删除这张参考？") && dispatch("asset.delete", { id: b.dataset.del })));
+  el.querySelectorAll("[data-more]").forEach((b) => (b.onclick = () => report(dispatch("generation.reference", { entityId: b.dataset.more, view: "three-quarter" }))));
+  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "参考")));
 }
 
 function renderEvents(el, d) {

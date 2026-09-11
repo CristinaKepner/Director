@@ -52,6 +52,7 @@ export function createEmptyProject() {
     storyboard: [],
     jobs: [],
     annotations: [],
+    assets: [], // reference / generated assets bound to entities → consistency across generations
     events: [],
     agent: {
       mode: "collaborative",
@@ -183,7 +184,7 @@ export function loadProjectData(json) {
   const next = { ...base, ...json, agent: store.data.agent, health: store.data.health };
   next.project = { ...base.project, ...json.project, playing: false, recording: null };
   next.scene = { ...base.scene, ...json.scene, environment: { ...base.scene.environment, ...(json.scene?.environment || {}) } };
-  for (const k of ["entities", "cameras", "lights", "shots", "takes", "storyboard", "jobs", "annotations", "events"]) next[k] = Array.isArray(json[k]) ? json[k] : [];
+  for (const k of ["entities", "cameras", "lights", "shots", "takes", "storyboard", "jobs", "annotations", "assets", "events"]) next[k] = Array.isArray(json[k]) ? json[k] : [];
   next.takes.forEach((t) => t.status === "recording" && (t.status = "aborted"));
   next.jobs.forEach((j) => ["queued", "running"].includes(j.status) && (j.status = "failed"));
   if (["RECORDING", "ARMED", "GENERATING"].includes(next.project.currentState)) next.project.currentState = "REVIEW";
@@ -213,7 +214,7 @@ export function canRun(action, state = store.data.project.currentState) {
 }
 
 export function find(kind, id, d = store.data) {
-  const coll = { entity: d.entities, camera: d.cameras, light: d.lights, shot: d.shots, take: d.takes, card: d.storyboard, job: d.jobs }[kind];
+  const coll = { entity: d.entities, camera: d.cameras, light: d.lights, shot: d.shots, take: d.takes, card: d.storyboard, job: d.jobs, asset: d.assets }[kind];
   return coll?.find((x) => x.id === id) || null;
 }
 

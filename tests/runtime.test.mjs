@@ -186,6 +186,33 @@ test("merged studio features: walk path with dwell, room, model library", () => 
   assert.equal(dispatch("scene.preset", { preset: "softbox-studio" }).ok, true);
 });
 
+test("assets: reference job → asset → approve → references travel with the shot", async () => {
+  dispatch("project.set-state", { state: "EDIT" });
+  const r = dispatch("generation.reference", { entityId: "hero", view: "front" });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const until = Date.now() + 8000;
+  while (Date.now() < until && store.get().jobs.find((j) => j.id === r.id).status !== "done") await new Promise((res) => setTimeout(res, 100));
+  const job = store.get().jobs.find((j) => j.id === r.id);
+  assert.equal(job.kind, "reference");
+  assert.equal(job.status, "done");
+  const added = dispatch("asset.add", { entityId: "hero", url: "/media/hero-ref.jpg", label: "hero front" });
+  assert.equal(added.ok, true);
+  assert.equal(store.get().assets.find((a) => a.id === added.id).approved, false);
+  assert.equal(dispatch("asset.approve", { id: added.id }).approved, true);
+  dispatch("project.set-state", { state: "EDIT" });
+  const refs = R.referencesForShot(store.get(), store.get().shots.find((s) => s.id === "shot_01"));
+  assert.equal(refs.length, 1);
+  assert.equal(refs[0].entityId, "hero");
+  const sub = dispatch("generation.submit", { shotId: "shot_01", mode: "t2i", provider: "seedream-5" });
+  assert.equal(sub.ok, true, JSON.stringify(sub));
+  assert.equal(store.get().jobs.find((j) => j.id === sub.id).inputs.references.length, 1);
+  assert.ok(dispatch("context.assets").data.some((a) => a.id === added.id));
+  assert.equal(dispatch("asset.delete", { id: added.id }).ok, true);
+  const ex = dispatch("project.export");
+  assert.ok(Array.isArray(ex.data.assets));
+  dispatch("project.set-state", { state: "EDIT" });
+});
+
 test("capabilities expose every action with state permissions", () => {
   const caps = R.capabilities();
   assert.ok(caps.length > 60);

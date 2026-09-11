@@ -1326,6 +1326,11 @@ function updateJob(id, patch) {
     const j = d.jobs.find((x) => x.id === id);
     if (!j) return;
     Object.assign(j, patch, { updatedAt: new Date().toISOString() });
+    // a finished reference job becomes an asset of its entity (unapproved until the director says so)
+    if (patch.status === "done" && j.kind === "reference" && j.result?.url && !d.assets.some((a) => a.jobId === j.id)) {
+      d.assets = d.assets || [];
+      d.assets.push({ id: uid("asset"), kind: "reference", entityId: j.entityId, label: j.label || `${j.entityId} 参考图`, url: j.result.url, mediaKind: j.result.kind || "image", approved: false, jobId: j.id, model: j.model, prompt: j.prompt, createdAt: new Date().toISOString() });
+    }
     if (patch.status === "done") {
       const s = d.shots.find((x) => x.id === j.shotId);
       const card = d.storyboard.find((c) => c.shotId === j.shotId);
@@ -1337,6 +1342,97 @@ function updateJob(id, patch) {
     if (!d.jobs.some((x) => ["queued", "running"].includes(x.status)) && d.project.currentState === "GENERATING") d.project.currentState = "REVIEW";
   });
 }
+
+// ============ asset.* — reference assets keep characters / products consistent across generations ============
+register("asset.add", {
+  doc: "登记一个资产（参考图 / 生成结果 / 上传）并绑定到实体：entityId + url；approved=true 后参与该实体出现的所有生成",
+  params: { entityId: "string", url: "string", label: "string", kind: "reference|generated|upload", mediaKind: "image|video", approved: "boolean", fromJob: "jobId (copy url/model/prompt from a finished job)" },
+  validate: ({ entityId, url, fromJob }, d) => (entityId && !d.entities.some((e) => e.id === entityId) ? { error: "ENTITY_NOT_FOUND" } : !url && !fromJob ? { error: "MISSING_PARAM", missing: ["url"] } : null),
+  handler({ entityId, url, label, kind = "reference", mediaKind = "image", approved = false, fromJob }) {
+    const job = fromJob ? D().jobs.find((j) => j.id === fromJob) : null;
+    if (fromJob && !job?.result?.url) return { ok: false, error: "JOB_HAS_NO_RESULT" };
+    const a = { id: uid("asset"), kind, entityId: entityId || job?.entityId || null, label: label || (job ? `${job.shotId || job.entityId} · ${job.model}` : url), url: url || job.result.url, mediaKind: job ? job.result.kind || mediaKind : mediaKind, approved: !!approved, jobId: job?.id || null, model: job?.model || null, prompt: job?.prompt || null, createdAt: new Date().toISOString() };
+    store.patch((d) => (d.assets = [...(d.assets || []), a]));
+    return { ok: true, id: a.id, entityId: a.entityId, targetIds: [a.id, a.entityId].filter(Boolean) };
+  },
+});
+
+register("asset.approve", {
+  doc: "批准 / 取消批准一个资产作为实体的参考（同一实体可有多张已批准参考，按顺序传给供应商，最多 4 张）",
+  params: { id: "string", approved: "boolean (default true)" },
+  required: ["id"],
+  undoable: true,
+  handler({ id, approved = true }) {
+    const a = D().assets?.find((x) => x.id === id);
+    if (!a) return { ok: false, error: "ASSET_NOT_FOUND" };
+    store.patch((d) => (d.assets.find((x) => x.id === id).approved = !!approved));
+    return { ok: true, id, approved: !!approved, targetIds: [id, a.entityId].filter(Boolean) };
+  },
+});
+
+register("asset.delete", {
+  doc: "删除资产",
+  params: { id: "string" },
+  required: ["id"],
+  handler({ id }) {
+    if (!D().assets?.some((x) => x.id === id)) return { ok: false, error: "ASSET_NOT_FOUND" };
+    store.patch((d) => (d.assets = d.assets.filter((x) => x.id !== id)));
+    return { ok: true, id };
+  },
+});
+
+register("context.assets", {
+  doc: "资产清单：每个实体已批准 / 待批准的参考",
+  undoable: false,
+  handler: () => ({ ok: true, data: (D().assets || []).map((a) => ({ id: a.id, entityId: a.entityId, label: a.label, kind: a.kind, mediaKind: a.mediaKind, approved: a.approved, url: a.url, model: a.model })) }),
+});
+
+// approved references for the entities that appear in a shot (subject first), capped for the providers
+export function referencesForShot(d, shot, limit = 4) {
+  const ids = [];
+  const cam = d.cameras.find((c) => c.id === shot.cameraId);
+  if (cam?.target) ids.push(cam.target);
+  for (const t of shot.targetIds || []) ids.push(t);
+  for (const e of d.entities) if (["character", "vehicle", "weapon", "prop"].includes(e.semanticType)) ids.push(e.id);
+  const seen = new Set();
+  const out = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const ent = d.entities.find((e) => e.id === id);
+    if (!ent) continue;
+    for (const a of (d.assets || []).filter((x) => x.entityId === id && x.approved && x.mediaKind !== "video")) {
+      out.push({ assetId: a.id, entityId: id, name: ent.displayName, url: a.url, look: ent.continuity?.look || "" });
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+
+register("generation.reference", {
+  doc: "为实体生成参考图（角色定妆照 / 产品图，中性背景、正面全身或整件产品），完成后自动登记为该实体的未批准资产。provider 默认 seedream-5",
+  params: { entityId: "string", provider: "providerId (t2i)", prompt: "string (override)", view: "front|three-quarter|profile|turntable", label: "string" },
+  required: ["entityId"],
+  undoable: false,
+  validate: ({ entityId, provider = "seedream-5" }, d) => (!d.entities.some((e) => e.id === entityId) ? { error: "ENTITY_NOT_FOUND" } : !PROVIDERS[provider] ? { error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) } : !PROVIDERS[provider].modes.includes("t2i") ? { error: "MODE_NOT_SUPPORTED", provider, supported: PROVIDERS[provider].modes } : null),
+  handler({ entityId, provider = "seedream-5", prompt, view = "front", label }, meta) {
+    const d0 = D();
+    const e = d0.entities.find((x) => x.id === entityId);
+    const isChar = e.semanticType === "character";
+    const look = [e.continuity?.look, e.continuity?.wardrobe, e.continuity?.color].filter(Boolean).join(", ");
+    const style = d0.project.style || "photoreal, cinematic, high-end commercial photography";
+    const text = prompt || (isChar
+      ? `Character reference sheet of ${e.displayName}${e.role ? ` (${e.role})` : ""}: ${look || "consistent identity and wardrobe"}. ${view === "turntable" ? "Three views side by side: front, three-quarter, profile" : `${view.replace("-", " ")} view, full body`}, neutral seamless grey studio background, soft even lighting, no props, no text. ${style}. The face, hair, wardrobe and proportions must be unambiguous so later shots can match them exactly.`
+      : `Product reference photo of ${e.displayName}: ${look || "exact shape, material and color"}. ${view === "turntable" ? "Three angles side by side: front, three-quarter, top" : `${view.replace("-", " ")} view`}, centered on a neutral seamless grey background, soft studio lighting, no people, no text. ${style}. Material, hardware, proportions and color must be unambiguous so later shots can match them exactly.`);
+    const job = { id: uid("job"), kind: "reference", entityId, shotId: null, takeId: null, mode: "t2i", provider, model: PROVIDERS[provider].name, prompt: text, negative: "text, watermark, logo, extra limbs, blurry, low quality", promptVersion: 0, compiler: "reference/1", seconds: 0, aspect: view === "turntable" ? "16:9" : isChar ? "3:4" : "1:1", inputs: { image: null, video: null, references: [] }, label: label || `${e.displayName} · ${view}`, status: "queued", progress: 0, result: null, source: meta.source || "human", createdAt: new Date().toISOString() };
+    store.patch((d) => {
+      d.jobs.push(job);
+      d.project.currentState = "GENERATING";
+    });
+    (hooks.generation || simulatedAdapter).submit(job, updateJob);
+    return { ok: true, id: job.id, entityId, provider, adapter: (hooks.generation || simulatedAdapter).name, targetIds: [entityId] };
+  },
+});
 
 register("generation.prompt", {
   doc: "把镜头编译成结构化 image / video(T2V,I2V) / v2v 提示词（中英）+ 负面词，存为新版本",
@@ -1389,8 +1485,9 @@ register("generation.submit", {
       compiler: P.compiler,
       seconds: Math.min(seconds, PROVIDERS[provider].maxSeconds || seconds),
       aspect: d0.project.aspect,
-      // reference inputs for adapters: storyboard keyframe / take thumbnail (i2v, i2i) and take proxy video (v2v)
-      inputs: { image: card?.keyframes?.[0] || take?.thumbnail || null, video: take?.videoUrl || null },
+      // reference inputs for adapters: storyboard keyframe / take thumbnail (i2v, i2i), take proxy video (v2v),
+      // and the approved reference assets of the entities in this shot (identity / product consistency)
+      inputs: { image: card?.keyframes?.[0] || take?.thumbnail || null, video: take?.videoUrl || null, references: referencesForShot(d0, s) },
       status: "queued",
       progress: 0,
       result: null,
@@ -1458,10 +1555,12 @@ register("review.compare", {
 
 // ============ context.* / health.* ============
 export function summarize(d = D()) {
+  const assets = (d.assets || []).map((a) => ({ id: a.id, entityId: a.entityId, label: a.label, approved: a.approved, kind: a.kind }));
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
   return {
     runtime: RUNTIME_VERSION,
     project: { id: d.project.id, name: d.project.name, fps: d.project.fps, aspect: d.project.aspect, version: d.project.version, state: d.project.currentState, fidelity: d.project.fidelity, buildMode: d.project.buildMode || "set", playhead: d.project.playhead, timecode: tc(d.project.playhead, d.project.fps) },
+    assets,
     scene: { id: d.scene.id, name: d.scene.name, environment: d.scene.environment },
     programCamera: d.project.programCameraId,
     currentShot: shot ? { id: shot.id, index: shot.index, title: shot.title, motion: shot.motion.type, seconds: (shot.range.outFrame - shot.range.inFrame) / d.project.fps, status: shot.status } : null,
