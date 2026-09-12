@@ -33,3 +33,18 @@ server/data/*
 
 # private working material (never published): test stories, handoff, studio replica
 private/
+
+# 密钥：只放在 ~ 或 app 的 userData/keys，永远不进仓库
+.ark-key
+.aigw-key
+*.key
+keys/
+*.pem
+
+# 桌面端：依赖与打包产物（dmg/zip 各 100 MB+）
+desktop/node_modules/
+desktop/dist/
+
+# 本机跑出来的媒体与工程
+server/data/media/
+*.director.json

@@ -1,7 +1,7 @@
 // Prompt compiler: turns Scene + Entity + Camera + Light + Shot + Take into structured T2I / T2V / V2V prompts.
 // The compiler is deterministic and versioned; every compile is stored on the Shot as a prompt version.
 import { store } from "./store.js";
-import { SHOT_SIZES, MOTION_TYPES, LIGHT_PRESETS, heightWord, inferShotSize, hexToKelvin, kelvinWord, deg } from "./schema.js";
+import { SHOT_SIZES, MOTION_TYPES, LIGHT_PRESETS, heightWord, inferShotSize, hexToKelvin, kelvinWord, deg, LOCK_ASPECTS} from "./schema.js";
 import { cameraStateAt, V } from "./motion.js";
 
 export const COMPILER_VERSION = "prompt-compiler/0.3";
@@ -169,15 +169,42 @@ export function compileShot(shotId, opts = {}) {
     ].filter(Boolean).join("\n"),
   };
 
+  // 锁 = 导演已经满意的部分。编进提示词的正向「必须保持」和负向「不许出现」，
+  // 两头都写，因为生成模型对否定式并不可靠，只给 negative 往往拦不住。
+  const locked = (shot.locks?.aspects || []).map((a) => LOCK_ASPECTS[a]).filter(Boolean);
+  const keepEn = locked.length ? `MUST PRESERVE from the approved version — ${locked.map((l) => `${l.en}: ${l.keep}`).join("; ")}. Change nothing else.` : "";
+  const keepZh = locked.length ? `必须与已批准的那一版保持一致 —— ${locked.map((l) => `${l.zh}：${l.keepZh || l.keep}`).join("；")}。其余一律不要动。` : "";
+
+  // 「向右移动一点」最容易被模型做成摇镜或推拉，所以把它写成一句没有歧义的机位指令，
+  // 并把没要改的维度显式钉死。
+  const mv = shot.lastMove;
+  const moveEn = mv
+    ? `Camera move this pass: ${[mv.right && `lateral truck ${mv.right > 0 ? "right" : "left"} ${Math.abs(mv.right).toFixed(2)}m`, mv.up && `pedestal ${mv.up > 0 ? "up" : "down"} ${Math.abs(mv.up).toFixed(2)}m`, mv.forward && `dolly ${mv.forward > 0 ? "in" : "out"} ${Math.abs(mv.forward).toFixed(2)}m`].filter(Boolean).join(", ")}. The camera translates only — it stays parallel to the original axis, keeps the same subject framing, and the focal length stays ${mm}mm. No pan, no tilt, no zoom, no roll, no dolly-zoom.`
+    : "";
+  const moveZh = mv
+    ? `本次机位变化：${[mv.right && `横移${mv.right > 0 ? "右" : "左"} ${Math.abs(mv.right).toFixed(2)} 米`, mv.up && `升降${mv.up > 0 ? "上" : "下"} ${Math.abs(mv.up).toFixed(2)} 米`, mv.forward && `${mv.forward > 0 ? "推近" : "拉远"} ${Math.abs(mv.forward).toFixed(2)} 米`].filter(Boolean).join("，")}。只做平移，机身保持与原轴平行，主体构图不变，焦段固定 ${mm}mm。不要摇镜、不要俯仰、不要变焦、不要滚转、不要滑动变焦。`
+    : "";
+
+  for (const k of ["en", "zh"]) {
+    const keep = k === "en" ? keepEn : keepZh;
+    const move = k === "en" ? moveEn : moveZh;
+    for (const block of [image, video, v2v]) {
+      const extra = [move, keep].filter(Boolean).join("\n");
+      if (extra) block[k] = `${block[k]}\n${extra}`;
+    }
+  }
+
   const negative = {
-    en: "text, watermark, logo, extra limbs, deformed vehicle, warped geometry, flicker, morphing identity, camera clipping through walls, jump cut, low resolution, oversaturated, cartoon",
-    zh: "文字、水印、标志、多余肢体、变形车辆、几何扭曲、闪烁、身份变化、镜头穿墙、跳切、低分辨率、过饱和、卡通",
+    en: ["text, watermark, logo, extra limbs, deformed vehicle, warped geometry, flicker, morphing identity, camera clipping through walls, jump cut, low resolution, oversaturated, cartoon",
+      ...locked.map((l) => l.avoid), mv ? "pan, tilt, zoom, roll, dolly zoom, handheld shake" : ""].filter(Boolean).join(", "),
+    zh: ["文字、水印、标志、多余肢体、变形车辆、几何扭曲、闪烁、身份变化、镜头穿墙、跳切、低分辨率、过饱和、卡通",
+      ...locked.map((l) => l.zh + "改变"), mv ? "摇镜、俯仰、变焦、滚转、滑动变焦、手持抖动" : ""].filter(Boolean).join("、"),
   };
 
   return {
     compiler: COMPILER_VERSION,
     createdAt: new Date().toISOString(),
-    meta: { shotSize: size, angle: angEn, height: heightEn, focal: mm, aperture, seconds, motion: shot.motion?.type || "static", keyframes: shot.keyframes?.length || 0, fidelity, subjects: targets.map((e) => e.id), lightingPreset: d.scene.environment.preset },
+    meta: { shotSize: size, angle: angEn, height: heightEn, focal: mm, aperture, seconds, motion: shot.motion?.type || "static", keyframes: shot.keyframes?.length || 0, fidelity, subjects: targets.map((e) => e.id), lightingPreset: d.scene.environment.preset, locks: shot.locks?.aspects || [], lastMove: mv || null },
     image, video, v2v, negative,
   };
 }

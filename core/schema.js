@@ -225,10 +225,35 @@ export const MODEL_LIBRARY = {
 // 摄影棚房间：scene.room {width, depth, height, pattern, spacing, walls, cyc}
 export const ROOM_PATTERNS = ["standard", "plain", "calibration"];
 
+// 已经满意的东西要能被说出来，否则「别改坏」只是一句愿望。
+// 每一项都对应：编译进提示词的正向约束 + 负向约束 + 哪些 Action 会动到它。
+// 角色卡：脸、身、服装、声音是同一个角色的不同侧面，过去它们只是一堆平铺的"参考图"，
+// 模型收到时分不清哪张是脸、哪张是造型。给资产标上 role，提交时就能按角色组织着说。
+export const ASSET_ROLES = {
+  face:     { zh: "面部", en: "face", say: "facial identity — match the face exactly", media: "image" },
+  body:     { zh: "身形", en: "body", say: "body type and proportions", media: "image" },
+  wardrobe: { zh: "服装", en: "wardrobe", say: "clothing, color and fabric", media: "image" },
+  prop:     { zh: "物品", en: "product", say: "product design, material and hardware", media: "image" },
+  style:    { zh: "风格", en: "style", say: "overall look and grade", media: "image" },
+  voice:    { zh: "配音", en: "voice", say: "voice timbre", media: "audio" },
+};
+
+export const LOCK_ASPECTS = {
+  identity:    { zh: "人物身份", en: "character identity", keep: "identical face, hair, body type and casting", keepZh: "同一张脸、同样的发型体型，选角不变", avoid: "different person, face swap, age change", guards: ["entity.update", "entity.replace-proxy", "entity.delete"], scope: "subject" },
+  wardrobe:    { zh: "服装造型", en: "wardrobe and styling", keep: "identical clothing, color, fabric and accessories", keepZh: "同一套服装、同样的颜色面料与配饰", avoid: "different outfit, changed color", guards: ["entity.update"], scope: "subject" },
+  performance: { zh: "表演动作", en: "performance and expression", keep: "same expression, gesture and body attitude", keepZh: "同样的表情、手势与身体姿态", avoid: "different expression, new gesture", guards: ["entity.pose", "entity.path", "entity.walk"], scope: "subject" },
+  framing:     { zh: "构图取景", en: "framing and composition", keep: "same shot size, subject placement and headroom", keepZh: "同样的景别、主体位置与头顶留白", avoid: "recomposed frame, different shot size, zoom", guards: ["camera.lens", "camera.frame", "camera.update"], scope: "camera" },
+  lighting:    { zh: "灯光", en: "lighting", keep: "identical key direction, contrast ratio and color temperature", keepZh: "主光方向、明暗比与色温完全一致", avoid: "relit, different time of day, changed mood", guards: ["light.update", "light.create", "light.delete", "light.toggle", "scene.preset", "scene.environment"], scope: "scene" },
+  palette:     { zh: "色彩", en: "color palette", keep: "identical palette and grade", keepZh: "同一套配色与调色", avoid: "different color grade, saturation shift", guards: ["project.set-style", "scene.environment"], scope: "scene" },
+  background:  { zh: "背景环境", en: "background and set", keep: "identical set, props and background geometry", keepZh: "同一处布景、道具与背景结构", avoid: "new set dressing, changed background", guards: ["scene.create", "scene.preset", "scene.room", "entity.create", "entity.delete"], scope: "scene" },
+  foreground:  { zh: "前景遮挡", en: "foreground occlusion", keep: "the same foreground element occluding the same part of frame", keepZh: "同一个前景物遮住画面的同一块位置", avoid: "removed foreground, changed occlusion", guards: ["entity.transform", "entity.delete"], scope: "any-entity" },
+  lens:        { zh: "焦段光圈", en: "lens", keep: "exact same focal length and aperture, no zoom", keepZh: "焦段与光圈完全不变，不要变焦", avoid: "zoom, focal length change, dolly zoom", guards: ["camera.lens"], scope: "camera" },
+};
+
 export const PROVIDERS = {
   "minimax-h3": { name: "MiniMax Hailuo 03", modes: ["t2v", "i2v", "v2v"], maxSeconds: 10 },
-  "seedance-2.5": { name: "Seedance 2.5 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 12 },
-  "seedance-2": { name: "Seedance 2.0 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 12 },
+  "seedance-2.5": { name: "Seedance 2.5 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 30, minSeconds: 4 } /* 实测 2026-09：单条 4–30 s */,
+  "seedance-2": { name: "Seedance 2.0 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 12, minSeconds: 4 },
   "seedream-5": { name: "Seedream 5.0 (Ark)", modes: ["t2i", "i2i"], maxSeconds: 0 },
   "kling-2.5": { name: "Kling 2.5", modes: ["t2v", "i2v"], maxSeconds: 10 },
   "veo-3": { name: "Veo 3", modes: ["t2v", "i2v"], maxSeconds: 8 },

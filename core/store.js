@@ -59,6 +59,7 @@ export function createEmptyProject() {
       backend: "rules",
       busy: false,
       pendingPlan: null,
+      suggest: [], // 下一步建议：由 planner 根据当前工程给出，前端兜底用内置规则
       messages: [
         {
           role: "agent",
@@ -169,6 +170,14 @@ function restoreSnapshot(snap) {
 }
 
 // ---- persistence ----
+// 换工程 = 换话题。保留导演的偏好（协作模式、规划后端），但对话本身跟着上一个工程走：
+// 里面的工具卡片指向的是已经不存在的对象，而且规划器会把最近 8 条当上下文喂给模型——
+// 不清掉的话，新工程的第一条指令会带着上一个工程的实体去推理。
+export function resetAgent(prev = {}) {
+  const fresh = createEmptyProject().agent;
+  return { ...fresh, mode: prev.mode ?? fresh.mode, backend: prev.backend ?? fresh.backend };
+}
+
 export function persistable(d = store.data) {
   const { agent, health, ...rest } = d;
   const copy = structuredClone(rest);
@@ -181,7 +190,7 @@ export function persistable(d = store.data) {
 
 export function loadProjectData(json) {
   const base = createEmptyProject();
-  const next = { ...base, ...json, agent: store.data.agent, health: store.data.health };
+  const next = { ...base, ...json, agent: resetAgent(store.data.agent), health: store.data.health };
   next.project = { ...base.project, ...json.project, playing: false, recording: null };
   next.scene = { ...base.scene, ...json.scene, environment: { ...base.scene.environment, ...(json.scene?.environment || {}) } };
   for (const k of ["entities", "cameras", "lights", "shots", "takes", "storyboard", "jobs", "annotations", "assets", "events"]) next[k] = Array.isArray(json[k]) ? json[k] : [];

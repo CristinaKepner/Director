@@ -8,12 +8,16 @@ import { initViewport } from "./viewport.js";
 import { bindUI, loadSaved, toast, maybeShowGuide } from "./ui.js";
 import { connect, dispatch, client, onMode } from "./client.js";
 import { say } from "../../core/agent.js";
+import { initDesktop } from "./desktop.js";
+import { film } from "./film.js";
+import { maybeShowFirstRun, showFirstRun } from "./firstrun.js";
 
 window.__dc = Object.assign(window.__dc || {}, { errors: [], ready: false });
 window.addEventListener("error", (e) => window.__dc.errors.push(String(e.message || e)));
 window.addEventListener("unhandledrejection", (e) => window.__dc.errors.push(String(e.reason?.message || e.reason)));
 
 bindUI();
+const isDesktop = initDesktop(); // mac client: native menu + save/open panels; no-op in a browser
 initViewport(document.getElementById("viewport"));
 
 const online = await connect();
@@ -35,5 +39,11 @@ window.__dc.store = store;
 window.__dc.dispatch = dispatch; // async: routes to backend when online
 window.__dc.local = localDispatch; // sync: local replica only (tests / debugging)
 window.__dc.client = client;
+window.__dc.desktop = isDesktop;
+window.__dc.film = film; // 白模逐镜录制 · 逐镜生成 · ffmpeg 拼片（桌面端菜单与自动化都走这里）
 window.__dc.ready = true;
-if (!new URLSearchParams(location.search).has("noguide")) maybeShowGuide();
+window.__dc.firstRun = showFirstRun; // 顶栏「?」之外的入口：随时能再来一次
+// 空工程 → 一句话出片；已经有工程的老用户走原来的四步引导
+if (!new URLSearchParams(location.search).has("noguide")) {
+  if (!maybeShowFirstRun()) maybeShowGuide();
+}

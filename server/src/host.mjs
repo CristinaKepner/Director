@@ -4,6 +4,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import * as R from "../../core/index.js";
+import { createFilmAssembler } from "./film.mjs";
+import { createJudge } from "./adapters/judge.mjs";
 
 const { store, dispatch, persistable, loadProjectData, capabilities, historyInfo, RUNTIME_VERSION } = R;
 
@@ -42,6 +44,18 @@ export function createHost(opts = {}) {
       R.setHooks({ generation });
       log(`generation adapter: ${generation.name}${generation.models ? " (" + Object.entries(generation.models).map(([k, v]) => `${k}→${v}`).join(", ") + ")" : ""}`);
     }
+  }
+
+  // ---- film assembler (ffmpeg): the cut, blockout or generated, into one file under mediaDir ----
+  const film = createFilmAssembler({ ffmpeg: opts.ffmpeg, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
+  R.setHooks({ film });
+  log(film.ready ? `film assembler: ffmpeg (${film.bin})` : "film assembler: ffmpeg NOT FOUND — film.export 会提示安装（brew install ffmpeg）");
+
+  // ---- 自动验收：抽帧 + 多模态模型对比新旧两版 ----
+  if (opts.judgeKey) {
+    const judge = createJudge({ apiKey: opts.judgeKey, baseUrl: opts.judgeBase, model: opts.judgeModel, ffmpeg: film.bin, mediaDir, log });
+    R.setHooks({ judge });
+    log(`verify judge: ${judge.model}${judge.ready ? "" : "（缺密钥或 ffmpeg，review.verify 会提示）"}`);
   }
 
   // ---- LLM planner (Agent Director backend) ----
@@ -94,6 +108,14 @@ export function createHost(opts = {}) {
     flushQueued = true;
     queueMicrotask(flush);
   });
+  // 「模型在想什么」：不进工程状态、不进撤销栈、不 bump version —— 只是一路推给所有页面看。
+  function emitThinking(thinking) {
+    const msg = { seq: ++broadcastSeq, thinking };
+    for (const fn of subscribers) {
+      try { fn(msg); } catch (err) { log(`subscriber error ${err.message}`); }
+    }
+  }
+
   function flush() {
     flushQueued = false;
     const d = store.get();
@@ -194,19 +216,49 @@ export function createHost(opts = {}) {
     const t0 = Date.now();
     let p;
     try {
-      p = await planner.plan(text, { capabilities: capabilities(), summary: R.summarize(), history, model });
+      p = await planner.plan(text, {
+        capabilities: capabilities(),
+        summary: R.summarize(),
+        history,
+        model,
+        onDelta: (d) => emitThinking({ model, phase: "planning", reasoning: d.reasoning ? d.reasoning.slice(-4000) : "", steps: d.steps || [], chars: (d.content || "").length }),
+      });
     } catch (err) {
       log(`llm failed (${err.code || ""} ${err.message}); falling back to rules`);
+      emitThinking({ model, phase: "failed", error: String(err.message).slice(0, 200) });
       store.patch((x) => (x.agent.busy = false));
       R.say("agent", `LLM（${model}）调用失败：${String(err.message).slice(0, 160)}。改用内置规则规划器。`);
       const rp = R.plan(text, store.get());
       const out = R.runPlan({ ...rp, text }, { mode, force: payload.force === true, source: "agent" });
       return { ok: true, backend: "rules", fallback: true, error_llm: err.message, plan: out?.plan?.steps, notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
     }
+    emitThinking({ model, phase: "executing", reasoning: p.reasoning ? p.reasoning.slice(-4000) : "", steps: p.steps.map((s) => s.label || s.action), chars: 0 });
     store.patch((x) => (x.agent.busy = false));
+    // 思考过程作为独立一条消息（role "thinking"）插在计划前面，页面默认折叠，点开随时回看。
+    // 不复用 agent 消息，否则会和 runPlan 自己说的 reply 重复。
+    if (p.reasoning || p.steps.length)
+      R.say("thinking", p.reasoning || "", {
+        thinking: {
+          model: p.model,
+          ms: p.ms,
+          reasoning: p.reasoning || "",
+          steps: p.steps.map((x) => ({ action: x.action, label: x.label, role: x.role })),
+          notes: p.notes || [],
+          usage: p.usage ? { total: p.usage.total_tokens, reasoning: p.usage.completion_tokens_details?.reasoning_tokens || 0 } : null,
+        },
+      });
+    // planner 要反问：先把问题摆出来，等导演选完再规划。不自作主张往下做。
+    if (p.ask?.length && !p.steps.length) {
+      store.patch((x) => (x.agent.suggest = p.suggest || []));
+      R.say("ask", p.reply || "", { ask: p.ask, notes: p.notes });
+      return { ok: true, backend: p.model, ms: Date.now() - t0, usage: p.usage, reply: p.reply, ask: p.ask, notes: p.notes, suggest: p.suggest, pending: true };
+    }
+    // 下一步建议来自 planner 对当前工程的判断，不是写死的几句
+    store.patch((x) => (x.agent.suggest = p.suggest || []));
     const planObj = { text, steps: p.steps, notes: p.notes, needsConfirm: p.needsConfirm, reply: p.reply, model: p.model };
     const out = R.runPlan(planObj, { mode, force: payload.force === true, source: "agent" });
-    return { ok: true, backend: p.model, ms: Date.now() - t0, usage: p.usage, reply: p.reply, plan: p.steps.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: p.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+    emitThinking({ model, phase: "done" });
+    return { ok: true, backend: p.model, ms: Date.now() - t0, usage: p.usage, reasoning: p.reasoning || "", suggest: p.suggest, reply: p.reply, plan: p.steps.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: p.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
   }
 
   async function invokeAsync(msg) {
@@ -275,7 +327,7 @@ export function createHost(opts = {}) {
       project: { id: d.project.id, name: d.project.name, version: d.project.version, state: d.project.currentState, scene: d.scene.name, shots: d.shots.length, takes: d.takes.length, jobs: d.jobs.length },
       persistence: { file: projectFile, dirty, lastSavedAt },
       media: { dir: mediaDir },
-      generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated", publisher: opts.publisher?.kind || "none", publicUrl: opts.publicUrl || null } : { name: "simulated", models: {} },
+      generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated", publisher: opts.publisher?.kind || "none", publicUrl: (typeof opts.publicUrl === "function" ? opts.publicUrl() : opts.publicUrl) || null } : { name: "simulated", models: {} },
       llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models, current: d.agent.backend } : { name: "rules", models: [], current: "rules" },
       recording: d.project.recording || null,
       ...extra,

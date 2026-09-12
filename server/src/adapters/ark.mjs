@@ -17,6 +17,13 @@ export const ARK_DEFAULTS = {
   // Seedream 5.0 requires ≥ 3,686,400 output pixels; sizes per project aspect
   imageSizes: { "16:9": "2560x1440", "9:16": "1440x2560", "1:1": "2048x2048", "4:3": "2240x1680", "3:4": "1680x2240", "2.39:1": "2976x1248", "21:9": "2976x1280" },
   resolution: "720p",
+  // 实测的单条时长边界（2026-09，逐秒探测得到）：2.5 是 4–30 s，2.0 是 4–12 s。
+  // 比这更短的镜头按下界出，再由成片拼接按镜头真实时长裁回；更长的镜头必须分段续拍（见 shot.chain）。
+  videoSeconds: {
+    "doubao-seedance-2-5-260628": { min: 4, max: 30 },
+    "doubao-seedance-2-0-260128": { min: 4, max: 12 },
+  },
+  videoSecondsDefault: { min: 4, max: 12 },
   pollMs: 5000,
   maxWaitMs: 15 * 60 * 1000,
 };
@@ -29,7 +36,8 @@ export function createArkAdapter(opts = {}) {
   const mediaDir = opts.mediaDir || null;
   const mediaUrl = opts.mediaUrl || ((name) => `/media/${name}`);
   const resolveLocal = opts.resolveLocal || (() => null); // "/media/x.webm" → absolute path (for v2v / i2v inputs)
-  const publicUrl = (opts.publicUrl || "").replace(/\/$/, ""); // e.g. https://console.example.com — Ark must be able to fetch reference videos
+  // resolved per call: with --tunnel the public address only exists after the server is up
+  const publicUrl = () => String((typeof opts.publicUrl === "function" ? opts.publicUrl() : opts.publicUrl) || "").replace(/\/$/, "");
   const publisher = opts.publisher || null; // fallback: publish local media to user-owned infrastructure (see publish.mjs)
   const log = opts.log || (() => {});
   const fallback = opts.fallback || null;
@@ -79,7 +87,10 @@ export function createArkAdapter(opts = {}) {
   // approved reference assets → data URLs + a prompt suffix naming them (the model sees which image is which)
   function references(job) {
     const refs = (job.inputs?.references || []).map((r) => ({ ...r, data: toDataUrl(r.url, "image/jpeg") })).filter((r) => r.data);
-    const suffix = refs.length ? ` Reference images: ${refs.map((r, i) => `[${i + 1}] ${r.name}${r.look ? " — " + r.look : ""} (match identity, wardrobe, material and color exactly)`).join("; ")}.` : "";
+    // 说清楚每张图管什么：一堆没有说明的参考图，模型只会平均一下
+    const suffix = refs.length
+      ? ` Reference images: ${refs.map((r, i) => `[${i + 1}] ${r.name}${r.roleSay ? ` — ${r.roleSay}` : r.look ? ` — ${r.look}` : ""}`).join("; ")}. Match every referenced attribute exactly; do not blend them together.`
+      : "";
     return { refs, suffix };
   }
 
@@ -100,7 +111,12 @@ export function createArkAdapter(opts = {}) {
   }
 
   async function submitVideo(job, update, model) {
-    const seconds = Math.max(2, Math.min(12, Math.round(job.seconds || 5)));
+    // Seedance rejects durations outside 4–12 s — a 3 s cut is legitimate in the edit, so clamp here and
+    // let the assembler trim the clip back to the shot's real length rather than failing the job.
+    const wanted = Math.round(job.seconds || 5);
+    const bounds = ARK_DEFAULTS.videoSeconds[model] || ARK_DEFAULTS.videoSecondsDefault;
+    const seconds = Math.max(bounds.min, Math.min(bounds.max, wanted));
+    if (wanted > bounds.max) log(`ark: ${job.id} 要 ${wanted}s，但 ${model} 单条最长 ${bounds.max}s —— 这一条只会出 ${bounds.max}s，长镜头请用分段续拍`);
     const ratio = /^\d+:\d+$/.test(job.aspect) ? job.aspect : "16:9";
     const { refs, suffix } = references(job);
     // Ark refuses first/last-frame content mixed with reference images: when approved references exist,
@@ -116,7 +132,8 @@ export function createArkAdapter(opts = {}) {
       if (!ref) throw Object.assign(new Error("no circled take video for this shot"), { code: "NO_REFERENCE_VIDEO" });
       const m = String(ref).match(/\/media\/([^/?#]+)/);
       let url = null;
-      if (m && publicUrl) url = `${publicUrl}/media/${m[1]}`;
+      const pub = publicUrl();
+      if (m && pub) url = `${pub}/media/${m[1]}`;
       else if (!m && /^https?:\/\//.test(ref) && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(ref)) url = ref;
       else if (m && publisher?.enabled) {
         const abs = resolveLocal(ref);
@@ -127,7 +144,7 @@ export function createArkAdapter(opts = {}) {
       if (!url) throw Object.assign(new Error("v2v needs a web-reachable reference video: start the backend with --public-url https://<host>, or --publish feishu --feishu-token-file FILE (uploads the take to your own Feishu Drive and uses its temporary download link)"), { code: "NO_PUBLIC_MEDIA_URL" });
       content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
     }
-    update(job.id, { status: "running", progress: 5, result: null, adapter: { name: "ark", model, seconds, ratio, references: refs.length, referenceMode: refs.length ? "identity (first frame skipped)" : hasImage ? "first frame" : "text" } });
+    update(job.id, { status: "running", progress: 5, result: null, adapter: { name: "ark", model, seconds, ratio, requested: wanted, references: refs.length, referenceMode: refs.length ? "identity (first frame skipped)" : hasImage ? "first frame" : "text" } });
     const created = await call("/contents/generations/tasks", { model, content });
     const taskId = created.id;
     log(`ark task ${taskId} ← ${job.id} (${model}, ${seconds}s ${ratio})`);

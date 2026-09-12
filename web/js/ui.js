@@ -81,7 +81,12 @@ export function bindUI() {
   $("aspect").onchange = (e) => dispatch("project.set-aspect", { aspect: e.target.value });
   $("buildMode").querySelectorAll("[data-build]").forEach((b) => (b.onclick = () => dispatch("project.set-build-mode", { mode: b.dataset.build })));
   $("exportBtn").onclick = () => download(`${store.get().project.name.replace(/\s+/g, "_")}.director.json`, JSON.stringify(persistable(), null, 2));
-  $("importBtn").onclick = () => $("importFile").click();
+  $("importBtn").onclick = async () => {
+    if (!window.director?.openProject) return $("importFile").click(); // browser: hidden file input
+    const r = await window.director.openProject(); // mac client: native open panel
+    if (r?.ok) report(dispatch("project.load", { data: r.data }));
+    else if (r && !r.canceled) toast(r.error || "导入失败", true);
+  };
   $("importFile").onchange = async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -209,14 +214,21 @@ export function toast(msg, err = false) {
   toastTimer = setTimeout(() => (t.hidden = true), 2600);
 }
 function download(name, content, type = "application/json") {
+  if (window.director?.saveFile) return saveNative(name, content); // mac client: native save panel
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([content], { type }));
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+async function saveNative(name, content) {
+  const ext = name.includes(".") ? name.split(".").pop() : "json";
+  const r = await window.director.saveFile(name, content, [{ name: ext.toUpperCase(), extensions: [ext] }, { name: "所有文件", extensions: ["*"] }]);
+  if (r?.ok) toast(`已保存到 ${r.path}`);
+  else if (r && !r.canceled) toast(r.error || "保存失败", true);
+}
 // "/media/x.mp4" from the backend → absolute URL next to the API root (survives path-prefix proxies)
-function mediaHref(u) {
+export function mediaHref(u) {
   if (!u || /^(https?:|data:|blob:)/.test(u)) return u;
   return isOnline() && client.base ? new URL(u.replace(/^\//, ""), new URL("../", client.base)).toString() : u;
 }
@@ -678,8 +690,92 @@ async function addToBoard(shotId) {
   openDrawer("board");
 }
 
+// ---------- 工具卡片：改了什么 / 这是哪一镜 ----------
+// 事件日志里本来就存了受影响对象的 before / after 快照，所以「改了什么」不用猜，
+// 直接对出来就是。原来卡片展开只有一坨 JSON，读起来等于没读。
+const FIELD_ZH = {
+  height: "机位高度", position: "位置", rotation: "旋转", scale: "缩放", yaw: "朝向",
+  focalLength: "焦段", aperture: "光圈", sensorWidth: "感光尺寸", target: "看向", rig: "Rig", preset: "景别",
+  intensity: "强度", color: "颜色", enabled: "开关", type: "类型",
+  pose: "位姿", joints: "关节", displayName: "名称", name: "名称", title: "标题", description: "描述",
+  duration: "时长", motion: "运镜", status: "状态", selectedTake: "圈选 Take", targetIds: "目标",
+  continuity: "连续性", proxy: "代理体", dimensions: "尺寸", fidelity: "保真度", aspect: "画幅", state: "状态",
+};
+const UNIT = { height: "m", focalLength: "mm", duration: "s" };
+
+function fmtVal(v, key) {
+  if (v === null || v === undefined) return "—";
+  if (Array.isArray(v)) return v.every((n) => typeof n === "number") ? `[${v.map((n) => Math.round(n * 100) / 100).join(", ")}]` : `${v.length} 项`;
+  if (v && typeof v === "object" && Object.keys(v).length <= 3) return Object.entries(v).map(([k2, v2]) => `${FIELD_ZH[k2] || k2} ${fmtVal(v2, k2)}`).join(" ");
+  if (typeof v === "object") return JSON.stringify(v).slice(0, 60);
+  if (typeof v === "number") return `${Math.round(v * 1000) / 1000}${UNIT[key] || ""}`;
+  if (typeof v === "boolean") return v ? "开" : "关";
+  return String(v).slice(0, 60);
+}
+
+const SKIP_KEYS = new Set(["version", "updatedAt", "createdAt", "usedByShots", "prompts", "promptVersions", "keyframes", "snapshot", "log", "events", "id"]);
+
+// 机位的位置藏在 pose.position、焦段藏在 lens.focalLength —— 只比一层就只能吐出整个对象的 JSON，
+// 等于没比。所以往下钻两层，拿叶子字段说话：「位置 [-1.86, 1.49, 3.01] → [-1.86, 2.4, 3.01]」。
+function walk(before, after, prefix, depth, out) {
+  const keys = [...new Set([...Object.keys(before || {}), ...Object.keys(after || {})])].filter((k) => !SKIP_KEYS.has(k));
+  for (const k of keys) {
+    if (out.length >= 8) return;
+    const a = before?.[k], b = after?.[k];
+    if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    const plain = (v) => v && typeof v === "object" && !Array.isArray(v);
+    if (depth > 0 && (plain(a) || plain(b))) {
+      walk(a || {}, b || {}, [...prefix, k], depth - 1, out);
+      continue;
+    }
+    out.push({ key: k, label: FIELD_ZH[k] || [...prefix, k].map((x) => FIELD_ZH[x] || x).join("·"), from: fmtVal(a, k), to: fmtVal(b, k) });
+  }
+}
+
+function diffOf(before, after) {
+  if (!before || !after || typeof before !== "object" || typeof after !== "object") return [];
+  const out = [];
+  walk(before, after, [], 2, out);
+  return out;
+}
+
+// 动作打到哪一镜上：优先看 payload，再看 targetIds
+function shotOf(d, m) {
+  const id = m.payload?.shotId || [m.payload?.id, ...(m.targetIds || [])].find((x) => typeof x === "string" && x.startsWith("shot_"));
+  return id ? d.shots.find((s) => s.id === id) : null;
+}
+
+function shotCard(sh, d) {
+  const secs = ((sh.range.outFrame - sh.range.inFrame) / d.project.fps).toFixed(1);
+  const cam = d.cameras.find((c) => c.id === sh.cameraId);
+  return `<div class="shotcard"><div class="hd"><b>${esc(String(sh.index).padStart(2, "0"))} ${esc(sh.title)}</b><span>${secs}s</span></div>
+    <div class="meta">${esc(cam?.name || sh.cameraId)} · ${Math.round(sh.lens.focalLength)}mm · ${esc(sh.motion.type)}${sh.status ? ` · ${esc(sh.status)}` : ""}</div>
+    <div class="actions"><button data-goshot="${esc(sh.id)}">跳到该镜</button></div></div>`;
+}
+
 // ---------- agent thread ----------
 const expanded = new Set();
+const raw = new Set();      // 展开后还想看原始参数的卡片
+const skipped = new Set();  // 待确认方案里被取消勾选的步骤 "<msgId>:<index>"
+const skipCount = (mid) => [...skipped].filter((k) => k.startsWith(`${mid}:`)).length;
+
+// 规划中的实时思考：由后端 SSE 的 thinking 帧喂进来（见 client.js）。不进工程状态，纯展示。
+let live = null;
+export function setThinking(t) {
+  if (!t || t.phase === "done" || t.phase === "failed") live = t?.phase === "failed" ? { ...t } : null;
+  else live = t;
+  renderThread(store.get());
+}
+
+function liveThinking(d) {
+  if (live?.phase === "failed") return `<div class="msg agent fail">规划失败：${esc(live.error || "")}</div>`;
+  if (!d.agent.busy) { live = null; return ""; } // 换工程/取消时不留下悬空的"正在规划"
+  const t = live || {};
+  const tail = t.reasoning ? esc(t.reasoning).slice(-1200) : "";
+  const steps = (t.steps || []).slice(-6).map((x) => `<div>· ${esc(x)}</div>`).join("");
+  const head = t.phase === "executing" ? "在执行计划…" : `${t.model || "模型"} 正在规划…`;
+  return `<div class="msg thinking live"><div class="line"><span class="spin">◠</span><b>${esc(head)}</b>${t.chars ? `<code>${t.chars} 字</code>` : ""}</div>${tail ? `<pre>${tail}</pre>` : ""}${steps ? `<div class="notes">${steps}</div>` : ""}${!tail && !steps ? `<div class="hint">这个模型不外传思考文本，等它把计划写出来。</div>` : ""}</div>`;
+}
 function renderThread(d) {
   const el = $("agentThread");
   const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
@@ -689,19 +785,50 @@ function renderThread(d) {
         if (m.role === "tool") {
           const open = expanded.has(m.id);
           const [head, ...rest] = m.text.split("\n");
-          return `<div class="msg tool ${m.ok === false ? "fail" : ""}" data-mid="${m.id}" data-toggle="1"><div class="line"><span>${m.ok === false ? "✗" : "✓"}</span><b>${esc(head)}</b><code>${esc(m.action)}</code></div>${open ? `<pre>${esc(rest.join("\n"))}</pre><div class="actions">${m.targetIds?.length ? m.targetIds.slice(0, 3).map((t) => `<button data-locate="${esc(t)}">定位 ${esc(t)}</button>`).join("") : ""}${m.eventId && m.ok !== false ? `<button data-undo-to="${m.eventId}">撤销到此前</button>` : ""}</div>` : ""}</div>`;
+          const evt = m.eventId ? d.events.find((e) => e.id === m.eventId) : null;
+          const changes = evt ? diffOf(evt.before, evt.after) : [];
+          const sh = shotOf(d, m);
+          const body = open
+            ? `${changes.length ? `<table class="diff">${changes.map((c) => `<tr><td>${esc(c.label)}</td><td class="from">${esc(c.from)}</td><td class="to">${esc(c.to)}</td></tr>`).join("")}</table>` : `<pre>${esc(rest.join("\n"))}</pre>`}
+               ${sh ? shotCard(sh, d) : ""}
+               <div class="actions">${m.targetIds?.length ? m.targetIds.slice(0, 3).map((t) => `<button data-locate="${esc(t)}">定位 ${esc(t)}</button>`).join("") : ""}${m.eventId && m.ok !== false ? `<button data-undo-to="${m.eventId}">撤销到此前</button>` : ""}${changes.length ? `<button data-raw="${m.id}">原始参数</button>` : ""}</div>
+               ${raw.has(m.id) ? `<pre>${esc(rest.join("\n"))}</pre>` : ""}`
+            : "";
+          const hint = !open && changes.length ? `<em>${esc(changes.slice(0, 2).map((c) => `${c.label} ${c.from}→${c.to}`).join("，"))}</em>` : "";
+          return `<div class="msg tool ${m.ok === false ? "fail" : ""}" data-mid="${m.id}" data-toggle="1"><div class="line"><span>${m.ok === false ? "✗" : "✓"}</span><b>${esc(head)}</b>${hint}<code>${esc(m.action)}</code></div>${body}</div>`;
+        }
+        if (m.role === "thinking") {
+          const t = m.thinking || {};
+          const open = expanded.has(m.id);
+          const head = `${t.model || "模型"} 想了 ${t.ms ? (t.ms / 1000).toFixed(1) + "s" : "一会儿"}${t.steps?.length ? ` · ${t.steps.length} 步` : ""}${t.usage?.reasoning ? ` · ${t.usage.reasoning} 思考 token` : ""}`;
+          const body = t.reasoning
+            ? `<pre>${esc(t.reasoning)}</pre>`
+            : `<div class="hint">这个模型不外传思考文本，下面是它写出来的计划顺序。</div>`;
+          const steps = (t.steps || []).map((x, i) => `<div class="step"><div>${esc(x.label || x.action)}<small>${esc(x.action)}</small></div></div>`).join("");
+          const notes = (t.notes || []).length ? `<div class="notes">${t.notes.map((n) => `<div>· ${esc(n)}</div>`).join("")}</div>` : "";
+          return `<div class="msg thinking" data-mid="${m.id}" data-toggle="1"><div class="line"><span>${open ? "▾" : "▸"}</span><b>思考过程</b><code>${esc(head)}</code></div>${open ? body + steps + notes : ""}</div>`;
+        }
+        if (m.role === "ask") {
+          const asked = m.answered || {};
+          return `<div class="msg ask" data-mid="${m.id}">${m.text ? esc(m.text) : ""}
+            ${(m.ask || []).map((a, qi) => `<div class="q"><div class="qt">${esc(a.question)}</div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}
+              <div class="opts">${a.options.map((o) => `<button class="${asked[qi] === o.label ? "on" : ""}${o.recommended ? " rec" : ""}" data-answer="${m.id}:${qi}:${esc(o.label)}" title="${esc(o.detail || "")}">${esc(o.label)}${o.recommended ? " · 推荐" : ""}</button>`).join("")}</div>
+              ${a.options.some((o) => o.detail) ? `<div class="why">${esc(a.options.find((o) => o.recommended)?.detail || a.options[0].detail || "")}</div>` : ""}</div>`).join("")}
+            ${(m.notes || []).length ? `<div class="why">${m.notes.map((n) => `· ${esc(n)}`).join("<br>")}</div>` : ""}</div>`;
         }
         if (m.role === "plan") {
-          const steps = (m.plan?.steps || []).filter((s) => !s.quiet);
+          // quiet 步骤不显示，但 agent.confirm 的 skip 下标是对着未过滤的 plan.steps 的 ——
+          // 所以复选框必须带真实下标，否则会跳掉另一步。
+          const steps = (m.plan?.steps || []).map((s, i) => ({ s, i })).filter((x) => !x.s.quiet);
           return `<div class="msg plan" data-mid="${m.id}">${esc(m.text)}
-          ${steps.map((s, i) => `<div class="step"><div>${esc(s.label)}<small>${esc(s.action)}</small></div>${m.manual ? `<button data-run-step="${m.id}:${i}">执行</button>` : ""}</div>`).join("")}
-          ${m.pending ? `<div class="actions"><button class="primary" data-confirm="1">确认执行</button><button data-cancel="1">取消</button></div>` : ""}</div>`;
+          ${steps.map(({ s, i }, vi) => `<div class="step${m.pending && skipped.has(`${m.id}:${i}`) ? " off" : ""}">${m.pending ? `<input type="checkbox" data-skip="${m.id}:${i}"${skipped.has(`${m.id}:${i}`) ? "" : " checked"}>` : ""}<div>${esc(s.label)}<small>${esc(s.action)}</small></div>${m.manual ? `<button data-run-step="${m.id}:${vi}">执行</button>` : ""}</div>`).join("")}
+          ${m.pending ? `<div class="actions"><button class="primary" data-confirm="${m.id}">${skipCount(m.id) ? `执行选中的 ${steps.length - skipCount(m.id)} 步` : "确认执行"}</button><button data-cancel="1">取消</button></div>` : ""}</div>`;
         }
         const media = m.media?.url ? (m.media.kind === "image" ? `<img class="media" data-preview="${esc(m.media.url)}" data-kind="image" src="${esc(mediaHref(m.media.url))}" />` : `<video class="media" data-preview="${esc(m.media.url)}" data-kind="video" src="${esc(mediaHref(m.media.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : "";
         const dl = m.download ? `<div class="actions"><button data-dl="${m.id}">下载 ${esc(m.download.name)}</button></div>` : "";
         return `<div class="msg ${m.role}" data-mid="${m.id}">${esc(m.text)}${media}${dl}</div>`;
       })
-      .join("") + (d.agent.busy ? `<div class="msg agent">…</div>` : "");
+      .join("") + liveThinking(d);
   el.querySelectorAll("[data-toggle]").forEach((n) => (n.onclick = (ev) => {
     if (ev.target.closest("button")) return;
     expanded.has(n.dataset.mid) ? expanded.delete(n.dataset.mid) : expanded.add(n.dataset.mid);
@@ -709,7 +836,35 @@ function renderThread(d) {
   }));
   el.querySelectorAll("[data-locate]").forEach((b) => (b.onclick = () => locate(b.dataset.locate)));
   el.querySelectorAll("[data-undo-to]").forEach((b) => (b.onclick = () => report(dispatch("project.undo-to", { eventId: b.dataset.undoTo }))));
-  el.querySelectorAll("[data-confirm]").forEach((b) => (b.onclick = () => report(dispatch("agent.confirm"))));
+  el.querySelectorAll("[data-raw]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); raw.has(b.dataset.raw) ? raw.delete(b.dataset.raw) : raw.add(b.dataset.raw); renderThread(store.get()); }));
+  el.querySelectorAll("[data-skip]").forEach((c) => (c.onclick = (ev) => {
+    ev.stopPropagation();
+    const k = c.dataset.skip;
+    c.checked ? skipped.delete(k) : skipped.add(k);
+    renderThread(store.get());
+  }));
+  el.querySelectorAll("[data-answer]").forEach((b) => (b.onclick = () => {
+    const [mid, qi, ...rest] = b.dataset.answer.split(":");
+    const label = rest.join(":");
+    const m = store.get().agent.messages.find((x) => x.id === mid);
+    if (!m) return;
+    const answered = { ...(m.answered || {}), [qi]: label };
+    // 本地先标上选中，避免等一个来回
+    store.light((d) => { const mm = d.agent.messages.find((x) => x.id === mid); if (mm) mm.answered = answered; });
+    renderThread(store.get());
+    const all = (m.ask || []).map((a, i) => (answered[i] ? `${a.question} → ${answered[i]}` : null)).filter(Boolean);
+    if (all.length === (m.ask || []).length) {
+      $("agentInput").value = all.join("；");
+      sendAgent();
+    }
+  }));
+  el.querySelectorAll("[data-goshot]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); report(dispatch("shot.select", { id: b.dataset.goshot })); }));
+  el.querySelectorAll("[data-confirm]").forEach((b) => (b.onclick = () => {
+    const mid = b.dataset.confirm;
+    const skip = [...skipped].filter((k) => k.startsWith(`${mid}:`)).map((k) => Number(k.split(":")[1]));
+    skip.forEach((i) => skipped.delete(`${mid}:${i}`));
+    report(dispatch("agent.confirm", skip.length ? { skip } : {}));
+  }));
   el.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => report(dispatch("agent.cancel"))));
   el.querySelectorAll("[data-run-step]").forEach((b) => (b.onclick = () => {
     const [mid, i] = b.dataset.runStep.split(":");
@@ -727,6 +882,14 @@ function renderThread(d) {
 
 // suggestions follow what the project needs next — three at most
 function renderChips(d) {
+  // planner 给的下一步建议优先：它看得到刚做完什么、工程现在缺什么。
+  // 没有（规则规划器、离线、或者模型没给）才回落到内置的进度推断。
+  const fromPlanner = (d.agent?.suggest || []).filter((x) => typeof x === "string" && x.trim());
+  if (fromPlanner.length) {
+    $("chips").innerHTML = fromPlanner.slice(0, 3).map((c) => `<button data-chip="${esc(c)}" title="来自规划器的建议">${esc(c)}</button>`).join("");
+    $("chips").querySelectorAll("[data-chip]").forEach((b) => (b.onclick = () => { $("agentInput").value = b.dataset.chip; sendAgent(); }));
+    return;
+  }
   const list = [];
   const cur = d.project.currentShotId || d.shots[0]?.id;
   if (!d.shots.length) list.push("载入示例「城市边缘」", "新建镜头「对峙」6秒 手持");
@@ -991,6 +1154,31 @@ function renderBoard(el, d) {
   el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, n.title)));
 }
 
+const openChain = new Set();
+
+// 「查看生成过程」：长镜头是被拆开跑的，拆成几段、每段演什么、哪一段失败了、
+// 尾帧是怎么交接的 —— 这些不摊开，用户只会看到一条黑箱进度条。
+function chainView(j) {
+  const parts = j.parts || [];
+  const rows = parts.map((p) => {
+    const state = p.status === "done" ? "done" : p.status === "failed" ? "fail" : p.status === "running" ? "run" : "wait";
+    const mark = { done: "✓", fail: "✗", run: "◠", wait: "·" }[state];
+    return `<div class="cv-seg ${state}">
+      <span class="cv-mark">${mark}</span>
+      <span class="cv-t">${p.from != null ? `${p.from}–${p.to}s` : `${(p.seconds || 0).toFixed(1)}s`}</span>
+      <span class="cv-beat">${esc(p.beat || "（沿用整镜描述）")}</span>
+      <span class="cv-meta">${p.attempt > 1 ? `第 ${p.attempt} 次 · ` : ""}${p.failure ? `${p.failure} · ` : ""}${p.url ? "已出" : p.status === "failed" ? esc(String(p.error || "").slice(0, 40)) : ""}</span>
+    </div>`;
+  }).join("");
+  const links = parts.length > 1 ? `<div class="cv-note">段与段之间用上一段的尾帧当下一段的首帧接上（${parts.length - 1} 次交接）。</div>` : "";
+  return `<div class="chainview">
+    <div class="cv-head"><b>拆成 ${parts.length} 段</b><span>${j.model} · 单条上限决定段长 · 串行执行</span></div>
+    ${rows}${links}
+    ${j.status === "failed" ? `<div class="cv-fail">${esc(j.message || j.error || "")}${j.hint ? `<br>${esc(j.hint)}` : ""}</div>` : ""}
+    ${j.result?.url ? `<div class="cv-note">缝合完成：${Math.round(j.result.seconds)}s · ${(j.result.bytes / 1e6).toFixed(1)} MB</div>` : ""}
+  </div>`;
+}
+
 function renderGen(el, d) {
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
   if (!shot) {
@@ -1017,7 +1205,7 @@ function renderGen(el, d) {
         <button data-act="submit" class="primary">提交</button>
       </div>
       ${!real.length ? `<div class="empty" style="padding:8px 0;justify-content:flex-start">${isOnline() ? "后端未配置生成密钥：任务只是模拟。" : "单机模式：任务只是模拟，不会真的生成。"}</div>` : ""}
-      ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}${(j.inputs?.references || []).length ? `<div class="prompt">参考 ${j.inputs.references.length}</div>` : ""}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}</div></td></tr>`).join("")}</tbody></table>` : ""}
+      ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}${(j.inputs?.references || []).length ? `<div class="prompt">参考 ${j.inputs.references.length}</div>` : ""}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}${j.kind === "chain" ? `<button data-chain="${j.id}">查看生成过程</button>` : ""}${j.kind === "chain" && j.resumable ? `<button data-resume="${j.shotId}">接着跑</button>` : ""}</div></td></tr>${j.kind === "chain" && openChain.has(j.id) ? `<tr><td colspan="5">${chainView(j)}</td></tr>` : ""}`).join("")}</tbody></table>` : ""}
     </div></div>`;
   el.querySelectorAll("[data-pm]").forEach((b) => (b.onclick = () => {
     promptTab.mode = b.dataset.pm;
@@ -1036,6 +1224,11 @@ function renderGen(el, d) {
   };
   el.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => dispatch("generation.cancel", { id: b.dataset.cancel })));
   el.querySelectorAll("[data-retry]").forEach((b) => (b.onclick = () => dispatch("generation.retry", { id: b.dataset.retry })));
+  el.querySelectorAll("[data-chain]").forEach((b) => (b.onclick = () => {
+    openChain.has(b.dataset.chain) ? openChain.delete(b.dataset.chain) : openChain.add(b.dataset.chain);
+    renderGen(el, store.get());
+  }));
+  el.querySelectorAll("[data-resume]").forEach((b) => (b.onclick = () => report(dispatch("shot.chain", { shotId: b.dataset.resume, resume: true }))));
   el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, `${shot.index} ${shot.title}`)));
 }
 

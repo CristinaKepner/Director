@@ -14,6 +14,7 @@ import {
   persistable,
   loadProjectData,
   createEmptyProject,
+  resetAgent,
 } from "./store.js";
 import {
   uid,
@@ -38,7 +39,8 @@ import {
   GEN_MODES,
   ASPECTS,
   FIDELITY,
-} from "./schema.js";
+  LOCK_ASPECTS,
+  ASSET_ROLES,} from "./schema.js";
 import { attachPrompts, compileShot } from "./prompts.js";
 import { MODEL_LIBRARY, ROOM_PATTERNS } from "./schema.js";
 import { cameraStateAt, entityStateAt, sequenceLayout } from "./motion.js";
@@ -50,7 +52,7 @@ export const CARD_STATUSES = ["empty", "blocked", "prompted", "generated", "appr
 const registry = new Map();
 const idempotency = new Map();
 let batchDepth = 0;
-const hooks = { recorder: null, generation: null, capture: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
+const hooks = { recorder: null, generation: null, capture: null, film: null, judge: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
 
 // Host integrations (browser recorder, generation adapters). Absent in the CLI: actions degrade gracefully.
 export function setHooks(h) {
@@ -69,6 +71,10 @@ export function listActions() {
   return [...registry.keys()].sort();
 }
 
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+
 function domainKind(name) {
   const dom = name.split(".")[0];
   return { entity: "entities", camera: "cameras", light: "lights", shot: "shots", take: "takes", storyboard: "storyboard", generation: "jobs" }[dom] || null;
@@ -85,6 +91,32 @@ function snapshotFor(name, id, d) {
   return null;
 }
 
+// 已锁的镜头 = 导演说过「这一块我满意了」。任何会动到它的 Action 在这里被拦下来，
+// 不管来自界面、CLI 还是 Agent —— 拦在 dispatch 而不是每个 handler 里，才不会有漏网的入口。
+// 想改就先解锁，或者显式带 force（force 会记进事件日志，事后查得到是谁越过的）。
+function lockedBy(name, payload, d) {
+  const hits = [];
+  const id = payload.id ?? payload.shotId ?? payload.entityId ?? null;
+  for (const shot of d.shots) {
+    for (const aspect of shot.locks?.aspects || []) {
+      const def = LOCK_ASPECTS[aspect];
+      if (!def || !def.guards.includes(name)) continue;
+      // 这个 Action 有没有动到这一镜，按 aspect 的性质判断：
+      //   scene      灯光 / 色彩 / 背景是全场的，任何一次改动都落在每个镜头上
+      //   subject    只有动到这一镜的被摄主体才算
+      //   camera     只有动到这一镜的机位（或点名这一镜）才算
+      //   any-entity 前景遮挡可能是任何物体，动到场里的实体就算
+      const scoped =
+        def.scope === "scene" ? true
+        : def.scope === "camera" ? payload.shotId === shot.id || id === shot.cameraId || id === shot.id
+        : def.scope === "subject" ? !!id && shot.targetIds.includes(id)
+        : /* any-entity */ !!id && d.entities.some((e) => e.id === id);
+      if (scoped) hits.push({ shotId: shot.id, title: shot.title, aspect, zh: def.zh });
+    }
+  }
+  return hits;
+}
+
 export function dispatch(name, payload = {}, meta = {}) {
   const t0 = hooks.clock();
   const source = meta.source || "human";
@@ -96,6 +128,14 @@ export function dispatch(name, payload = {}, meta = {}) {
   };
   if (!def) return { ok: false, error: "UNKNOWN_ACTION", action: name, hint: `try one of: ${listActions().slice(0, 12).join(", ")} …` };
   if (!canRun(name)) return fail("STATE_FORBIDDEN", { state: store.get().project.currentState, hint: `allowed in ${STATE_MACHINE.filter((s) => canRun(name, s)).join("/")}` });
+  if (!meta.force) {
+    const locks = lockedBy(name, payload, store.get());
+    if (locks.length)
+      return fail("LOCKED", {
+        locks,
+        hint: `${locks.map((l) => `${l.shotId}「${l.title}」锁了${l.zh}`).join("；")}。要改就先 shot.unlock，或带 force 越过（会记进事件日志）。`,
+      });
+  }
   if (meta.idempotencyKey && idempotency.has(meta.idempotencyKey)) return { ...idempotency.get(meta.idempotencyKey), replay: true };
   const missing = (def.required || []).filter((k) => payload[k] === undefined || payload[k] === null || payload[k] === "");
   if (missing.length) return fail("MISSING_PARAM", { missing, params: def.params });
@@ -121,7 +161,7 @@ export function dispatch(name, payload = {}, meta = {}) {
   const targetIds = result.targetIds || [result.id || payload.id].filter(Boolean);
   const after = result.ok ? snapshotFor(name, result.id || payload.id, store.get()) : result;
   const ms = Math.round((hooks.clock() - t0) * 10) / 10;
-  if (!meta.silent) logEvent({ id: eventId, action: name, source, actorId: meta.actorId, payload, targetIds, before, after, undoable: !!(def.undoable && result.ok && batchDepth === 0), ok: result.ok, ms, batch: batchDepth > 0 ? meta.batchLabel : undefined });
+  if (!meta.silent) logEvent({ id: eventId, action: name, source, actorId: meta.actorId, payload, targetIds, before, after, forced: meta.force ? lockedBy(name, payload, store.get()).map((l) => `${l.shotId}:${l.aspect}`) : undefined, undoable: !!(def.undoable && result.ok && batchDepth === 0), ok: result.ok, ms, batch: batchDepth > 0 ? meta.batchLabel : undefined });
   store.light((d) => {
     d.health.lastCommandMs = ms;
     d.health.commands = (d.health.commands || 0) + 1;
@@ -240,7 +280,7 @@ register("project.new", {
     base.project.name = name || "Untitled Stage";
     if (f) base.project.fps = Number(f);
     if (aspect && ASPECTS[aspect]) base.project.aspect = aspect;
-    base.agent = D().agent;
+    base.agent = resetAgent(D().agent); // 新工程给一条干净的对话，只留下模式与规划后端
     base.health = D().health;
     clearHistory();
     store.set(base, null, { loaded: true });
@@ -676,6 +716,64 @@ register("camera.transform", {
   },
 });
 
+// 「再向右移动一点」—— 这句话要能落成一个确定的数。
+// 坐标系：机位自身。right 是画面右方、up 是画面上方、forward 是朝向被摄体的方向，单位米。
+// 关键在于它是 truck（平移），不是 pan（摇）：look-at 目标保持不动，所以机位平移后仍看着原来的点，
+// 焦段一个字不改。这正是视频模型最容易搞混的一组——提示词里也会因此写死 no pan / no zoom。
+const NUDGE_AMOUNT = { 一点点: 0.08, 一点: 0.15, 一些: 0.4, 明显: 1.0, 大幅: 2.0 };
+export const NUDGE_STEPS = NUDGE_AMOUNT;
+
+register("camera.nudge", {
+  doc: `相对微调机位（机位自身坐标系，米）：right 画面右 / up 画面上 / forward 推近。保持 look-at 与焦段不变 —— 是平移不是摇镜。amount 词表：${Object.keys(NUDGE_AMOUNT).join("/")}`,
+  params: { id: "string", right: "number (m)", up: "number (m)", forward: "number (m)", amount: "一点点|一点|一些|明显|大幅", direction: "right|left|up|down|forward|back" },
+  validate: camExists,
+  handler({ id, right, up, forward, amount, direction }) {
+    const d0 = D();
+    const cam = d0.cameras.find((c) => c.id === (id || d0.project.programCameraId));
+    if (!cam) return { ok: false, error: "NO_CAMERA" };
+    // 说了方向词就把词换成米；没说数量默认「一点」
+    let dr = Number(right) || 0, du = Number(up) || 0, df = Number(forward) || 0;
+    if (direction) {
+      const m = NUDGE_AMOUNT[amount] ?? NUDGE_AMOUNT["一点"];
+      if (direction === "right") dr += m;
+      else if (direction === "left") dr -= m;
+      else if (direction === "up") du += m;
+      else if (direction === "down") du -= m;
+      else if (direction === "forward") df += m;
+      else if (direction === "back") df -= m;
+    }
+    if (!dr && !du && !df) return { ok: false, error: "NO_DELTA", hint: "给 right/up/forward 的米数，或者 direction + amount" };
+
+    const pos = cam.pose.position;
+    const target = cam.pose.lookAt || cam.target || [0, 1, 0];
+    const tgt = Array.isArray(target) ? target : (d0.entities.find((e) => e.id === target)?.transform?.position || [0, 1, 0]);
+    // 机位自身的右/上/前，由 位置→目标 这条视线推出来（世界 up = +Y）
+    const fwd = norm(sub(tgt, pos));
+    const rightV = norm(cross(fwd, [0, 1, 0]));
+    const upV = cross(rightV, fwd);
+    const delta = [
+      rightV[0] * dr + upV[0] * du + fwd[0] * df,
+      rightV[1] * dr + upV[1] * du + fwd[1] * df,
+      rightV[2] * dr + upV[2] * du + fwd[2] * df,
+    ];
+    const next = [pos[0] + delta[0], pos[1] + delta[1], pos[2] + delta[2]];
+
+    store.patch((d) => {
+      const c = d.cameras.find((x) => x.id === cam.id);
+      c.pose.position = next;
+      c.pose.lookAt = tgt;        // 平移后仍看着原来那个点：不是摇镜
+      c.version = (c.version || 0) + 1;
+      // 让提示词编译器知道这一步是横移多少米，好把 no pan / no zoom 写死
+      for (const sh of d.shots.filter((x) => x.cameraId === cam.id)) {
+        sh.cameraPose = structuredClone(c.pose);
+        sh.lastMove = { right: dr, up: du, forward: df, meters: Math.hypot(dr, du, df), at: new Date().toISOString() };
+      }
+    });
+    const say = [dr && `${dr > 0 ? "右" : "左"}移 ${Math.abs(dr).toFixed(2)} m`, du && `${du > 0 ? "升" : "降"} ${Math.abs(du).toFixed(2)} m`, df && `${df > 0 ? "推近" : "拉远"} ${Math.abs(df).toFixed(2)} m`].filter(Boolean).join("，");
+    return { ok: true, id: cam.id, moved: { right: dr, up: du, forward: df }, from: pos, to: next, lookAt: tgt, focalLength: cam.lens.focalLength, describe: `${say}（机位坐标系，焦段与视线目标不变）` };
+  },
+});
+
 register("camera.look-at", {
   doc: "机位看向某个实体（null 取消）",
   params: { id: "string", target: "entityId|null" },
@@ -921,6 +1019,89 @@ register("shot.select", {
       d.project.selectedKind = "shot";
       d.project.selectedId = id;
     });
+  },
+});
+
+// 长镜头不是"同一句话演五分钟"。一条 90 秒的镜头里有三段不同的事情发生，
+// 每段该有自己的内容描述 —— 否则每一段拿到的都是同一条提示词，模型只会各演各的。
+// 拆解是语言活，由 planner（或导演自己）做完写进来；运行时只负责按拍执行。
+register("shot.beats", {
+  doc: "把一个长镜头拆成若干拍，每拍一句话说清这段发生什么。shot.chain 会按拍分段，每段用自己的描述去生成",
+  params: { shotId: "string", beats: "[{seconds, text}]（seconds 省略则均分剩余时长）；给了 beats 就是整体替换", clear: "boolean（只在不给 beats 时有效：清空所有拍）" },
+  handler({ shotId, beats, clear }) {
+    const d0 = D();
+    const s = d0.shots.find((x) => x.id === (shotId || d0.project.currentShotId));
+    if (!s) return { ok: false, error: "NO_SHOT" };
+    // clear 只在没给 beats 时才是"清空"。给了 beats 还带 clear，意思是"换成这些"——
+    // 调用方（尤其是模型）很自然会这么写。破坏性开关绝不能悄悄盖过内容，否则就是
+    // 返回 ok:true 的静默丢数据。
+    const list0 = Array.isArray(beats) ? beats : [];
+    if (clear && !list0.length) {
+      store.patch((d) => (d.shots.find((x) => x.id === s.id).beats = null));
+      return { ok: true, id: s.id, beats: null, cleared: true };
+    }
+    const list = list0.map((b) => ({ text: String(b?.text ?? b ?? "").trim(), seconds: Number(b?.seconds) || 0 })).filter((b) => b.text);
+    if (!list.length) return { ok: false, error: "NO_BEATS", hint: "beats 要是 [{seconds, text}]，text 说清这一拍发生什么" };
+    const total = (s.range.outFrame - s.range.inFrame) / d0.project.fps;
+    const fixed = list.reduce((n, b) => n + b.seconds, 0);
+    const free = list.filter((b) => !b.seconds).length;
+    // 没写时长的拍平分剩下的时间；都写了就按写的比例缩放到镜头总时长
+    const each = free ? Math.max(0, total - fixed) / free : 0;
+    let out = list.map((b) => ({ text: b.text, seconds: b.seconds || each }));
+    const sum = out.reduce((n, b) => n + b.seconds, 0) || 1;
+    out = out.map((b) => ({ ...b, seconds: Math.round((b.seconds / sum) * total * 100) / 100 }));
+    store.patch((d) => (d.shots.find((x) => x.id === s.id).beats = out));
+    return { ok: true, id: s.id, total: Math.round(total * 10) / 10, beats: out };
+  },
+});
+
+register("shot.lock", {
+  doc: `锁定这一镜已经满意的部分，重新生成时必须保持不变。aspects: ${Object.keys(LOCK_ASPECTS).join("/")}`,
+  params: { shotId: "string", aspects: "string[]", note: "string", referenceFrame: "dataURL (以哪一帧为准)" },
+  required: ["aspects"],
+  validate: ({ aspects }) => {
+    const bad = (Array.isArray(aspects) ? aspects : [aspects]).filter((a) => !LOCK_ASPECTS[a]);
+    return bad.length ? { error: "BAD_ASPECT", bad, allowed: Object.keys(LOCK_ASPECTS) } : null;
+  },
+  handler({ shotId, aspects, note, referenceFrame }) {
+    const d0 = D();
+    const s = d0.shots.find((x) => x.id === (shotId || d0.project.currentShotId));
+    if (!s) return { ok: false, error: "NO_SHOT" };
+    const list = [...new Set([...(s.locks?.aspects || []), ...(Array.isArray(aspects) ? aspects : [aspects])])];
+    // 以哪一帧为准：优先调用方给的，其次这一镜最后一条成功生成的结果，再次圈选 Take 的缩略图
+    const lastGen = d0.jobs.filter((j) => j.shotId === s.id && j.status === "done" && j.result?.url).at(-1);
+    const take = d0.takes.find((t) => t.id === s.selectedTake);
+    store.patch((d) => {
+      const sh = d.shots.find((x) => x.id === s.id);
+      sh.locks = {
+        aspects: list,
+        note: note || sh.locks?.note || "",
+        lockedAt: new Date().toISOString(),
+        // 基准：锁的是「这个样子」，所以要记住当时是哪一版
+        reference: referenceFrame || sh.locks?.reference || lastGen?.result?.url || take?.thumbnail || null,
+        jobId: lastGen?.id || sh.locks?.jobId || null,
+        promptVersion: sh.promptVersions?.at(-1)?.version || 1,
+      };
+      sh.version += 1;
+    });
+    return { ok: true, id: s.id, aspects: list, zh: list.map((a) => LOCK_ASPECTS[a].zh), reference: D().shots.find((x) => x.id === s.id).locks.reference };
+  },
+});
+
+register("shot.unlock", {
+  doc: "解锁：不传 aspects 就全解",
+  params: { shotId: "string", aspects: "string[]" },
+  handler({ shotId, aspects }) {
+    const d0 = D();
+    const s = d0.shots.find((x) => x.id === (shotId || d0.project.currentShotId));
+    if (!s) return { ok: false, error: "NO_SHOT" };
+    const drop = new Set(aspects ? (Array.isArray(aspects) ? aspects : [aspects]) : Object.keys(LOCK_ASPECTS));
+    store.patch((d) => {
+      const sh = d.shots.find((x) => x.id === s.id);
+      const left = (sh.locks?.aspects || []).filter((a) => !drop.has(a));
+      sh.locks = left.length ? { ...sh.locks, aspects: left } : null;
+    });
+    return { ok: true, id: s.id, aspects: D().shots.find((x) => x.id === s.id).locks?.aspects || [] };
   },
 });
 
@@ -1346,12 +1527,12 @@ function updateJob(id, patch) {
 // ============ asset.* — reference assets keep characters / products consistent across generations ============
 register("asset.add", {
   doc: "登记一个资产（参考图 / 生成结果 / 上传）并绑定到实体：entityId + url；approved=true 后参与该实体出现的所有生成",
-  params: { entityId: "string", url: "string", label: "string", kind: "reference|generated|upload", mediaKind: "image|video", approved: "boolean", fromJob: "jobId (copy url/model/prompt from a finished job)" },
+  params: { entityId: "string", url: "string", label: "string", kind: "reference|generated|upload", role: `${Object.keys(ASSET_ROLES).join("|")}（这张图管的是角色的哪一面）`, mediaKind: "image|video|audio", approved: "boolean", fromJob: "jobId (copy url/model/prompt from a finished job)" },
   validate: ({ entityId, url, fromJob }, d) => (entityId && !d.entities.some((e) => e.id === entityId) ? { error: "ENTITY_NOT_FOUND" } : !url && !fromJob ? { error: "MISSING_PARAM", missing: ["url"] } : null),
-  handler({ entityId, url, label, kind = "reference", mediaKind = "image", approved = false, fromJob }) {
+  handler({ entityId, url, label, kind = "reference", role, mediaKind = "image", approved = false, fromJob }) {
     const job = fromJob ? D().jobs.find((j) => j.id === fromJob) : null;
     if (fromJob && !job?.result?.url) return { ok: false, error: "JOB_HAS_NO_RESULT" };
-    const a = { id: uid("asset"), kind, entityId: entityId || job?.entityId || null, label: label || (job ? `${job.shotId || job.entityId} · ${job.model}` : url), url: url || job.result.url, mediaKind: job ? job.result.kind || mediaKind : mediaKind, approved: !!approved, jobId: job?.id || null, model: job?.model || null, prompt: job?.prompt || null, createdAt: new Date().toISOString() };
+    const a = { id: uid("asset"), kind, role: ASSET_ROLES[role] ? role : null, entityId: entityId || job?.entityId || null, label: label || (job ? `${job.shotId || job.entityId} · ${job.model}` : url), url: url || job.result.url, mediaKind: job ? job.result.kind || mediaKind : mediaKind, approved: !!approved, jobId: job?.id || null, model: job?.model || null, prompt: job?.prompt || null, createdAt: new Date().toISOString() };
     store.patch((d) => (d.assets = [...(d.assets || []), a]));
     return { ok: true, id: a.id, entityId: a.entityId, targetIds: [a.id, a.entityId].filter(Boolean) };
   },
@@ -1381,6 +1562,44 @@ register("asset.delete", {
   },
 });
 
+register("context.character", {
+  doc: "角色卡：一个角色（或产品）的身份字段、按用途分组的参考资产、以及它出现在哪些镜头",
+  params: { id: "string (entityId；不传就列出全部角色)" },
+  undoable: false,
+  handler({ id }) {
+    const d = D();
+    const build = (e) => {
+      const mine = (d.assets || []).filter((a) => a.entityId === e.id);
+      const byRole = {};
+      for (const [r, def] of Object.entries(ASSET_ROLES)) {
+        const list = mine.filter((a) => a.role === r);
+        if (list.length) byRole[r] = { zh: def.zh, approved: list.filter((a) => a.approved).length, total: list.length, assets: list.map((a) => ({ id: a.id, url: a.url, approved: a.approved, label: a.label })) };
+      }
+      const unroled = mine.filter((a) => !a.role);
+      return {
+        id: e.id,
+        name: e.displayName || e.id,
+        semanticType: e.semanticType,
+        role: e.role || null,
+        continuity: e.continuity || {},
+        pose: e.pose || null,
+        proxy: e.proxy || null,
+        assetRef: e.assetRef || null, // 换过 GLB 就在这
+        roles: byRole,
+        unroled: unroled.length,
+        // 卡片完整度：这几面齐了，跨镜头一致性才稳
+        missing: (e.semanticType === "character" ? ["face", "wardrobe", "voice"] : ["prop"]).filter((r) => !byRole[r]?.approved),
+        usedByShots: d.shots.filter((s) => s.targetIds.includes(e.id)).map((s) => s.id),
+      };
+    };
+    if (id) {
+      const e = d.entities.find((x) => x.id === id);
+      return e ? { ok: true, data: build(e) } : { ok: false, error: "ENTITY_NOT_FOUND" };
+    }
+    return { ok: true, data: d.entities.filter((e) => ["character", "vehicle", "prop", "weapon"].includes(e.semanticType)).map(build) };
+  },
+});
+
 register("context.assets", {
   doc: "资产清单：每个实体已批准 / 待批准的参考",
   undoable: false,
@@ -1401,8 +1620,8 @@ export function referencesForShot(d, shot, limit = 4) {
     seen.add(id);
     const ent = d.entities.find((e) => e.id === id);
     if (!ent) continue;
-    for (const a of (d.assets || []).filter((x) => x.entityId === id && x.approved && x.mediaKind !== "video")) {
-      out.push({ assetId: a.id, entityId: id, name: ent.displayName, url: a.url, look: ent.continuity?.look || "" });
+    for (const a of (d.assets || []).filter((x) => x.entityId === id && x.approved && x.mediaKind !== "video" && x.mediaKind !== "audio")) {
+      out.push({ assetId: a.id, entityId: id, name: ent.displayName, url: a.url, role: a.role || null, roleSay: a.role ? ASSET_ROLES[a.role]?.say : null, look: ent.continuity?.look || "" });
       if (out.length >= limit) return out;
     }
   }
@@ -1411,26 +1630,33 @@ export function referencesForShot(d, shot, limit = 4) {
 
 register("generation.reference", {
   doc: "为实体生成参考图（角色定妆照 / 产品图，中性背景、正面全身或整件产品），完成后自动登记为该实体的未批准资产。provider 默认 seedream-5",
-  params: { entityId: "string", provider: "providerId (t2i)", prompt: "string (override)", view: "front|three-quarter|profile|turntable", label: "string" },
+  params: { entityId: "string", provider: "providerId (t2i)", prompt: "string (override)", view: "front|three-quarter|profile|turntable", role: `${Object.keys(ASSET_ROLES).join("|")}（这一张管角色的哪一面，默认 face/prop）`, label: "string" },
   required: ["entityId"],
   undoable: false,
   validate: ({ entityId, provider = "seedream-5" }, d) => (!d.entities.some((e) => e.id === entityId) ? { error: "ENTITY_NOT_FOUND" } : !PROVIDERS[provider] ? { error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) } : !PROVIDERS[provider].modes.includes("t2i") ? { error: "MODE_NOT_SUPPORTED", provider, supported: PROVIDERS[provider].modes } : null),
-  handler({ entityId, provider = "seedream-5", prompt, view = "front", label }, meta) {
+  handler({ entityId, provider = "seedream-5", prompt, view = "front", role, label }, meta) {
     const d0 = D();
     const e = d0.entities.find((x) => x.id === entityId);
     const isChar = e.semanticType === "character";
     const look = [e.continuity?.look, e.continuity?.wardrobe, e.continuity?.color].filter(Boolean).join(", ");
     const style = d0.project.style || "photoreal, cinematic, high-end commercial photography";
+    const useRole = ASSET_ROLES[role] ? role : isChar ? "face" : "prop";
+    // 一张图管一件事：要脸就拍头肩、要服装就拍整套 —— 混在一张里模型两头都学不准
+    const roleShot = { face: "tight head-and-shoulders portrait, face fills the frame, neutral expression",
+      body: "full body, arms slightly away from the torso, neutral stance",
+      wardrobe: "full outfit head to toe, garment clearly readable, plain styling",
+      prop: "the product alone, centered",
+      style: "a mood frame that defines the overall look and grade" }[useRole] || "";
     const text = prompt || (isChar
-      ? `Character reference sheet of ${e.displayName}${e.role ? ` (${e.role})` : ""}: ${look || "consistent identity and wardrobe"}. ${view === "turntable" ? "Three views side by side: front, three-quarter, profile" : `${view.replace("-", " ")} view, full body`}, neutral seamless grey studio background, soft even lighting, no props, no text. ${style}. The face, hair, wardrobe and proportions must be unambiguous so later shots can match them exactly.`
+      ? `Character ${ASSET_ROLES[useRole]?.en || "reference"} sheet of ${e.displayName}${e.role ? ` (${e.role})` : ""}: ${look || "consistent identity and wardrobe"}. ${roleShot}. ${view === "turntable" ? "Three views side by side: front, three-quarter, profile" : `${view.replace("-", " ")} view`}, neutral seamless grey studio background, soft even lighting, no props, no text. ${style}. The face, hair, wardrobe and proportions must be unambiguous so later shots can match them exactly.`
       : `Product reference photo of ${e.displayName}: ${look || "exact shape, material and color"}. ${view === "turntable" ? "Three angles side by side: front, three-quarter, top" : `${view.replace("-", " ")} view`}, centered on a neutral seamless grey background, soft studio lighting, no people, no text. ${style}. Material, hardware, proportions and color must be unambiguous so later shots can match them exactly.`);
-    const job = { id: uid("job"), kind: "reference", entityId, shotId: null, takeId: null, mode: "t2i", provider, model: PROVIDERS[provider].name, prompt: text, negative: "text, watermark, logo, extra limbs, blurry, low quality", promptVersion: 0, compiler: "reference/1", seconds: 0, aspect: view === "turntable" ? "16:9" : isChar ? "3:4" : "1:1", inputs: { image: null, video: null, references: [] }, label: label || `${e.displayName} · ${view}`, status: "queued", progress: 0, result: null, source: meta.source || "human", createdAt: new Date().toISOString() };
+    const job = { id: uid("job"), kind: "reference", role: useRole, entityId, shotId: null, takeId: null, mode: "t2i", provider, model: PROVIDERS[provider].name, prompt: text, negative: "text, watermark, logo, extra limbs, blurry, low quality", promptVersion: 0, compiler: "reference/1", seconds: 0, aspect: view === "turntable" ? "16:9" : isChar ? "3:4" : "1:1", inputs: { image: null, video: null, references: [] }, label: label || `${e.displayName} · ${ASSET_ROLES[useRole]?.zh || view}`, status: "queued", progress: 0, result: null, source: meta.source || "human", createdAt: new Date().toISOString() };
     store.patch((d) => {
       d.jobs.push(job);
       d.project.currentState = "GENERATING";
     });
     (hooks.generation || simulatedAdapter).submit(job, updateJob);
-    return { ok: true, id: job.id, entityId, provider, adapter: (hooks.generation || simulatedAdapter).name, targetIds: [entityId] };
+    return { ok: true, id: job.id, entityId, role: useRole, provider, adapter: (hooks.generation || simulatedAdapter).name, targetIds: [entityId] };
   },
 });
 
@@ -1504,6 +1730,187 @@ register("generation.submit", {
   },
 });
 
+// 长镜头：供应商单条有上限（实测 Seedance 2.5 是 30 s、2.0 是 12 s），
+// 一分钟的一镜到底只能分段续拍 —— 每段用上一段的尾帧当首帧接下去，最后拼成一条。
+// 这条链天然是串行的（第 N+1 段要等第 N 段出完才有首帧），换来的是接得上；
+// 要快就用 renderShots 并行出多个独立镜头，两者解决的不是同一个问题。
+// 生成失败分三类，处理方式完全不同 —— 一律重试只会把钱烧在必然失败的请求上。
+//   transient  网络 / 超时 / 5xx / 限流：原样重试就行
+//   content    内容策略拦截：同一条提示词重试多少次都会再被拦，必须换措辞，交给人或 Agent
+//   fatal      参数非法、供应商不认识：重试无意义
+export function classifyFailure(err) {
+  const t = `${err?.code || ""} ${err?.error || ""} ${err?.message || ""}`.toLowerCase();
+  if (/sensitive|policy|violation|copyright|risk|审核|违规/.test(t)) return "content";
+  if (/timeout|timed out|econn|socket|network|fetch failed|rate|429|5\d\d|internal|unavailable/.test(t)) return "transient";
+  if (/invalidparameter|not valid|not support|bad_|unknown|no_/.test(t)) return "fatal";
+  return "transient";
+}
+
+// 长镜头：供应商单条有上限（实测 Seedance 2.5 是 30 s、2.0 是 12 s），
+// 一分钟的一镜到底只能分段续拍 —— 每段用上一段的尾帧当首帧接下去，最后拼成一条。
+// 这条链天然是串行的（第 N+1 段要等第 N 段出完才有首帧），换来的是接得上；
+// 要快就用 renderShots 并行出多个独立镜头，两者解决的不是同一个问题。
+//
+// 一条链要跑十分钟以上，中途一定会遇到失败。所以：已完成的段落盘，失败的段可以单独重跑，
+// resume 从第一个没完成的段接着走 —— 不是从头再来。
+register("shot.chain", {
+  doc: "长镜头分段续拍：切成若干段，逐段用上一段尾帧续拍，最后拼成一条。resume 从上次断掉的地方继续",
+  params: { shotId: "string", provider: "providerId", segmentSeconds: "number", lang: "en|zh", resume: "boolean", retries: "number (每段瞬时故障自动重试次数，默认 2)" },
+  undoable: false,
+  handler({ shotId, provider = "seedance-2.5", segmentSeconds, lang = "en", resume, retries = 2 }, meta) {
+    const d0 = D();
+    const s = d0.shots.find((x) => x.id === (shotId || d0.project.currentShotId));
+    if (!s) return { ok: false, error: "NO_SHOT" };
+    if (!PROVIDERS[provider]) return { ok: false, error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) };
+    if (!hooks.film?.ready) return { ok: false, error: "FFMPEG_NOT_FOUND", hint: "续拍要靠 ffmpeg 取尾帧并拼接" };
+    const adapter = hooks.generation || simulatedAdapter;
+
+    const total = (s.range.outFrame - s.range.inFrame) / d0.project.fps;
+    const cap = Math.min(Number(segmentSeconds) || PROVIDERS[provider].maxSeconds || 12, PROVIDERS[provider].maxSeconds || 12);
+
+    // 分段方案：有拍就按拍切（超过单条上限的拍继续对半切，内容描述跟着走），
+    // 没拍就均分 —— 均分只是兜底，叙事镜头应该先 shot.beats 拆一遍。
+    const plan = [];
+    if (s.beats?.length) {
+      for (const b of s.beats) {
+        const k = Math.max(1, Math.ceil(b.seconds / cap));
+        for (let j = 0; j < k; j++) plan.push({ seconds: b.seconds / k, text: b.text, beat: b.text, part: k > 1 ? `${j + 1}/${k}` : null });
+      }
+    } else {
+      const k = Math.max(1, Math.ceil(total / cap));
+      for (let j = 0; j < k; j++) plan.push({ seconds: total / k, text: "", beat: null, part: null });
+    }
+    const n = plan.length;
+    const per = total / n;
+    if (n === 1) return { ok: false, error: "NO_NEED", hint: `这一镜 ${total.toFixed(1)}s，${provider} 单条放得下，直接 generation.submit 就行` };
+
+    // 续跑：沿用上一条链已经出好的段
+    const prior = resume ? d0.jobs.filter((j) => j.kind === "chain" && j.shotId === s.id).at(-1) : null;
+    if (resume && !prior) return { ok: false, error: "NO_CHAIN", hint: "这一镜还没有可续跑的链" };
+    if (prior && prior.status === "running") return { ok: false, error: "CHAIN_RUNNING", id: prior.id };
+    const kept = prior ? (prior.parts || []).filter((p) => p.status === "done" && p.url) : [];
+
+    if (!s.prompts) attachPrompts(s.id);
+    const P = D().shots.find((x) => x.id === s.id).prompts;
+    const card = d0.storyboard.find((c) => c.shotId === s.id);
+    const chainId = uid("chain");
+    const parent = {
+      id: chainId,
+      kind: "chain",
+      shotId: s.id,
+      mode: "chain",
+      provider,
+      model: PROVIDERS[provider].name,
+      prompt: `${s.title} · ${total.toFixed(1)}s 分 ${n} 段续拍`,
+      seconds: total,
+      aspect: d0.project.aspect,
+      segments: n,
+      resumedFrom: prior?.id || null,
+      // 每段的账本：续跑靠它，事后复盘也靠它
+      // 账本里存着每段的拍内容与时间窗，「查看生成过程」就是把它显示出来
+      parts: plan.map((p, i) => (kept[i] ? { ...kept[i], beat: p.text || null } : { index: i + 1, status: "queued", seconds: p.seconds, beat: p.text || null, from: Math.round(plan.slice(0, i).reduce((a, x) => a + x.seconds, 0) * 10) / 10, to: Math.round(plan.slice(0, i + 1).reduce((a, x) => a + x.seconds, 0) * 10) / 10 })),
+      status: "queued",
+      progress: 0,
+      result: null,
+      source: meta.source || "human",
+      createdAt: new Date().toISOString(),
+    };
+    store.patch((d) => d.jobs.push(parent));
+
+    const setPart = (i, patch) => store.patch((d) => {
+      const j = d.jobs.find((x) => x.id === chainId);
+      if (j) j.parts[i] = { ...j.parts[i], ...patch };
+    });
+    const cancelled = () => D().jobs.find((j) => j.id === chainId)?.status === "cancelled";
+
+    (async () => {
+      let firstFrame = card?.keyframes?.[0] || null;
+      // 续跑时，起点是最后一个已完成段的尾帧
+      if (kept.length) {
+        firstFrame = await hooks.film.lastFrame(kept.at(-1).url);
+        updateJob(chainId, { note: `续跑：沿用前 ${kept.length} 段` });
+      }
+
+      for (let i = 0; i < n; i++) {
+        if (cancelled()) return;
+        if (parent.parts[i]?.status === "done" && parent.parts[i].url) continue; // 这段上次已经出好了
+
+        let attempt = 0;
+        for (;;) {
+          if (cancelled()) return;
+          const mode = firstFrame ? "i2v" : "t2v";
+          const segId = uid("job");
+          const step = plan[i];
+          const from = plan.slice(0, i).reduce((a, x) => a + x.seconds, 0);
+          const beatLine = step.text ? `\nWhat happens in this segment (${from.toFixed(1)}s–${(from + step.seconds).toFixed(1)}s of the ${total.toFixed(0)}s take): ${step.text}` : "";
+          const tail = `${beatLine}\nThis is segment ${i + 1} of ${n} of one continuous ${total.toFixed(0)}s take.${i ? " Continue seamlessly from the provided first frame — same subject, same lighting, same lens, no cut, no reset." : ""} The camera keeps moving in the same direction at the same speed; do not restart the move.`;
+          const seg = {
+            id: segId, shotId: s.id, chainId, segment: i + 1, attempt: attempt + 1, mode, provider,
+            model: PROVIDERS[provider].name,
+            prompt: (mode === "v2v" ? P.v2v[lang] : P.video[lang]) + tail,
+            negative: P.negative[lang],
+            seconds: step.seconds,
+            beat: step.text || null,
+            aspect: d0.project.aspect,
+            inputs: { image: firstFrame, video: null, references: referencesForShot(D(), s) },
+            status: "queued", progress: 0, result: null,
+            source: meta.source || "human", createdAt: new Date().toISOString(),
+          };
+          store.patch((d) => d.jobs.push(seg));
+          setPart(i, { status: "running", jobId: segId, attempt: attempt + 1 });
+          updateJob(chainId, { status: "running", progress: Math.round((i / n) * 90), note: `第 ${i + 1}/${n} 段${attempt ? `（第 ${attempt + 1} 次尝试）` : ""}` });
+
+          const done = await new Promise((resolve) => {
+            adapter.submit(seg, (id, patch) => {
+              updateJob(id, patch);
+              if (id === segId && ["done", "failed", "cancelled"].includes(patch.status)) resolve(D().jobs.find((j) => j.id === segId));
+            });
+          });
+
+          if (done?.status === "done" && done.result?.url) {
+            setPart(i, { status: "done", url: done.result.url, jobId: segId, error: null });
+            firstFrame = await hooks.film.lastFrame(done.result.url);
+            if (!firstFrame && i < n - 1) {
+              setPart(i, { status: "failed", error: "NO_TAIL_FRAME" });
+              updateJob(chainId, { status: "failed", error: "NO_TAIL_FRAME", message: `第 ${i + 1} 段取不到尾帧，接不下去`, recoverable: "retry" });
+              return;
+            }
+            break;
+          }
+
+          const kindOf = classifyFailure(done);
+          setPart(i, { status: "failed", error: done?.error || "?", failure: kindOf, jobId: segId });
+          if (kindOf === "transient" && attempt < retries) { attempt += 1; continue; }
+          updateJob(chainId, {
+            status: "failed",
+            error: done?.error || "SEGMENT_FAILED",
+            failure: kindOf,
+            message: `第 ${i + 1}/${n} 段失败（${kindOf}）：${String(done?.error || "").slice(0, 160)}`,
+            // 已经出好的段不会丢：改完提示词用 resume 接着跑
+            hint: kindOf === "content"
+              ? `内容策略拦截，同一条提示词重试还会被拦。改写这一镜的描述或风格后，用 shot.chain --resume 从第 ${i + 1} 段接着跑（前 ${i} 段保留）。`
+              : kindOf === "fatal"
+              ? `参数或供应商问题，重试没用。检查时长与模式后 shot.chain --resume。`
+              : `已经自动重试 ${retries} 次仍失败。稍后 shot.chain --resume 从第 ${i + 1} 段接着跑。`,
+            resumable: true,
+          });
+          return;
+        }
+      }
+
+      if (cancelled()) return;
+      updateJob(chainId, { progress: 92, note: "拼接" });
+      const clips = D().jobs.find((j) => j.id === chainId).parts.map((p) => ({ shotId: s.id, index: p.index, title: `${s.title} #${p.index}`, seconds: p.seconds || per, kind: "generated", url: p.url }));
+      const res = d0.project.resolution || { width: 1920, height: 1080 };
+      const out = await hooks.film.assemble({ id: `${chainId}`, width: res.width, height: res.height, fps: d0.project.fps, clips }, (patch) => updateJob(chainId, { ...patch, status: patch.status === "done" ? "running" : patch.status }));
+      if (!out.ok) return updateJob(chainId, { status: "failed", error: out.error, message: out.message, resumable: true });
+      updateJob(chainId, { status: "done", progress: 100, note: null, result: { kind: "video", url: out.url, bytes: out.bytes, seconds: out.seconds, segments: n } });
+    })().catch((err) => updateJob(chainId, { status: "failed", error: "CHAIN_FAILED", message: String(err?.message || err), resumable: true }));
+
+    return { ok: true, id: chainId, segments: n, perSegment: Math.round(per * 10) / 10, seconds: total, provider, reused: kept.length, plan: plan.map((p, i) => ({ index: i + 1, seconds: Math.round(p.seconds * 10) / 10, beat: p.text || null })), hint: `分 ${n} 段串行续拍，每段 ${per.toFixed(1)}s${kept.length ? `（沿用 ${kept.length} 段）` : ""}` };
+  },
+});
+
 register("generation.status", { doc: "查询任务", params: { id: "string" }, undoable: false, handler: ({ id }) => ({ ok: true, jobs: D().jobs.filter((j) => !id || j.id === id).map((j) => ({ id: j.id, shotId: j.shotId, mode: j.mode, provider: j.provider, status: j.status, progress: j.progress, result: j.result })) }) });
 register("generation.cancel", { doc: "取消任务", params: { id: "string" }, required: ["id"], undoable: false, handler: ({ id }) => { updateJob(id, { status: "cancelled" }); return { ok: true, id }; } });
 register("generation.retry", {
@@ -1519,6 +1926,123 @@ register("generation.retry", {
     (hooks.generation || simulatedAdapter).submit(j, updateJob);
     return { ok: true, id };
   },
+});
+
+// ============ film.* ============
+// The cut: one clip per shot, in shot order, assembled into a single film. A shot's clip is either the
+// blockout proxy (the Take the browser recorded) or the generated video (a done generation job) — same edit,
+// two fidelities, so a half-generated film still plays end to end with blockout standing in for the rest.
+function clipFor(d, shot, source) {
+  const gen = d.jobs
+    .filter((j) => j.shotId === shot.id && j.status === "done" && j.result?.url && (j.result.kind === "video" || /\.(mp4|webm|mov)$/i.test(j.result.url)))
+    .at(-1);
+  const take = d.takes.find((t) => t.id === shot.selectedTake && t.videoUrl) || d.takes.filter((t) => t.shotId === shot.id && t.videoUrl).at(-1);
+  const pick =
+    source === "generated" ? (gen ? { kind: "generated", url: gen.result.url, jobId: gen.id, model: gen.model, mode: gen.mode } : null)
+    : source === "blockout" ? (take ? { kind: "blockout", url: take.videoUrl, takeId: take.id } : null)
+    : gen ? { kind: "generated", url: gen.result.url, jobId: gen.id, model: gen.model, mode: gen.mode }
+    : take ? { kind: "blockout", url: take.videoUrl, takeId: take.id }
+    : null;
+  return pick;
+}
+
+function editFor(d, source = "auto") {
+  const fps = d.project.fps;
+  return sequenceLayout(d.shots).map((seg) => {
+    const shot = d.shots.find((x) => x.id === seg.shotId);
+    const clip = clipFor(d, shot, source);
+    return {
+      shotId: shot.id,
+      index: shot.index,
+      title: shot.title,
+      seconds: Math.round(((shot.range.outFrame - shot.range.inFrame) / fps) * 100) / 100,
+      startTc: tc(seg.start),
+      endTc: tc(seg.end),
+      ...(clip || {}),
+      kind: clip?.kind || null,
+      missing: !clip,
+    };
+  });
+}
+
+register("film.plan", {
+  doc: "成片清单：逐镜列出用哪段素材（generated 生成视频 / blockout 白模 Take）、缺哪几镜",
+  params: { source: "auto|blockout|generated" },
+  undoable: false,
+  handler({ source = "auto" }) {
+    const d = D();
+    const clips = editFor(d, source);
+    const ready = clips.filter((c) => !c.missing);
+    return {
+      ok: true,
+      data: {
+        source,
+        shots: clips.length,
+        ready: ready.length,
+        missing: clips.filter((c) => c.missing).map((c) => c.shotId),
+        seconds: Math.round(ready.reduce((n, c) => n + c.seconds, 0) * 100) / 100,
+        fullSeconds: Math.round(clips.reduce((n, c) => n + c.seconds, 0) * 100) / 100,
+        assembler: hooks.film ? { name: hooks.film.name, ready: !!hooks.film.ready } : null,
+        clips,
+      },
+    };
+  },
+});
+
+register("film.export", {
+  doc: "导出成片：按镜头顺序把每镜的素材拼成一条片子（需要后端的 ffmpeg 组装器）",
+  params: { source: "auto|blockout|generated", name: "string", allowPartial: "boolean (缺镜时跳过而不是报错)" },
+  undoable: false,
+  handler({ source = "auto", name, allowPartial = true }, meta) {
+    const d = D();
+    if (!hooks.film) return { ok: false, error: "NO_ASSEMBLER", hint: "成片拼接在后端完成；连上后端再试" };
+    if (!hooks.film.ready) return { ok: false, error: "FFMPEG_NOT_FOUND", hint: "后端找不到 ffmpeg：brew install ffmpeg，或启动时 --ffmpeg /path/to/ffmpeg" };
+    const clips = editFor(d, source);
+    const usable = clips.filter((c) => !c.missing);
+    if (!usable.length) return { ok: false, error: "NO_CLIPS", hint: source === "generated" ? "还没有任何生成结果" : "先录一条白模 Take" };
+    if (usable.length < clips.length && !allowPartial) return { ok: false, error: "INCOMPLETE", missing: clips.filter((c) => c.missing).map((c) => c.shotId) };
+
+    const id = uid("film");
+    const res = d.project.resolution || { width: 1920, height: 1080 };
+    const job = {
+      id,
+      kind: "film",
+      shotId: null,
+      mode: "assemble",
+      provider: "ffmpeg",
+      model: "ffmpeg",
+      filmSource: source,
+      prompt: `${d.project.name} · ${usable.length}/${clips.length} 镜 · ${source}`,
+      seconds: Math.round(usable.reduce((n, c) => n + c.seconds, 0) * 100) / 100,
+      aspect: d.project.aspect,
+      status: "queued",
+      progress: 0,
+      result: null,
+      clips: usable.map((c) => ({ shotId: c.shotId, index: c.index, title: c.title, seconds: c.seconds, kind: c.kind, url: c.url })),
+      source: meta.source || "human",
+      createdAt: new Date().toISOString(),
+    };
+    store.patch((x) => x.jobs.push(job));
+
+    // async like generation.submit: the job carries progress, SSE pushes it, film.status reads it
+    Promise.resolve()
+      .then(() => hooks.film.assemble({ id: name ? String(name).replace(/\.mp4$/i, "").replace(/[^\w.-]+/g, "_") : id, width: res.width, height: res.height, fps: d.project.fps, clips: job.clips }, (patch) => updateJob(id, patch)))
+      .then((out) => {
+        if (!out.ok) return updateJob(id, { status: "failed", error: out.error, message: out.message, hint: out.hint, progress: 0 });
+        updateJob(id, { status: "done", progress: 100, result: { kind: "video", url: out.url, bytes: out.bytes, seconds: out.seconds, clips: out.clips } });
+        store.patch((x) => (x.project.filmUrl = out.url));
+      })
+      .catch((err) => updateJob(id, { status: "failed", error: "ASSEMBLE_FAILED", message: String(err?.message || err) }));
+
+    return { ok: true, id, queued: true, used: usable.length, of: clips.length, source, seconds: job.seconds, hint: "拼接中；film.status 或 SSE 看进度" };
+  },
+});
+
+register("film.status", {
+  doc: "成片拼接任务状态",
+  params: { id: "string" },
+  undoable: false,
+  handler: ({ id }) => ({ ok: true, jobs: D().jobs.filter((j) => j.kind === "film" && (!id || j.id === id)).map((j) => ({ id: j.id, status: j.status, progress: j.progress, note: j.note, error: j.error, result: j.result, clips: j.clips?.length, seconds: j.seconds })) }),
 });
 
 // ============ review.* ============
@@ -1574,6 +2098,86 @@ export function summarize(d = D()) {
     history: historyInfo(),
   };
 }
+
+register("review.verify", {
+  doc: "自动验收：把这一镜新生成的结果和已批准的那一版对比 —— 要改的改了没有，锁住的有没有漂",
+  params: { shotId: "string", jobId: "string (默认最后一条成功的生成)", against: "string (基准 jobId / 媒体地址；默认锁里记的那版)", request: "string (这次要求改什么)" },
+  undoable: false,
+  handler({ shotId, jobId, against, request }, meta) {
+    const d0 = D();
+    const s = d0.shots.find((x) => x.id === (shotId || d0.project.currentShotId));
+    if (!s) return { ok: false, error: "NO_SHOT" };
+    if (!hooks.judge) return { ok: false, error: "NO_JUDGE", hint: "验收在后端做；连上后端再试" };
+    if (!hooks.judge.ready) return { ok: false, error: "JUDGE_NOT_READY", hint: "需要网关密钥（--llm-key-file）和 ffmpeg" };
+
+    const vids = d0.jobs.filter((j) => j.shotId === s.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url));
+    const after = jobId ? vids.find((j) => j.id === jobId) : vids.at(-1);
+    if (!after) return { ok: false, error: "NO_RESULT", hint: "这一镜还没有可验收的生成结果" };
+    const baselineRef =
+      against ? (vids.find((j) => j.id === against)?.result?.url || against)
+      : s.locks?.jobId && vids.find((j) => j.id === s.locks.jobId)?.result?.url
+      || s.locks?.reference
+      || vids.filter((j) => j.id !== after.id).at(-1)?.result?.url
+      || null;
+    if (!baselineRef) return { ok: false, error: "NO_BASELINE", hint: "没有基准版本：先 shot.lock 把满意的那一版记下来" };
+
+    const id = uid("vfy");
+    const job = {
+      id,
+      kind: "verify",
+      shotId: s.id,
+      mode: "verify",
+      provider: "judge",
+      model: hooks.judge.model,
+      prompt: request || s.lastMove ? `${request || ""}` : "",
+      status: "queued",
+      progress: 0,
+      result: null,
+      source: meta.source || "human",
+      createdAt: new Date().toISOString(),
+    };
+    store.patch((d) => d.jobs.push(job));
+
+    const locks = (s.locks?.aspects || []).map((a) => ({ aspect: a, ...LOCK_ASPECTS[a] }));
+    const mv = s.lastMove;
+    Promise.resolve()
+      .then(() => {
+        updateJob(id, { status: "running", progress: 20 });
+        return hooks.judge.verify({
+          shotId: s.id,
+          shotTitle: `${s.index} ${s.title}`,
+          request: request || "",
+          expectedMove: mv ? `横移 ${(mv.right || 0).toFixed(2)}m / 升降 ${(mv.up || 0).toFixed(2)}m / 推拉 ${(mv.forward || 0).toFixed(2)}m，只平移不摇不变焦` : "",
+          locks,
+          before: baselineRef,
+          after: after.result.url,
+        });
+      })
+      .then((v) => {
+        if (!v.ok) return updateJob(id, { status: "failed", error: v.error, message: v.message, hint: v.hint });
+        updateJob(id, { status: "done", progress: 100, result: { kind: "verdict", ...v } });
+        // 结论只进评审记录，不自动通过也不自动打回 —— 判定模型同样会错
+        store.patch((d) => {
+          const sh = d.shots.find((x) => x.id === s.id);
+          sh.lastVerdict = { at: new Date().toISOString(), jobId: after.id, applied: v.applied, worst: v.worst, cameraMove: v.cameraMove, summary: v.summary, drift: v.drift };
+        });
+      })
+      .catch((err) => updateJob(id, { status: "failed", error: "JUDGE_FAILED", message: String(err?.message || err) }));
+
+    return { ok: true, id, queued: true, against: baselineRef, checking: locks.map((l) => l.zh), hint: "验收中；review.verdict 或 SSE 看结果" };
+  },
+});
+
+register("review.verdict", {
+  doc: "读验收结论",
+  params: { shotId: "string" },
+  undoable: false,
+  handler: ({ shotId }) => {
+    const d = D();
+    const s = d.shots.find((x) => x.id === (shotId || d.project.currentShotId));
+    return s ? { ok: true, data: { shotId: s.id, locks: s.locks?.aspects || [], verdict: s.lastVerdict || null } } : { ok: false, error: "NO_SHOT" };
+  },
+});
 
 register("context.scene", { doc: "当前场景摘要（Agent 记忆入口）", undoable: false, handler: () => ({ ok: true, data: summarize() }) });
 register("context.project", { doc: "完整工程 JSON", undoable: false, handler: () => ({ ok: true, data: persistable() }) });

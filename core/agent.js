@@ -512,16 +512,30 @@ export function runPlan(p, opts = {}) {
   return { plan: p, ...out };
 }
 
-export function confirmPlan() {
-  const p = store.get().agent.pendingPlan;
-  if (!p) return null;
+/**
+ * @param skip 要跳过的步骤序号（对应 pendingPlan.steps 的下标）。导演可以只批准其中几步，
+ *             而不是整份方案要么全收要么全退。
+ */
+export function confirmPlan(skip = []) {
+  const pending = store.get().agent.pendingPlan;
+  if (!pending) return null;
+  const drop = new Set((skip || []).map(Number).filter((n) => Number.isInteger(n)));
+  const p = drop.size ? { ...pending, steps: pending.steps.filter((_, i) => !drop.has(i)) } : pending;
+  if (!p.steps.length) {
+    store.patch((x) => {
+      x.agent.pendingPlan = null;
+      x.agent.messages = x.agent.messages.map((m) => (m.pending ? { ...m, pending: false, cancelled: true } : m));
+    });
+    say("agent", "这些步骤都被跳过了，没有改动。");
+    return { results: [], skipped: drop.size };
+  }
   store.patch((x) => {
     x.agent.pendingPlan = null;
     x.agent.messages = x.agent.messages.map((m) => (m.pending ? { ...m, pending: false, confirmed: true } : m));
   });
   const out = executePlan(p);
-  say("agent", summaryText(p, out));
-  return out;
+  say("agent", summaryText(p, out) + (drop.size ? `（跳过 ${drop.size} 步）` : ""));
+  return { ...out, skipped: drop.size };
 }
 
 export function cancelPlan() {
@@ -574,12 +588,13 @@ register("agent.run", {
 });
 
 register("agent.confirm", {
-  doc: "确认并执行 Collaborative 模式下待确认的方案",
+  doc: "确认并执行 Collaborative 模式下待确认的方案；skip 可以只跳过其中几步",
+  params: { skip: "number[] (要跳过的步骤下标)" },
   undoable: false,
-  handler: () => {
-    const out = confirmPlan();
+  handler: ({ skip } = {}) => {
+    const out = confirmPlan(skip);
     if (!out) return { ok: false, error: "NO_PENDING_PLAN" };
-    return { ok: true, okCount: out.okCount, failed: out.failed, results: out.results.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })) };
+    return { ok: true, okCount: out.okCount, failed: out.failed, skipped: out.skipped || 0, results: out.results.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })) };
   },
 });
 

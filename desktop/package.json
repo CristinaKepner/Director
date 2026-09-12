@@ -1,0 +1,112 @@
+{
+  "name": "director-console-desktop",
+  "productName": "导演台",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "description": "Director Console · 导演台 — macOS client. Wraps the same core runtime, backend and web console in a native window.",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "icon": "node build/make-icon.mjs && ./build/make-icns.sh",
+    "pack": "electron-builder --mac --dir",
+    "dist": "electron-builder --mac",
+    "manifest": "node ../tools/make-update-manifest.mjs --dist dist"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "io.directorconsole.mac",
+    "productName": "导演台",
+    "copyright": "Director Console",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.mjs",
+      "update.mjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../core",
+        "to": "app-src/core"
+      },
+      {
+        "from": "../web",
+        "to": "app-src/web"
+      },
+      {
+        "from": "../docs",
+        "to": "app-src/docs"
+      },
+      {
+        "from": "../server/bin",
+        "to": "app-src/server/bin"
+      },
+      {
+        "from": "../server/src",
+        "to": "app-src/server/src"
+      },
+      {
+        "from": "../package.json",
+        "to": "app-src/package.json"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "build/icon.icns",
+      "darkModeSupport": true,
+      "minimumSystemVersion": "11.0",
+      "identity": null,
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "CFBundleName": "导演台",
+        "CFBundleDisplayName": "导演台",
+        "NSHumanReadableCopyright": "Director Console",
+        "LSMinimumSystemVersion": "11.0"
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "导演台 ${version}",
+      "backgroundColor": "#0b0c10",
+      "contents": [
+        {
+          "x": 150,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 420,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}
