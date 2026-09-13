@@ -386,13 +386,14 @@ function renderShotStrip(d) {
   });
 }
 function renderTabs(d) {
-  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, gen: !!d.project.currentShotId, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
+  const films = filmJobs(d);
+  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, gen: !!d.project.currentShotId, film: films.length > 0, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
   document.querySelectorAll("[data-bottom]").forEach((b) => {
     const k = b.dataset.bottom;
     b.hidden = !has[k];
     b.classList.toggle("on", ui.drawer && ui.tab === k);
-    const n = { takes: d.takes.length, board: d.storyboard.length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
-    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", gen: "生成", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
+    const n = { takes: d.takes.length, board: d.storyboard.length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
+    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", gen: "生成", film: "成片", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
   });
   if (ui.drawer && !has[ui.tab]) ui.tab = "shots";
 }
@@ -753,6 +754,77 @@ function shotCard(sh, d) {
     <div class="actions"><button data-goshot="${esc(sh.id)}">跳到该镜</button></div></div>`;
 }
 
+// ---------- 成片 ----------
+// 拼好的片子原来在面板里没有入口：film.export 建的任务 shotId 是 null，
+// 而生成抽屉只列当前镜头的任务，所以它谁也看不见。这里把整条片子当一等公民摆出来：
+// 整片（film）和长镜头分段续拍（chain）都是"一条能播的成片"，放在一起。
+function filmJobs(d) {
+  return [...(d.jobs || [])].reverse().filter((j) => j.kind === "film" || j.kind === "chain");
+}
+
+let filmPick = null;
+
+function renderFilm(el, d) {
+  const jobs = filmJobs(d);
+  if (!jobs.length) return void (el.innerHTML = emptyState("还没有成片。镜头有素材后，「成片 → 导出成片」拼一条。"));
+  const cur = jobs.find((j) => j.id === filmPick) || jobs.find((j) => j.result?.url) || jobs[0];
+  const src = cur.result?.url;
+  const shotOf = (j) => (j.shotId ? d.shots.find((s) => s.id === j.shotId) : null);
+  const kindZh = (j) => (j.kind === "chain" ? `长镜头续拍 · ${(j.parts || []).length} 段` : { auto: "有生成用生成，缺的用白模", blockout: "全部白模", generated: "全部生成" }[j.filmSource] || "成片");
+
+  el.innerHTML = `<div class="film-layout">
+    <div class="film-main">
+      ${src
+        ? `<video class="film-player" src="${esc(mediaHref(src))}" controls playsinline preload="metadata"></video>`
+        : `<div class="film-empty">${["queued", "running"].includes(cur.status) ? `拼接中 ${cur.progress || 0}%${cur.note ? ` · ${esc(cur.note)}` : ""}` : esc(cur.message || cur.error || "这一条没有产出")}</div>`}
+      <div class="film-meta">
+        <b>${esc(cur.prompt || cur.id)}</b>
+        <span>${kindZh(cur)}${shotOf(cur) ? ` · ${esc(shotOf(cur).index)} ${esc(shotOf(cur).title)}` : ""}</span>
+        <span>${cur.result ? `${Math.round(cur.result.seconds)}s · ${(cur.result.bytes / 1e6).toFixed(1)} MB${cur.result.clips ? ` · ${cur.result.clips} 段` : ""}` : badge(cur.status)}</span>
+      </div>
+      <div class="actions">
+        ${src ? `<button data-preview="${esc(src)}" data-kind="video" class="primary">全屏播放</button>` : ""}
+        ${src ? `<button data-save-film="${esc(src)}">${window.director?.saveFile ? "另存为…" : "下载"}</button>` : ""}
+        ${src && window.director?.revealMedia ? `<button data-reveal-film="${esc(src)}">在访达中显示</button>` : ""}
+        ${cur.kind === "chain" ? `<button data-chain="${cur.id}">查看生成过程</button>` : ""}
+        ${cur.kind === "chain" && cur.resumable ? `<button data-resume="${cur.shotId}">接着跑</button>` : ""}
+        <button data-refilm="auto">重新拼一条</button>
+      </div>
+      ${cur.kind === "chain" && openChain.has(cur.id) ? chainView(cur) : ""}
+    </div>
+    <div class="film-list">
+      ${jobs.map((j) => `<div class="film-item ${j.id === cur.id ? "on" : ""}" data-film="${j.id}">
+        <div class="fi-top"><b>${esc(kindZh(j))}</b>${["queued", "running"].includes(j.status) ? `<span class="mono">${j.progress || 0}%</span>` : j.result ? `<span class="mono">${Math.round(j.result.seconds)}s</span>` : badge(j.status)}</div>
+        <div class="fi-sub mono">${esc(new Date(j.createdAt).toLocaleTimeString())} · ${esc(j.id)}</div>
+      </div>`).join("")}
+    </div></div>`;
+
+  el.querySelectorAll("[data-film]").forEach((n) => (n.onclick = () => { filmPick = n.dataset.film; renderFilm(el, store.get()); }));
+  el.querySelectorAll("[data-save-film]").forEach((b) => (b.onclick = async () => {
+    const ref = b.dataset.saveFilm;
+    // 桌面端让主进程直接拷贝后端那份文件：几十 MB 的视频不该经过渲染进程的内存，
+    // 而且 saveFile 是按字符串写的，二进制会被写坏。
+    if (window.director?.saveMedia) {
+      const r = await window.director.saveMedia(ref);
+      if (r?.ok) toast(`已保存到 ${r.path}`);
+      else if (r && !r.canceled) toast(r.error || "保存失败", true);
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = mediaHref(ref);
+    a.download = ref.split("/").pop();
+    a.click();
+  }));
+  el.querySelectorAll("[data-reveal-film]").forEach((b) => (b.onclick = () => window.director?.revealMedia?.(b.dataset.revealFilm)));
+  el.querySelectorAll("[data-refilm]").forEach((b) => (b.onclick = () => report(dispatch("film.export", { source: b.dataset.refilm }))));
+  el.querySelectorAll("[data-chain]").forEach((b) => (b.onclick = () => {
+    openChain.has(b.dataset.chain) ? openChain.delete(b.dataset.chain) : openChain.add(b.dataset.chain);
+    renderFilm(el, store.get());
+  }));
+  el.querySelectorAll("[data-resume]").forEach((b) => (b.onclick = () => report(dispatch("shot.chain", { shotId: b.dataset.resume, resume: true }))));
+  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "成片")));
+}
+
 // ---------- agent thread ----------
 const expanded = new Set();
 const raw = new Set();      // 展开后还想看原始参数的卡片
@@ -974,6 +1046,7 @@ function renderBottom(d) {
   if (tab === "takes") return renderTakes(el, d);
   if (tab === "board") return renderBoard(el, d);
   if (tab === "gen") return renderGen(el, d);
+  if (tab === "film") return renderFilm(el, d);
   if (tab === "assets") return renderAssets(el, d);
   if (tab === "log") return renderEvents(el, d);
   return renderHealth(el, d);
@@ -1031,11 +1104,21 @@ function renderTimeline(el, d) {
   }
   const len = Math.max(1, shot.range.outFrame - shot.range.inFrame);
   const pct = (f) => `${((f - shot.range.inFrame) / len) * 100}%`;
+  // 刻度按时长自适应：90 秒的镜头画 90 条秒线只会糊成一片。目标是最多十来个标签。
+  const secs = len / d.project.fps;
+  const step = [1, 2, 5, 10, 15, 30, 60].find((x) => secs / x <= 12) || 120;
   const ticks = [];
-  for (let f = shot.range.inFrame; f <= shot.range.outFrame; f += d.project.fps) ticks.push(`<div class="tick" style="left:${pct(f)}">${((f - shot.range.inFrame) / d.project.fps).toFixed(0)}s</div>`);
+  for (let t = 0; t <= secs + 1e-6; t += step) {
+    const f = shot.range.inFrame + t * d.project.fps;
+    if (f > shot.range.outFrame + 1e-6) break;
+    ticks.push(`<div class="tick" style="left:${pct(f)}">${t >= 60 ? `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, "0")}` : `${Math.round(t)}s`}</div>`);
+  }
   const keys = (shot.keyframes || []).map((k) => `<div class="key" style="left:${pct(k.frame)}" title="f${k.frame} · ${k.focalLength}mm" data-kf="${k.frame}"></div>`).join("");
-  const entKeys = d.entities.filter((e) => e.path?.length).map((e) => `<div class="tl-track"><span class="lbl">${esc(e.displayName).slice(0, 10)}</span>${e.path.map((k) => `<div class="key" style="left:calc(98px + (100% - 106px) * ${(k.frame - shot.range.inFrame) / len})" title="${esc(e.id)} f${k.frame}"></div>`).join("")}</div>`).join("");
-  const lightKeys = d.lights.filter((l) => l.keyframes?.length).map((l) => `<div class="tl-track"><span class="lbl">${esc(l.name).slice(0, 10)}</span>${l.keyframes.map((k) => `<div class="key" style="left:calc(98px + (100% - 106px) * ${(k.frame - shot.range.inFrame) / len})" title="${esc(l.id)} f${k.frame} ${k.intensity}"></div>`).join("")}</div>`).join("");
+  const at = (f) => `left:calc(var(--tl-lbl) + (100% - var(--tl-lbl) - 16px) * ${(f - shot.range.inFrame) / len})`;
+  const sub = (name, id, marks) => `<div class="tl-track sub"><span class="lbl" title="${esc(name)}">${esc(name)}</span>${marks.map((m) => `<div class="key" style="${at(m.frame)}" title="${esc(id)} f${m.frame}${m.extra || ""}"></div>`).join("")}</div>`;
+  const entKeys = d.entities.filter((e) => e.path?.length).map((e) => sub(e.displayName || e.id, e.id, e.path)).join("");
+  const lightKeys = d.lights.filter((l) => l.keyframes?.length).map((l) => sub(l.name || l.id, l.id, l.keyframes.map((k) => ({ frame: k.frame, extra: ` ${k.intensity}` })))).join("");
+  const subCount = d.entities.filter((e) => e.path?.length).length + d.lights.filter((l) => l.keyframes?.length).length;
   const layout = d.shots.map((s, i, arr) => ({ s, start: arr.slice(0, i).reduce((a, x) => a + x.range.outFrame - x.range.inFrame, 0), len: s.range.outFrame - s.range.inFrame }));
   const total = layout.reduce((a, x) => a + x.len, 0) || 1;
   el.innerHTML = `<div class="timeline">
@@ -1051,8 +1134,8 @@ function renderTimeline(el, d) {
       <input class="tl-scrub" type="range" min="${shot.range.inFrame}" max="${shot.range.outFrame}" step="1" value="${d.project.playhead}" />
       <div class="tl-track"><span class="lbl">Camera</span><span>${esc(d.cameras.find((c) => c.id === shot.cameraId)?.name || "")} · ${(shot.keyframes || []).length ? `${shot.keyframes.length} 关键帧` : esc(MOTION_TYPES[shot.motion.type]?.zh || "")}</span>${keys}</div>
       <div class="tl-track"><span class="lbl">Lens</span><span>${Math.round(shot.lens.focalLength)} mm · f/${shot.lens.aperture}</span></div>
-      ${entKeys}${lightKeys}
-      <div class="tl-track"><span class="lbl">Sequence</span>${layout.map((x) => `<div class="seg-shot ${x.s.id === shot.id ? "cur" : ""}" data-seg="${x.s.id}" style="left:calc(98px + (100% - 106px) * ${x.start / total});width:calc((100% - 106px) * ${x.len / total})">${esc(x.s.index)} ${esc(x.s.title)}</div>`).join("")}</div>
+      ${subCount ? `<div class="tl-subs" style="--n:${Math.min(subCount, 4)}">${entKeys}${lightKeys}</div>` : ""}
+      <div class="tl-track"><span class="lbl">Sequence</span>${layout.map((x) => `<div class="seg-shot ${x.s.id === shot.id ? "cur" : ""}" data-seg="${x.s.id}" style="left:calc(var(--tl-lbl) + (100% - var(--tl-lbl) - 16px) * ${x.start / total});width:calc((100% - var(--tl-lbl) - 16px) * ${x.len / total})">${esc(x.s.index)} ${esc(x.s.title)}</div>`).join("")}</div>
     </div></div>`;
   const scrub = el.querySelector(".tl-scrub");
   scrub.oninput = () => dispatch("timeline.seek", { frame: Number(scrub.value) }, { silent: true });
@@ -1167,10 +1250,11 @@ function chainView(j) {
       <span class="cv-mark">${mark}</span>
       <span class="cv-t">${p.from != null ? `${p.from}–${p.to}s` : `${(p.seconds || 0).toFixed(1)}s`}</span>
       <span class="cv-beat">${esc(p.beat || "（沿用整镜描述）")}</span>
-      <span class="cv-meta">${p.attempt > 1 ? `第 ${p.attempt} 次 · ` : ""}${p.failure ? `${p.failure} · ` : ""}${p.url ? "已出" : p.status === "failed" ? esc(String(p.error || "").slice(0, 40)) : ""}</span>
+      <span class="cv-meta">${p.attempt > 1 ? `第 ${p.attempt} 次 · ` : ""}${p.seamSoft ? "首帧被拦→文生 · " : ""}${p.failure && p.status === "failed" ? `${p.failure} · ` : ""}${p.url ? "已出" : p.status === "failed" ? esc(String(p.error || "").slice(0, 40)) : ""}</span>
     </div>`;
   }).join("");
-  const links = parts.length > 1 ? `<div class="cv-note">段与段之间用上一段的尾帧当下一段的首帧接上（${parts.length - 1} 次交接）。</div>` : "";
+  const soft = parts.filter((p) => p.seamSoft).length;
+  const links = parts.length > 1 ? `<div class="cv-note">段与段之间用上一段的尾帧当下一段的首帧接上（${parts.length - 1} 次交接）。${soft ? `其中 ${soft} 处首帧被内容策略拦下，改成不带首帧生成——这几处接缝不锚定，会有轻微跳变。` : ""}</div>` : "";
   return `<div class="chainview">
     <div class="cv-head"><b>拆成 ${parts.length} 段</b><span>${j.model} · 单条上限决定段长 · 串行执行</span></div>
     ${rows}${links}

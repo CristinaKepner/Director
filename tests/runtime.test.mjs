@@ -495,6 +495,34 @@ test("beats: a long take is split by story beats, each segment carrying its own 
   R.setHooks({ film: null, generation: null });
 });
 
+// 同一类 bug 出现在四个 Action 上，而且真的毁过一次数据：谷物粥那条片子的 9 条轨道运动
+// 全被 entity.path 的 clear 吞掉，白模预演里其实一动不动，却报 ok。
+test("clear flags never silently win over content (entity.path / walk / light.keyframe / scene.room)", () => {
+  dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
+  const light = store.get().lights[0].id;
+
+  // 动线：带 clear 一起给关键帧，意思是"换成这些"
+  dispatch("entity.path", { id: "hero", keyframes: [{ frame: 0, position: [0, 0, 0] }, { frame: 48, position: [2, 0, 1] }], clear: true }, { source: "agent" });
+  assert.equal(store.get().entities.find((e) => e.id === "hero").path.length, 2);
+  // 只给 clear 才是清空
+  dispatch("entity.path", { id: "hero", clear: true }, { source: "agent" });
+  assert.equal(store.get().entities.find((e) => e.id === "hero").path, null);
+
+  dispatch("light.keyframe", { id: light, frame: 24, intensity: 5, clear: true }, { source: "agent" });
+  assert.equal(store.get().lights.find((l) => l.id === light).keyframes.length, 1);
+  dispatch("light.keyframe", { id: light, clear: true }, { source: "agent" });
+  assert.equal(store.get().lights.find((l) => l.id === light).keyframes, null);
+
+  dispatch("scene.room", { width: 10, depth: 14 }, { source: "agent" });
+  dispatch("scene.room", { width: 12, clear: true }, { source: "agent" });
+  assert.equal(store.get().scene.environment.room.width, 12, "给了尺寸就该改尺寸，不是拆房间");
+  dispatch("scene.room", { clear: true }, { source: "agent" });
+  assert.equal(store.get().scene.environment.room, undefined);
+
+  dispatch("entity.walk", { id: "hero", waypoints: [[0, 0, 0], [3, 0, 0]], clear: true }, { source: "agent" });
+  assert.ok((store.get().entities.find((e) => e.id === "hero").path || []).length > 0, "给了路点就该建走位");
+});
+
 test("shot.beats: a destructive flag must never silently win over the payload", () => {
   dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
   dispatch("shot.update", { id: "shot_01", duration: 90 }, { source: "cli" });

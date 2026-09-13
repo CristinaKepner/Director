@@ -401,8 +401,9 @@ register("scene.room", {
   doc: `摄影棚房间：width/depth/height 米，pattern ${ROOM_PATTERNS.join("/")}（棋盘 / 纯白 / 校准图案），spacing 格距，walls 后墙+侧墙，cyc 圆角回幕；clear=true 拆掉`,
   params: { width: "number", depth: "number", height: "number", pattern: ROOM_PATTERNS.join("|"), spacing: "number", walls: "boolean", cyc: "boolean", color: "#hex", clear: "boolean" },
   handler({ width, depth, height, pattern, spacing, walls, cyc, color, clear }) {
+    const onlyClear = clear && [width, depth, height, pattern, spacing, walls, cyc, color].every((x) => x === undefined);
     store.patch((d) => {
-      if (clear) {
+      if (onlyClear) {
         delete d.scene.environment.room;
         return;
       }
@@ -517,14 +518,17 @@ register("entity.pose", {
 });
 
 register("entity.path", {
-  doc: "设置物体动线关键帧 [{frame, position, yaw}]；clear=true 清除",
+  doc: "设置物体动线关键帧 [{frame, position, yaw}]；clear=true 清除（只在不给 keyframes 时生效）",
   params: { id: "string", keyframes: "[{frame,position,yaw}]", clear: "boolean" },
   required: ["id"],
   validate: ({ id }, d) => (d.entities.some((e) => e.id === id) ? null : { error: "NOT_FOUND" }),
   handler({ id, keyframes, clear, append }) {
+    // clear 只在没给内容时才清空。给了 keyframes 还带 clear，意思是"换成这些"——
+    // 调用方（尤其是模型）很自然会这么写。破坏性开关盖过内容 = 返回 ok 却静默丢数据。
+    const wipe = clear && !keyframes?.length && !append;
     store.patch((d) => {
       const e = d.entities.find((x) => x.id === id);
-      if (clear) e.path = null;
+      if (wipe) e.path = null;
       else if (append) e.path = [...(e.path || []), append].sort((a, b) => a.frame - b.frame);
       else if (keyframes) e.path = keyframes.map((k) => ({ frame: Number(k.frame), position: parseVec(k.position), yaw: k.yaw !== undefined ? Number(k.yaw) : undefined }));
       e.version += 1;
@@ -543,7 +547,7 @@ register("entity.walk", {
     const d0 = D();
     const fps = d0.project.fps || 24;
     const e0 = d0.entities.find((x) => x.id === id);
-    if (clear) {
+    if (clear && !Array.isArray(waypoints)) {
       store.patch((d) => {
         const e = d.entities.find((x) => x.id === id);
         e.path = null;
@@ -920,7 +924,7 @@ register("light.update", {
 });
 
 register("light.toggle", { doc: "开关灯", params: { id: "string", enabled: "boolean" }, required: ["id"], handler: ({ id, enabled }) => store.patch((d) => { const l = d.lights.find((x) => x.id === id); if (l) l.enabled = enabled === undefined ? !l.enabled : !!enabled; }) });
-register("light.keyframe", { doc: "灯光强度关键帧 {frame,intensity}；clear 清除", params: { id: "string", frame: "number", intensity: "number", clear: "boolean" }, required: ["id"], handler: ({ id, frame, intensity, clear }) => store.patch((d) => { const l = d.lights.find((x) => x.id === id); if (!l) return; if (clear) l.keyframes = null; else l.keyframes = [...(l.keyframes || []).filter((k) => k.frame !== Number(frame)), { frame: Number(frame), intensity: Number(intensity) }].sort((a, b) => a.frame - b.frame); }) });
+register("light.keyframe", { doc: "灯光强度关键帧 {frame,intensity}；clear 清除（只在不给 frame 时生效）", params: { id: "string", frame: "number", intensity: "number", clear: "boolean" }, required: ["id"], handler: ({ id, frame, intensity, clear }) => store.patch((d) => { const l = d.lights.find((x) => x.id === id); if (!l) return; if (clear && frame === undefined) l.keyframes = null; else l.keyframes = [...(l.keyframes || []).filter((k) => k.frame !== Number(frame)), { frame: Number(frame), intensity: Number(intensity) }].sort((a, b) => a.frame - b.frame); }) });
 register("light.delete", { doc: "删除灯光", params: { id: "string" }, required: ["id"], handler: ({ id }) => store.patch((d) => { d.lights = d.lights.filter((l) => l.id !== id); if (d.project.selectedId === id) d.project.selectedId = null; }) });
 
 // ============ shot.* ============
@@ -1740,6 +1744,10 @@ register("generation.submit", {
 //   fatal      参数非法、供应商不认识：重试无意义
 export function classifyFailure(err) {
   const t = `${err?.code || ""} ${err?.error || ""} ${err?.message || ""}`.toLowerCase();
+  // 输入图被拒是一个单独的情况：不是提示词的问题，是我们喂进去的那一帧本身过不了审
+  // （续拍用的尾帧里有可辨认人脸时，Ark 会判成 PrivacyInformation）。
+  // 这种可以降级成不带首帧重试，而不是整条链停在这。
+  if (/inputimage|privacyinformation|input image/.test(t)) return "input-image";
   if (/sensitive|policy|violation|copyright|risk|审核|违规/.test(t)) return "content";
   if (/timeout|timed out|econn|socket|network|fetch failed|rate|429|5\d\d|internal|unavailable/.test(t)) return "transient";
   if (/invalidparameter|not valid|not support|bad_|unknown|no_/.test(t)) return "fatal";
@@ -1880,6 +1888,14 @@ register("shot.chain", {
 
           const kindOf = classifyFailure(done);
           setPart(i, { status: "failed", error: done?.error || "?", failure: kindOf, jobId: segId });
+          // 首帧过不了审：丢掉首帧改成文生视频再试一次。接缝因此不再锚定在那一帧上
+          // （会有轻微跳变），但整条链能继续，比停在这里强。
+          if (kindOf === "input-image" && firstFrame) {
+            firstFrame = null;
+            setPart(i, { seamSoft: true });
+            attempt += 1;
+            continue;
+          }
           if (kindOf === "transient" && attempt < retries) { attempt += 1; continue; }
           updateJob(chainId, {
             status: "failed",
@@ -1887,7 +1903,9 @@ register("shot.chain", {
             failure: kindOf,
             message: `第 ${i + 1}/${n} 段失败（${kindOf}）：${String(done?.error || "").slice(0, 160)}`,
             // 已经出好的段不会丢：改完提示词用 resume 接着跑
-            hint: kindOf === "content"
+            hint: kindOf === "input-image"
+              ? `续拍用的首帧过不了审（画面里有可辨认人脸时常见），去掉首帧改文生视频也失败了。把这一拍改成不露正脸的描述后 shot.chain --resume。`
+              : kindOf === "content"
               ? `内容策略拦截，同一条提示词重试还会被拦。改写这一镜的描述或风格后，用 shot.chain --resume 从第 ${i + 1} 段接着跑（前 ${i} 段保留）。`
               : kindOf === "fatal"
               ? `参数或供应商问题，重试没用。检查时长与模式后 shot.chain --resume。`

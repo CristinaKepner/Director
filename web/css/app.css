@@ -288,21 +288,25 @@ table.grid td .actions button { font-size: 12px; padding: 3px 10px; border-radiu
 video.thumb { background: #000; }
 .thumb.clickable { cursor: zoom-in; }
 
-.timeline { display: grid; grid-template-columns: 200px 1fr; gap: 14px; height: 100%; }
-.tl-side { display: flex; flex-direction: column; gap: 8px; }
-.tl-side .tcs { font-family: var(--mono); color: var(--accent-2); }
-.tl-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.tl-ruler { position: relative; height: 22px; background: var(--sunken); border-radius: 7px; border: 1px solid var(--line); overflow: hidden; font-family: var(--mono); font-size: 11px; color: var(--dim); }
-.tl-ruler .tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line-2); padding-left: 3px; }
+.timeline { --tl-lbl: 104px; display: grid; grid-template-columns: 210px 1fr; gap: 16px; height: 100%; min-height: 0; }
+.tl-side { display: flex; flex-direction: column; gap: 10px; }
+.tl-side .tcs { font-family: var(--mono); color: var(--accent-2); font-size: 13px; }
+.tl-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.tl-ruler { position: relative; height: 26px; background: var(--sunken); border-radius: 7px; border: 1px solid var(--line); overflow: hidden; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.tl-ruler .tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line-2); padding: 6px 0 0 4px; white-space: nowrap; }
 .tl-ruler .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); box-shadow: 0 0 8px var(--glow); }
-.tl-track { position: relative; height: 26px; background: var(--sunken); border-radius: 7px; border: 1px solid var(--line); display: flex; align-items: center; padding: 0 8px; gap: 8px; font-size: 12px; color: var(--muted); }
-.tl-track .lbl { width: 90px; flex: none; color: var(--dim); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
-.tl-track .key { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; background: var(--accent-2); transform: rotate(45deg); cursor: pointer; }
+.tl-track { position: relative; height: 32px; background: var(--sunken); border-radius: 7px; border: 1px solid var(--line); display: flex; align-items: center; padding: 0 8px; gap: 10px; font-size: 12px; color: var(--muted); }
+.tl-track .lbl { width: calc(var(--tl-lbl) - 16px); flex: none; color: var(--dim); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 走位 / 灯光每个对象一条轨，十来个就会把抽屉撑爆 —— 收进一个可滚区，最多露四条 */
+.tl-subs { display: flex; flex-direction: column; gap: 5px; overflow-y: auto; max-height: calc(var(--n) * 31px); padding-right: 2px; }
+.tl-track.sub { height: 26px; background: transparent; border-style: dashed; }
+.tl-track.sub .lbl { text-transform: none; letter-spacing: 0; }
+.tl-track .key { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--accent-2); transform: rotate(45deg); cursor: pointer; }
 .tl-track .key:hover { background: #fff; }
-.tl-track .seg-shot { position: absolute; top: 3px; bottom: 3px; background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 5px; font-size: 11px; color: var(--text); padding: 0 7px; overflow: hidden; white-space: nowrap; cursor: pointer; display: flex; align-items: center; }
+.tl-track .seg-shot { position: absolute; top: 3px; bottom: 3px; background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 5px; font-size: 11px; color: var(--text); padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; }
 .tl-track .seg-shot.cur { background: rgba(118, 87, 255, .3); }
-.tl-scrub { width: 100%; }
-.tl-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
+.tl-scrub { width: 100%; margin: 2px 0; }
+.tl-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
 .tl-buttons button { font-size: 12px; padding: 4px 10px; border-radius: var(--r-pill); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
@@ -394,3 +398,22 @@ body.desktop.blur .topbar input.ghost { color: var(--muted); }
 .cv-seg.fail .cv-mark, .cv-seg.fail .cv-meta { color: var(--danger); }
 .cv-note { margin-top: 7px; font-size: 11px; color: var(--dim); line-height: 1.5; }
 .cv-fail { margin-top: 7px; font-size: 11px; color: var(--danger); line-height: 1.6; }
+
+
+/* ---------- 成片面板 ---------- */
+.film-layout { display: grid; grid-template-columns: 1fr 220px; gap: 14px; height: 100%; min-height: 0; }
+.film-main { display: flex; flex-direction: column; gap: 9px; min-width: 0; overflow: auto; }
+.film-player { width: 100%; max-height: 46vh; background: #000; border-radius: var(--r-card); display: block; }
+.film-empty { display: flex; align-items: center; justify-content: center; min-height: 140px; border: 1px dashed var(--line-2); border-radius: var(--r-card); color: var(--dim); font-size: 12px; }
+.film-meta { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; font-size: 12px; }
+.film-meta b { font-weight: 500; }
+.film-meta span { color: var(--dim); font-size: 11px; font-family: var(--mono); }
+.film-list { display: flex; flex-direction: column; gap: 5px; overflow: auto; min-height: 0; border-left: 1px solid var(--line); padding-left: 12px; }
+.film-item { padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--r-card); cursor: pointer; background: var(--surface); }
+.film-item:hover { border-color: var(--line-2); }
+.film-item.on { border-color: var(--accent-line); background: var(--accent-soft); }
+.fi-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 12px; }
+.fi-top b { font-weight: 500; }
+.fi-top span { font-size: 11px; color: var(--dim); }
+.fi-sub { margin-top: 2px; font-size: 10px; color: var(--dim); }
+@media (max-width: 1100px) { .film-layout { grid-template-columns: 1fr; } .film-list { border-left: 0; border-top: 1px solid var(--line); padding-left: 0; padding-top: 10px; flex-direction: row; overflow-x: auto; } .film-item { min-width: 160px; } }

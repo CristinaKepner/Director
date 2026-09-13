@@ -19,4 +19,7 @@ contextBridge.exposeInMainWorld("director", {
   notify: (opts) => ipcRenderer.invoke("desktop:notify", opts), // {title, body, sound}
   pickSaveVideo: (name) => ipcRenderer.invoke("desktop:pick-save-video", name),
   state: (s) => ipcRenderer.send("desktop:state", s), // 菜单按当前工程能做什么来亮/灰
+  // 成片几十 MB：让主进程直接拷后端那份文件，不把字节搬进渲染进程
+  saveMedia: (url) => ipcRenderer.invoke("desktop:save-media", url),
+  revealMedia: (url) => ipcRenderer.invoke("desktop:reveal-media", url),
 });

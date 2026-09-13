@@ -785,6 +785,32 @@ ipcMain.handle("desktop:open-json", async () => {
   }
 });
 ipcMain.handle("desktop:reveal", (_e, p) => shell.showItemInFolder(p || PROJECT_FILE));
+
+// "/media/x.mp4" → 媒体目录里的真实文件。只认单个文件名，不接受路径穿越。
+function mediaPath(ref) {
+  const m = String(ref || "").match(/\/media\/([^/?#]+)/);
+  const name = m ? path.basename(decodeURIComponent(m[1])) : path.basename(String(ref || ""));
+  if (!name) return null;
+  const file = path.join(MEDIA_DIR, name);
+  return path.dirname(file) === MEDIA_DIR && fs.existsSync(file) ? file : null;
+}
+ipcMain.handle("desktop:reveal-media", (_e, ref) => {
+  const f = mediaPath(ref);
+  if (f) shell.showItemInFolder(f);
+  return { ok: !!f };
+});
+ipcMain.handle("desktop:save-media", async (_e, ref) => {
+  const src = mediaPath(ref);
+  if (!src) return { ok: false, error: "找不到这个媒体文件" };
+  const r = await dialog.showSaveDialog(win, { title: "另存为", defaultPath: path.join(app.getPath("movies"), path.basename(src)) });
+  if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+  try {
+    fs.copyFileSync(src, r.filePath);
+    return { ok: true, path: r.filePath };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
 ipcMain.handle("desktop:info", () => ({ version: app.getVersion(), api: server ? `${server.url}/api/` : null, projectFile: PROJECT_FILE, mediaDir: MEDIA_DIR, dataDir: DATA_DIR, userData: USER }));
 ipcMain.handle("desktop:confirm", async (_e, { message, detail, ok = "继续", cancel = "取消" }) => {
   const r = await dialog.showMessageBox(win, { type: "question", message, detail, buttons: [ok, cancel], defaultId: 0, cancelId: 1 });
