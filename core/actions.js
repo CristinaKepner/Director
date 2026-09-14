@@ -1619,11 +1619,21 @@ register("reference.analyze", {
 // 贴一个链接 → 本地素材。这是「复刻」最短的那条路：
 // 人在抖音/B站刷到一条想拍成那样的片子，说不清楚，但能把链接贴过来。
 // 落成本地文件之后，接的还是原来那条路（reference.analyze → planner 建场 → 白模 → 生成）。
+// 链接能不能用，dispatch 当场就知道 —— 没理由先建一个任务、再让它在后台失败。
+// 深一层的检查（站点认不认、要不要登录）留给适配器，那些确实得试了才知道。
+function badLink(url) {
+  let u;
+  try { u = new URL(String(url || "").trim()); } catch { return { error: "BAD_URL", hint: "这不是一个链接。把视频页的地址整条贴进来。" }; }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return { error: "BAD_PROTOCOL", hint: "只支持 http / https 链接。本地文件直接拖进来就行。" };
+  return null;
+}
+
 register("reference.fetch", {
   doc: "从视频链接（B站/抖音/YouTube 等）下载一段素材到本地，作为参照。可只取其中一段",
   params: { url: "string（视频页地址）", from: "number（起始秒，可选）", to: "number（结束秒，可选）" },
   required: ["url"],
   undoable: false,
+  validate: ({ url }) => badLink(url),
   handler({ url, from, to }, meta) {
     if (!hooks.fetcher) return { ok: false, error: "NO_FETCHER", hint: "下链接在后端做；连上后端再试" };
     if (!hooks.fetcher.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "装一个 yt-dlp（brew install yt-dlp）就能贴链接了" };
@@ -1688,7 +1698,7 @@ register("reference.replicate", {
   undoable: false,
   validate(p) {
     if (!p.url && !p.ref) return { error: "MISSING_PARAM", missing: ["url|ref"], hint: "给一个链接，或者一个已经在 media 里的素材" };
-    return null;
+    return p.url ? badLink(p.url) : null;
   },
   handler({ url, ref, from, to, hint, build }, meta) {
     const wantBuild = build !== false;

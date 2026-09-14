@@ -613,3 +613,20 @@ test("scene.create clear 不能删掉还在跑的任务", () => {
   assert.ok(!ids.includes("job_done_shot"), "已经结束、且属于被清掉那些镜头的任务才该清");
   assert.equal(store.get().shots.length, 0, "镜头确实清干净了");
 });
+
+// 和「注定失败的生成模式不该排队」同一条规矩：链接坏不坏，dispatch 当场就知道。
+// 先建任务再后台失败，用户得等一圈才看到「这不是个链接」。
+test("坏链接当场拒绝，不排成任务", () => {
+  R.setHooks({ fetcher: { name: "stub", ready: true, probe: async () => ({ ok: true }), download: async () => ({ ok: true, url: "/media/x.mp4", bytes: 1 }) } });
+  const before = store.get().jobs.length;
+  for (const [url, code] of [["file:///etc/passwd", "BAD_PROTOCOL"], ["javascript:alert(1)", "BAD_PROTOCOL"], ["随便打的字", "BAD_URL"]]) {
+    const r = dispatch("reference.fetch", { url }, { source: "human" });
+    assert.equal(r.ok, false, `${url} 该被拒`);
+    assert.equal(r.error, code);
+    assert.ok(r.hint, "拒了要说清楚下一步该怎么办");
+  }
+  assert.equal(store.get().jobs.length, before, "一个任务都不该建");
+  const good = dispatch("reference.fetch", { url: "https://example.com/video/1" }, { source: "human" });
+  assert.equal(good.ok, true, "正常链接照常排队");
+  R.setHooks({ fetcher: null });
+});
