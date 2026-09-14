@@ -1,7 +1,7 @@
 {
   "name": "director-console-desktop",
   "productName": "导演台",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "private": true,
   "type": "module",
   "description": "Director Console · 导演台 — macOS client. Wraps the same core runtime, backend and web console in a native window.",
