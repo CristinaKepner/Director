@@ -497,3 +497,34 @@ body.desktop.blur .topbar input.ghost { color: var(--muted); }
 .sc-why b { color: var(--text); }
 .sc-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
 @media (max-width: 1000px) { .sc-grid, .sc-grid.three { grid-template-columns: 1fr; grid-auto-rows: 1fr; } }
+
+/* ---------- 参照：贴一条链接就能复刻 ---------- */
+.fr-link { display: flex; gap: 8px; margin-top: 10px; }
+.fr-link input { flex: 1; min-width: 0; padding: 11px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--sunken); color: var(--text); font-size: 13px; }
+.fr-link input:focus { outline: none; border-color: var(--accent); }
+.fr-link button { padding: 11px 16px; white-space: nowrap; }
+.fr-linknote { margin-top: 8px; }
+
+.ref-pane { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px 10px; }
+.ref-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ref-row input { flex: 1 1 240px; min-width: 0; padding: 9px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--sunken); color: var(--text); font-size: 13px; }
+.ref-row input:focus { outline: none; border-color: var(--accent); }
+.ref-row button { white-space: nowrap; }
+.ref-drop { margin-top: 8px; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; text-align: center; color: var(--muted); font-size: 12px; cursor: pointer; transition: border-color .15s, background .15s; }
+.ref-drop:hover, .ref-drop.over { border-color: var(--accent); background: var(--sunken); }
+.ref-live { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.ref-read { border-top: 1px solid var(--line); padding-top: 12px; }
+.ref-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.ref-head span { color: var(--muted); font-size: 11px; }
+.ref-brief { margin: 0 0 10px; line-height: 1.6; font-size: 13px; }
+.ref-grid th { width: 130px; text-align: left; color: var(--muted); font-weight: 500; vertical-align: top; }
+.ref-grid td { line-height: 1.55; }
+.ref-note { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.ref-empty { color: var(--muted); font-size: 12px; padding: 18px 0; text-align: center; }
+.ref-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.ref-path { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.ref-path b { font-size: 13px; }
+.ref-path span { color: var(--muted); font-size: 11px; line-height: 1.6; flex: 1; }
+.ref-path .actions { margin-top: 4px; }
+.sc-cell.origin .sc-tag { background: var(--accent-soft); border-color: var(--accent-line); }
+@media (max-width: 760px) { .ref-two { grid-template-columns: 1fr; } }

@@ -395,13 +395,13 @@ function renderShotStrip(d) {
 }
 function renderTabs(d) {
   const films = filmJobs(d);
-  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, gen: !!d.project.currentShotId, film: films.length > 0, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
+  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, ref: true, gen: !!d.project.currentShotId, film: films.length > 0, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
   document.querySelectorAll("[data-bottom]").forEach((b) => {
     const k = b.dataset.bottom;
     b.hidden = !has[k];
     b.classList.toggle("on", ui.drawer && ui.tab === k);
-    const n = { takes: d.takes.length, board: d.storyboard.length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
-    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", gen: "生成", film: "成片", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
+    const n = { takes: d.takes.length, board: d.storyboard.length, ref: d.jobs.filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind) && ["queued", "running"].includes(j.status)).length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
+    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", ref: "参照", gen: "生成", film: "成片", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
   });
   if (ui.drawer && !has[ui.tab]) ui.tab = "shots";
 }
@@ -771,6 +771,7 @@ function filmJobs(d) {
 }
 
 let filmPick = null;
+let showRefCol = null; // null = 自动：没生成时默认把原片摆出来
 let showPrevGen = false; // 对照默认两栏；上一版是可选的第三栏
 
 function renderFilm(el, d) {
@@ -907,7 +908,11 @@ export function renderCompare(d) {
   if (!shot) { el.innerHTML = `<div class="sc-empty">还没有镜头。</div>`; return; }
   const p = comparePairs(d).find((x) => x.shot.id === shot.id) || pairFor(d, shot);
   const three = showPrevGen && !!p.previous;
-  const key = `${shot.id}|${p.blockout}|${p.generated}|${three ? p.previous : ""}|${JSON.stringify(p.verdict || null)}`;
+  // 原片：复刻流程里最该被并排看的东西。还没生成的时候默认就摆出来 ——
+  // 这时候白模的唯一意义就是「和原片比，机位走位对上了没有」，不摆出来等于没法判断。
+  const origin = d.project.reference?.ref || null;
+  const withRef = origin && (showRefCol === null ? !p.generated : showRefCol);
+  const key = `${shot.id}|${p.blockout}|${p.generated}|${three ? p.previous : ""}|${withRef ? origin : ""}|${JSON.stringify(p.verdict || null)}`;
   if (el.dataset.key === key) return; // 别在播放时被每帧重绘打断
   el.dataset.key = key;
 
@@ -916,10 +921,11 @@ export function renderCompare(d) {
   }</div></div>`;
 
   el.innerHTML = `
-    <div class="sc-grid ${three ? "three" : ""}">
+    <div class="sc-grid ${[withRef, three, !!p.generated || !withRef].filter(Boolean).length > 2 ? "three" : ""}">
+      ${withRef ? cell("原片 · 你要复刻的那条", origin, "origin") : ""}
       ${cell("白模 · 免费 · 你改的是这边", p.blockout)}
       ${three ? cell("生成 · 上一版", p.previous) : ""}
-      ${cell(`生成 · ${esc(p.mode || "")}${three ? " · 新版" : ""} · 计费`, p.generated, "gen")}
+      ${withRef && !p.generated ? "" : cell(`生成 · ${esc(p.mode || "")}${three ? " · 新版" : ""} · 计费`, p.generated, "gen")}
     </div>
     <div class="sc-bar">
       <b>${esc(shot.index)} ${esc(shot.title)}</b>
@@ -928,16 +934,22 @@ export function renderCompare(d) {
       ${verdictLine(p.verdict)}
       <span class="sc-run" data-run hidden></span>
       <div class="sc-btns">
+        ${origin ? `<button data-origin class="${withRef ? "on" : ""}">${withRef ? "收起原片" : "对上原片"}</button>` : ""}
         ${p.previous ? `<button data-prev class="${three ? "on" : ""}">${three ? "只看两栏" : "加上一版"}</button>` : ""}
         <button data-play>一起播</button>
+        ${withRef ? `<button data-origin-gen="${esc(shot.id)}">直接照原片生成</button>` : ""}
         <button class="primary" data-regen="${esc(shot.id)}">改完重生成这一镜</button>
         <button data-close>退出对照</button>
       </div>
     </div>
-    <div class="sc-why"><b>左边随便改，不花钱</b>：机位、走位、光、焦段。改完点「改完重生成这一镜」——<b>只重做这一镜</b>，构图跟着白模走，人物靠已批准的参考图锁住。</div>`;
+    <div class="sc-why">${withRef && !p.generated
+      ? `<b>对着原片调白模</b>：机位高度、焦段、运动轨迹、主体在画面里的位置 —— 这些对上了，生成出来才像。白模改多少次都不花钱，对齐了再花钱生成。`
+      : `<b>左边随便改，不花钱</b>：机位、走位、光、焦段。改完点「改完重生成这一镜」——<b>只重做这一镜</b>，构图跟着白模走，人物靠已批准的参考图锁住。`}</div>`;
   bindSync(el);
   el.querySelector("[data-close]").onclick = () => dispatch("project.set-view", { mode: "program" });
   el.querySelector("[data-prev]")?.addEventListener("click", () => { showPrevGen = !showPrevGen; el.dataset.key = ""; renderCompare(store.get()); });
+  el.querySelector("[data-origin]")?.addEventListener("click", () => { showRefCol = !withRef; el.dataset.key = ""; renderCompare(store.get()); });
+  el.querySelector("[data-origin-gen]")?.addEventListener("click", (ev) => report(dispatch("generation.submit", { shotId: ev.currentTarget.dataset.originGen, mode: "v2v", provider: "seedance-2.5", reference: "origin" })));
 }
 
 function pairFor(d, s) {
@@ -1046,10 +1058,18 @@ function renderThread(d) {
     store.light((d) => { const mm = d.agent.messages.find((x) => x.id === mid); if (mm) mm.answered = answered; });
     renderThread(store.get());
     const all = (m.ask || []).map((a, i) => (answered[i] ? `${a.question} → ${answered[i]}` : null)).filter(Boolean);
-    if (all.length === (m.ask || []).length) {
-      $("agentInput").value = all.join("；");
-      sendAgent();
+    if (all.length !== (m.ask || []).length) return;
+    // 选项自带下一步就直接执行。提问的那一方本来就知道每个答案对应什么动作，
+    // 再绕一圈让规划器从一句「运镜照搬」里重新推一遍，推丢了用户就只收到一句空承诺。
+    const nexts = (m.ask || []).map((a, i) => a.options.find((o) => o.label === answered[i])?.next).filter(Boolean);
+    if (nexts.length === (m.ask || []).length) {
+      const extra = $("agentInput").value.trim();
+      if (extra) $("agentInput").value = "";
+      nexts.forEach((n) => report(dispatch(n.action, extra ? { ...n.payload, hint: [n.payload?.hint, extra].filter(Boolean).join("；") } : n.payload)));
+      return;
     }
+    $("agentInput").value = all.join("；");
+    sendAgent();
   }));
   el.querySelectorAll("[data-goshot]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); report(dispatch("shot.select", { id: b.dataset.goshot })); }));
   el.querySelectorAll("[data-confirm]").forEach((b) => (b.onclick = () => {
@@ -1159,6 +1179,104 @@ function hideGuide() {
 }
 
 // ---------- bottom drawer ----------
+// 参照：随时能复刻一条。
+//
+// 放在剪辑区而不是只放在首屏，是因为复刻不是一次性的开场动作 —— 片子做到一半想换个运镜、
+// 想照着另一条的打光重来一遍，都该是随手一贴。这里和首屏调的是同一个 Action，
+// Agent 说"复刻这条链接"走的也是它，所以三个入口不会各自长歪。
+function renderRef(el, d) {
+  const jobs = (d.jobs || []).filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind)).slice().reverse();
+  const cur = d.project.reference;
+  const a = cur?.analysis;
+  const running = jobs.find((j) => ["queued", "running"].includes(j.status));
+
+  el.innerHTML = `<div class="ref-pane">
+    <div class="ref-in">
+      <div class="ref-row">
+        <input id="refUrl" type="url" placeholder="贴一条视频链接：抖音 / B站 / YouTube…" spellcheck="false" ${running ? "disabled" : ""}>
+        <input id="refHint" type="text" placeholder="想复刻它的什么？（可留空，例：只要运镜，主体换成我的产品）" spellcheck="false" ${running ? "disabled" : ""}>
+        <button id="refGo" class="primary" ${running ? "disabled" : ""}>复刻</button>
+      </div>
+      <div class="ref-drop" id="refDrop"><input type="file" id="refFile" accept="image/*,video/*" hidden><span>或把本地图片 / 视频拖到这里</span></div>
+      ${running ? `<div class="ref-live">${(running.phases || []).map((ph) => `<div class="fr-step ${ph.state === "run" ? "run" : ph.state}"><span>${ph.state === "done" ? "✓" : ph.state === "run" ? "◠" : ph.state === "fail" ? "✗" : "·"}</span><b>${esc(ph.label)}</b><i>${esc(ph.note || (ph.state === "run" ? (running.progress || 0) + "%" : ""))}</i></div>`).join("") || `<div class="fr-step run"><span>◠</span><b>${esc(running.note || "处理中")}</b><i>${running.progress || 0}%</i></div>`}</div>` : ""}
+    </div>
+
+    ${a ? `<div class="ref-read">
+      <div class="ref-head"><b>最近读到的参照</b><span>${esc(cur.model || "")} · ${cur.frames || 1} 帧${cur.from != null ? ` · ${cur.from}s–${cur.to ?? "末"}s` : ""}</span></div>
+      <p class="ref-brief">${esc(a.brief || a.summary || "")}</p>
+      <table class="grid ref-grid"><tbody>
+        ${[["景别 / 视角", `${a.camera?.shotSize || "—"} · ${a.camera?.angle || "—"}`],
+           ["机位高度 / 焦段", `${a.camera?.heightMeters ?? "—"} m · ${a.camera?.focalMm ?? "—"} mm · f/${a.camera?.aperture ?? "—"}`],
+           ["构图", a.camera?.framing || "—"],
+           ["光", `${a.lighting?.keyDirection || "—"} · ${a.lighting?.ratio || "—"} · ${a.lighting?.colorTemp || "—"}`],
+           ["运镜", `${a.motion?.type || "—"}${a.motion?.description ? " · " + a.motion.description : ""}`],
+           ["主体", (a.subjects || []).map((x) => x.displayName).join("、") || "—"],
+           ["拍", (a.beats || []).map((b, i) => `${i + 1}) ${b.seconds}s ${b.text}`).join("　") || "—"]]
+          .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="ref-two">
+        <div class="ref-path">
+          <b>先走白模</b><span>在 3D 里把机位走位搭出来，和原片并排对齐，改到满意再花钱生成。慢一点，但运镜是你的，改哪一镜都只重做那一镜。</span>
+          <div class="actions"><button id="refRebuild" class="primary">按这份参数建场</button>${d.shots.length ? `<button id="refCompare">和原片并排看</button>` : ""}</div>
+        </div>
+        <div class="ref-path">
+          <b>直接照着原片生成</b><span>把原片整条当参考视频交给 Seedance，运动和构图跟它走，主体换成你已批准的参考图。快，也计费；运镜是原片的，想改就得回到白模那条路。</span>
+          <div class="actions"><button id="refDirect" ${d.shots.length ? "" : "disabled title='先建场，才有镜头可生成'"}>用原片直接生成这一镜</button>${cur.ref ? `<button data-preview="${esc(cur.ref)}" data-kind="video">看原片</button>` : ""}</div>
+        </div>
+      </div>
+    </div>` : `<div class="ref-empty">还没读过参照。贴一条链接，或者拖一个本地文件进来。</div>`}
+
+    ${jobs.length ? `<table class="grid"><thead><tr><th>来源</th><th>阶段</th><th>结果</th><th></th></tr></thead><tbody>
+      ${jobs.slice(0, 8).map((j) => `<tr class="row"><td title="${esc(j.prompt || "")}">${esc((j.inputs?.title || j.prompt || j.id).slice(0, 60))}</td><td>${badge(j.status)}${j.status === "running" ? ` ${j.progress || 0}%` : ""}</td><td>${esc(j.result?.shots ? j.result.shots + " 个镜头" : j.result?.url ? "素材已就位" : j.hint || j.error || j.note || "")}</td><td>${j.result?.ref || j.result?.url ? `<button data-preview="${esc(j.result.ref || j.result.url)}" data-kind="video">看</button>` : ""}</td></tr>`).join("")}
+    </tbody></table>` : ""}
+  </div>`;
+
+  const urlIn = $("refUrl"), hintIn = $("refHint");
+  const go = () => {
+    const u = urlIn.value.trim();
+    if (!u) return toast("先贴一条链接", true);
+    report(dispatch("reference.replicate", { url: u, hint: hintIn.value.trim() || undefined }));
+  };
+  $("refGo").onclick = go;
+  urlIn.onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); go(); } };
+
+  const drop = $("refDrop"), file = $("refFile");
+  drop.onclick = () => file.click();
+  file.onchange = () => file.files[0] && uploadRef(file.files[0], hintIn.value.trim());
+  drop.ondragover = (ev) => { ev.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = (ev) => {
+    ev.preventDefault();
+    drop.classList.remove("over");
+    const t = ev.dataTransfer?.getData("text/uri-list") || ev.dataTransfer?.getData("text/plain");
+    const f = ev.dataTransfer?.files?.[0];
+    if (f) return uploadRef(f, hintIn.value.trim());
+    if (t && /^https?:\/\//i.test(t.trim())) { urlIn.value = t.trim(); go(); }
+  };
+
+  const rb = $("refRebuild");
+  if (rb) rb.onclick = () => report(dispatch("reference.replicate", { ref: cur.ref, from: cur.from ?? undefined, to: cur.to ?? undefined, hint: hintIn.value.trim() || undefined }));
+  const rc = $("refCompare");
+  if (rc) rc.onclick = () => dispatch("project.set-view", { mode: "compare" });
+  const rd = $("refDirect");
+  if (rd) rd.onclick = () => report(dispatch("generation.submit", { mode: "v2v", provider: "seedance-2.5", reference: "origin" }));
+}
+
+async function uploadRef(f, hint) {
+  const kind = f.type.startsWith("video") ? "video" : f.type.startsWith("image") ? "image" : null;
+  if (!kind) return toast("只认图片和视频", true);
+  if (!client.base) return toast("要连上后端才能读参照", true);
+  toast(`上传 ${f.name}…`);
+  try {
+    const r = await fetch(new URL(`upload?label=${kind}`, client.base), { method: "POST", headers: { "content-type": f.type }, body: f });
+    const out = await r.json();
+    if (!out.ok) throw new Error(out.error || "上传失败");
+    report(dispatch("reference.replicate", { ref: out.url, hint: hint || undefined }));
+  } catch (err) {
+    toast(String(err.message || err), true);
+  }
+}
+
 function renderBottom(d) {
   const el = $("bottomBody");
   const tab = ui.tab || "shots";
@@ -1166,6 +1284,7 @@ function renderBottom(d) {
   if (tab === "timeline") return renderTimeline(el, d);
   if (tab === "takes") return renderTakes(el, d);
   if (tab === "board") return renderBoard(el, d);
+  if (tab === "ref") return renderRef(el, d);
   if (tab === "gen") return renderGen(el, d);
   if (tab === "film") return renderFilm(el, d);
   if (tab === "assets") return renderAssets(el, d);

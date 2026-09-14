@@ -52,7 +52,7 @@ export const CARD_STATUSES = ["empty", "blocked", "prompted", "generated", "appr
 const registry = new Map();
 const idempotency = new Map();
 let batchDepth = 0;
-const hooks = { recorder: null, generation: null, capture: null, film: null, judge: null, reference: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
+const hooks = { recorder: null, generation: null, capture: null, film: null, judge: null, reference: null, fetcher: null, planner: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
 
 // Host integrations (browser recorder, generation adapters). Absent in the CLI: actions degrade gracefully.
 export function setHooks(h) {
@@ -362,7 +362,12 @@ register("scene.create", {
         d.shots = [];
         d.takes = [];
         d.storyboard = [];
-        d.jobs = [];
+        // 在跑的活儿不能删。规划器建场时常常 scene.create{clear} 开一张白纸，
+        // 而它自己很可能正是被某个编排任务（reference.replicate）叫起来的 ——
+        // 一刀切清空会把那个任务连同进度一起抹掉，外面就只看到「任务凭空消失」，
+        // 分不清是成了还是废了。同理，还在跑的生成任务删了也不会停，只是结果无处可归。
+        // 清掉的只有：已经结束、且属于刚被清掉那些镜头的任务。
+        d.jobs = d.jobs.filter((j) => ["queued", "running"].includes(j.status) || !j.shotId);
         d.project.programCameraId = null;
         d.project.currentShotId = null;
       }
@@ -1611,6 +1616,219 @@ register("reference.analyze", {
   },
 });
 
+// 贴一个链接 → 本地素材。这是「复刻」最短的那条路：
+// 人在抖音/B站刷到一条想拍成那样的片子，说不清楚，但能把链接贴过来。
+// 落成本地文件之后，接的还是原来那条路（reference.analyze → planner 建场 → 白模 → 生成）。
+register("reference.fetch", {
+  doc: "从视频链接（B站/抖音/YouTube 等）下载一段素材到本地，作为参照。可只取其中一段",
+  params: { url: "string（视频页地址）", from: "number（起始秒，可选）", to: "number（结束秒，可选）" },
+  required: ["url"],
+  undoable: false,
+  handler({ url, from, to }, meta) {
+    if (!hooks.fetcher) return { ok: false, error: "NO_FETCHER", hint: "下链接在后端做；连上后端再试" };
+    if (!hooks.fetcher.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "装一个 yt-dlp（brew install yt-dlp）就能贴链接了" };
+    const id = uid("fetch");
+    store.patch((d) => d.jobs.push({
+      id,
+      kind: "reference-fetch",
+      shotId: null,
+      mode: "fetch",
+      provider: "yt-dlp",
+      model: "yt-dlp",
+      prompt: String(url).slice(0, 300),
+      inputs: { url, from: from ?? null, to: to ?? null },
+      status: "queued",
+      progress: 0,
+      result: null,
+      source: meta.source || "human",
+      createdAt: new Date().toISOString(),
+    }));
+
+    Promise.resolve()
+      .then(async () => {
+        updateJob(id, { status: "running", progress: 1, note: "连接" });
+        // 先探一下：标题和时长几秒就回来，先让人看到「下的是这条」，再开始等进度
+        const meta2 = await hooks.fetcher.probe(url);
+        if (meta2.ok) updateJob(id, { note: meta2.title, inputs: { url, from: from ?? null, to: to ?? null, title: meta2.title, site: meta2.site, uploader: meta2.uploader, duration: meta2.duration, thumbnail: meta2.thumbnail } });
+        else if (meta2.error === "BAD_URL" || meta2.error === "BAD_PROTOCOL") return meta2;
+        return hooks.fetcher.download({ url, from, to, onProgress: (p) => updateJob(id, { progress: Math.round(p.percent), note: p.note ? `${meta2.title || ""} · ${p.note}` : meta2.title }) });
+      })
+      .then((r) => {
+        if (!r.ok) return updateJob(id, { status: "failed", error: r.error, message: r.message, hint: r.hint });
+        updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "video", url: r.url, bytes: r.bytes, site: r.site, source: r.source } });
+      })
+      .catch((err) => updateJob(id, { status: "failed", error: "FETCH_FAILED", message: String(err?.message || err) }));
+
+    return { ok: true, id, queued: true, hint: "下载中；SSE 或 generation.status 看进度" };
+  },
+});
+
+// 复刻：一条链接 → 一个搭好的工程。
+//
+// 这个 Action 存在的理由，是「Agent 是主，工具是从」这句话要落到代码里。
+// 复刻一条片子要经手四样东西：下载器（yt-dlp）、视觉模型（读画面）、规划器（翻成 Action）、
+// 3D 运行时（建场）。如果让界面按顺序去点这四样，那就是工具在主导流程 ——
+// 换个下载器、换个视觉模型，界面就得跟着改，Agent 也没法自己跑这条链。
+//
+// 所以四样都收在 hooks 后面，这里只表达顺序和依赖。谁来下载、谁来看图、谁来规划，
+// 都是可替换的；缺哪一个就在那一步停下并说清楚，不装作做完了。
+// 人点按钮和 Agent 下指令走的是同一个入口，因为本来就该是同一件事。
+// 往对话里插一条消息。agent.js 的 say() 干的是同一件事，但 agent.js 依赖本文件，
+// 反向 import 会成环 —— 所以这里自己推，别为了复用一行代码把依赖绕成一个圈。
+function pushMessage(role, text, extra = {}) {
+  store.patch((d) => {
+    d.agent.messages.push({ id: `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, role, text, at: new Date().toISOString(), ...extra });
+    d.agent.messages = d.agent.messages.slice(-120);
+  });
+}
+
+register("reference.replicate", {
+  doc: "复刻一条参照：链接（或已有素材）→ 下载 → 读出拍摄参数 → 在 3D 里把场景和分镜搭出来。之后录白模、生成由导演决定",
+  params: { url: "string（视频页地址，和 ref 二选一）", ref: "string（已有素材 /media/x.mp4，和 url 二选一）", from: "number（起始秒）", to: "number（结束秒）", hint: "string（导演补充，比如「只复刻运镜，人物换成我的产品」）", build: "boolean（默认 true；false 就只读不建场）" },
+  undoable: false,
+  validate(p) {
+    if (!p.url && !p.ref) return { error: "MISSING_PARAM", missing: ["url|ref"], hint: "给一个链接，或者一个已经在 media 里的素材" };
+    return null;
+  },
+  handler({ url, ref, from, to, hint, build }, meta) {
+    const wantBuild = build !== false;
+    if (url && !hooks.fetcher?.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "贴链接要 yt-dlp（brew install yt-dlp）。也可以把视频直接拖进来。" };
+    if (!hooks.reference?.ready) return { ok: false, error: "READER_NOT_READY", hint: "读参照要网关密钥和 ffmpeg" };
+    if (wantBuild && !hooks.planner?.ready) return { ok: false, error: "PLANNER_NOT_READY", hint: "建场要规划器；没有的话用 build:false 只读参数" };
+
+    const id = uid("rep");
+    store.patch((d) => d.jobs.push({
+      id,
+      kind: "replicate",
+      shotId: null,
+      mode: "replicate",
+      provider: "director",
+      model: hooks.reference.model,
+      prompt: String(url || ref).slice(0, 300),
+      inputs: { url: url || null, ref: ref || null, from: from ?? null, to: to ?? null, hint: hint || null },
+      phases: [
+        ...(url ? [{ key: "fetch", label: "把链接下下来", state: "wait" }] : []),
+        { key: "read", label: "读出景别 / 机位 / 光位 / 运镜", state: "wait" },
+        ...(wantBuild ? [{ key: "build", label: "在 3D 里把场景和分镜搭出来", state: "wait" }] : []),
+      ],
+      status: "queued",
+      progress: 0,
+      result: null,
+      source: meta.source || "human",
+      createdAt: new Date().toISOString(),
+    }));
+
+    const phase = (key, state, note) => store.patch((d) => {
+      const j = d.jobs.find((x) => x.id === id);
+      const ph = j?.phases?.find((x) => x.key === key);
+      if (ph) Object.assign(ph, { state, note: note ?? ph.note });
+    });
+
+    (async () => {
+      let media = ref, span = { from, to };
+      if (url) {
+        phase("fetch", "run");
+        updateJob(id, { status: "running", progress: 5, note: "连接" });
+        const meta2 = await hooks.fetcher.probe(url);
+        if (meta2.ok) phase("fetch", "run", meta2.title);
+        // 指定了起止秒就只下那一段：实测同一条片子整段 59.9 MB / 15 s，8 秒那段 2.8 MB / 3 s。
+        // 之后想换一段重下一次就是了，比一开始就把整条片子拖下来划算得多。
+        const got = await hooks.fetcher.download({ url, from, to, onProgress: (p) => updateJob(id, { progress: 5 + Math.round(p.percent * 0.35), note: p.note }) });
+        if (!got.ok) { phase("fetch", "fail", got.hint || got.error); return updateJob(id, { status: "failed", error: got.error, message: got.message, hint: got.hint }); }
+        media = got.url;
+        phase("fetch", "done", `${(got.bytes / 1e6).toFixed(1)} MB · ${got.site}`);
+      }
+
+      phase("read", "run");
+      // 同一个参照、同一段，已经读过就别再读：一次 12k tokens、四十多秒。
+      // 导演在选项里回答「要复刻什么」时走的正是这条路，不该为此再付一次钱。
+      const had = D().project.reference;
+      const cached = had?.ref === media && had.analysis && (had.from ?? null) === (span.from ?? null) && (had.to ?? null) === (span.to ?? null) ? had : null;
+      let an;
+      if (cached) {
+        an = { ok: true, analysis: cached.analysis, model: cached.model, frames: cached.frames };
+        updateJob(id, { progress: 60, note: "参照已经读过，直接用" });
+      } else {
+        updateJob(id, { progress: 45, note: "抽帧读画面" });
+        // 下载时已经截过了，这里再按原片秒数截一次就截空了
+        if (url) span = { from: undefined, to: undefined };
+        an = await hooks.reference.analyze({ ref: media, from: span.from, to: span.to, count: 6, hint });
+      }
+      if (!an.ok) { phase("read", "fail", an.hint || an.error); return updateJob(id, { status: "failed", error: an.error, hint: an.hint }); }
+      const a = an.analysis;
+      const c = a.camera || {};
+      phase("read", "done", `${c.shotSize || ""} ${c.focalMm ? c.focalMm + "mm" : ""} · ${(a.subjects || []).length} 个主体`);
+      store.patch((d) => (d.project.reference = { at: new Date().toISOString(), ref: media, from: span.from ?? null, to: span.to ?? null, frames: an.frames, model: an.model, analysis: a }));
+
+      if (!wantBuild) return updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "analysis", ref: media, ...an } });
+
+      // 没说要复刻什么，就先问 —— 而且是读完之后再问，所以问得出具体的问题。
+      // 「你想要什么样的片子」是废话；「这条是 CU 24mm 手持推进，你要它的运镜还是它的光」
+      // 才是一个人能回答的问题。这一步是整条链里唯一该停下来的地方：
+      // 建场之后再改意图，前面那些 Action 就白跑了。
+      if (!hint) {
+        const c2 = a.camera || {}, m2 = a.motion || {};
+        const who = (a.subjects || []).map((x) => x.displayName).join("、") || "画面主体";
+        phase("build", "wait", "等你说要复刻哪一部分");
+        updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "analysis", ref: media, analysis: a, awaiting: "intent" } });
+        pushMessage("ask", `这条我看完了：${a.summary || a.brief || ""}`, {
+          ask: [{
+            question: `${c2.shotSize || "MS"} 景别、约 ${c2.focalMm ?? 40}mm、${m2.type || "static"} 运镜，主体是${who}。你想复刻它的哪一部分？`,
+            why: "复刻什么决定了下一步怎么建场：只要运镜就把主体换成你的，整条复刻就连场景一起搭。选错了得推倒重来。",
+            options: [
+              { label: "运镜和构图照搬，主体换成我的", detail: "机位、焦段、运动轨迹、景别都跟它走，场里放你的产品或角色。想复刻「那个感觉」基本都是这个。", recommended: true, next: { action: "reference.replicate", payload: { ref: media, hint: "照搬机位、焦段、运动轨迹和景别；主体换成导演自己的产品或角色，场景保持同类但不必一模一样" } } },
+              { label: "整条都复刻，包括主体和场景", detail: "连人带景一起搭成它那样。用来学它怎么拍的。", next: { action: "reference.replicate", payload: { ref: media, hint: "整条复刻：主体、场景、光位、运镜都按参照搭出来" } } },
+              { label: "只要打光和色调", detail: "光位、明暗比、色温照搬，机位和主体你自己定。", next: { action: "reference.replicate", payload: { ref: media, hint: "只复刻光位、明暗比和色温；机位、景别、主体由导演另定，先给一个中性机位" } } },
+              { label: "只要节奏，镜头我自己来", detail: "按它的拍子分镜，每拍多长、什么时候切跟它一样，画面内容全换。", next: { action: "reference.replicate", payload: { ref: media, hint: "只复刻节奏：按参照的拍子分镜，每一拍的时长和切点跟它一致，画面内容全部换成导演自己的" } } },
+            ],
+          }],
+          notes: [`参照已经下到本地：${media}`, "选完我直接建场，不用再贴一次链接。想补充细节（比如「主体是一罐冷萃咖啡」）就直接打字说。"],
+        });
+        return;
+      }
+
+      phase("build", "run");
+      updateJob(id, { progress: 70, note: "建场" });
+      const brief = referenceBrief(a, hint);
+      const built = await hooks.planner.build(brief, { source: meta.source || "human", actorId: meta.actorId });
+      const shots = D().shots.length;
+      if (!shots) {
+        const saidOnly = built?.ok && !(built.plan || []).length;
+        phase("build", "fail", saidOnly ? "规划器只回了文字，没有建场" : built?.error || "没能建出镜头");
+        return updateJob(id, {
+          status: "failed",
+          error: saidOnly ? "BUILD_SAID_NOTHING_DONE" : "BUILD_EMPTY",
+          message: (built?.reply || "").slice(0, 300),
+          hint: saidOnly ? `规划器（${built.backend}）回了一句「${(built.reply || "").slice(0, 40)}…」但一步没执行。再说一次"照着参照把场建出来"通常就好了，或者在 Agent 面板换一个规划模型。` : "换个参照，或者补一句说明这条片子想拍什么",
+        });
+      }
+      phase("build", "done", `${shots} 个镜头`);
+      updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "replicate", ref: media, analysis: a, shots, brief } });
+    })().catch((err) => updateJob(id, { status: "failed", error: "REPLICATE_FAILED", message: String(err?.message || err) }));
+
+    return { ok: true, id, queued: true, hint: "复刻中：下载 → 读参照 → 建场。建完录白模就能看到一条能播的片子。" };
+  },
+});
+
+// 结构化分析 → 一段规划器能吃的导演口述。规划器读的是镜头语言，不是 JSON。
+export function referenceBrief(a, hint) {
+  const c = a.camera || {}, l = a.lighting || {}, s = a.scene || {}, m = a.motion || {};
+  const subs = (a.subjects || []).map((x) => `${x.displayName}（${x.semanticType}${x.look ? "，" + x.look : ""}${x.screenPosition ? "，在" + x.screenPosition : ""}）`).join("；");
+  const beats = (a.beats || []).length ? `\n按拍拆分：${a.beats.map((b, i) => `${i + 1}) ${b.seconds}s ${b.text}`).join("；")}` : "";
+  return [
+    "现在把下面这条镜头建进工程：scene.create 定场、entity.create 建主体、camera.create 建机位、shot.create 建镜头。只回文字不建工程是错的。",
+    `要复刻的参照镜头：${a.brief || a.summary || ""}`,
+    s.name || s.setting ? `场景：${s.name || ""}${s.setting ? "，" + s.setting : ""}${s.timeOfDay ? "，" + s.timeOfDay : ""}${s.palette ? "，主色调" + s.palette : ""}。` : "",
+    subs ? `画面里的主体：${subs}。把它们建成语义代理体并按描述摆位。` : "",
+    `机位：${c.shotSize || "MS"} 景别，${c.angle || "eye"} 视角，机位高度约 ${c.heightMeters ?? 1.5} 米，焦段约 ${c.focalMm ?? 40}mm，光圈 f/${c.aperture ?? 2.8}。${c.framing ? "构图：" + c.framing + "。" : ""}`,
+    `灯光：主光${l.keyDirection || "正面"}，${l.ratio || "柔和"}，${l.colorTemp || "中性"}。${(l.practicals || []).length ? "画面内光源：" + l.practicals.join("、") + "。" : ""}`,
+    `运镜：${m.type || "static"}${m.description ? "，" + m.description : ""}${m.speed ? "，" + m.speed : ""}。`,
+    beats,
+    hint ? `导演另外要求：${hint}` : "",
+    "建成一个镜头就行，时长按上面的拍数合计；画幅 16:9。",
+  ].filter(Boolean).join("\n");
+}
+
 register("reference.result", {
   doc: "读回最近一次（或指定任务）的参照分析",
   params: { id: "string" },
@@ -1745,7 +1963,7 @@ register("generation.prompt", {
 
 register("generation.submit", {
   doc: `提交生成任务。mode: ${Object.keys(GEN_MODES).join("/")}；provider: ${Object.keys(PROVIDERS).join("/")}；v2v 自动使用圈选 Take 的白模视频`,
-  params: { shotId: "string", mode: "t2i|i2i|t2v|i2v|v2v", provider: "providerId", prompt: "string (override)", lang: "en|zh" },
+  params: { shotId: "string", mode: "t2i|i2i|t2v|i2v|v2v", provider: "providerId", prompt: "string (override)", lang: "en|zh", reference: "take|origin（v2v 拿谁当参考视频：白模 Take，还是复刻的原片。默认 take）" },
   validate: ({ mode = "t2v", provider = "seedance-2" }) => {
     if (!PROVIDERS[provider]) return { error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) };
     if (!PROVIDERS[provider].modes.includes(mode)) return { error: "MODE_NOT_SUPPORTED", provider, supported: PROVIDERS[provider].modes };
@@ -1754,7 +1972,7 @@ register("generation.submit", {
     if (ready && !ready.ok) return { error: ready.error || "MODE_NOT_READY", hint: ready.hint };
     return null;
   },
-  handler({ shotId, mode = "t2v", provider = "seedance-2", prompt, lang = "en" }, meta) {
+  handler({ shotId, mode = "t2v", provider = "seedance-2", prompt, lang = "en", reference = "take" }, meta) {
     const d0 = D();
     const sid = shotId || d0.project.currentShotId;
     let s = d0.shots.find((x) => x.id === sid);
@@ -1783,7 +2001,9 @@ register("generation.submit", {
       aspect: d0.project.aspect,
       // reference inputs for adapters: storyboard keyframe / take thumbnail (i2v, i2i), take proxy video (v2v),
       // and the approved reference assets of the entities in this shot (identity / product consistency)
-      inputs: { image: card?.keyframes?.[0] || take?.thumbnail || null, video: take?.videoUrl || null, references: referencesForShot(d0, s) },
+      // reference "origin"：拿原片当参考视频，跳过白模直接照着它的运动生成。
+      // 快，但运镜是原片的、不是导演调过的 —— 想改机位就得回到白模那条路。
+      inputs: { image: card?.keyframes?.[0] || take?.thumbnail || null, video: (reference === "origin" ? d0.project.reference?.ref : null) || take?.videoUrl || null, videoFrom: reference === "origin" && d0.project.reference?.ref ? "origin" : "take", references: referencesForShot(d0, s) },
       status: "queued",
       progress: 0,
       result: null,
@@ -2168,6 +2388,7 @@ export function summarize(d = D()) {
   return {
     runtime: RUNTIME_VERSION,
     project: { id: d.project.id, name: d.project.name, fps: d.project.fps, aspect: d.project.aspect, version: d.project.version, state: d.project.currentState, fidelity: d.project.fidelity, buildMode: d.project.buildMode || "set", playhead: d.project.playhead, timecode: tc(d.project.playhead, d.project.fps) },
+    reference: d.project.reference ? { ref: d.project.reference.ref, from: d.project.reference.from, to: d.project.reference.to, summary: d.project.reference.analysis?.summary, shotSize: d.project.reference.analysis?.camera?.shotSize, motion: d.project.reference.analysis?.motion?.type, subjects: (d.project.reference.analysis?.subjects || []).map((x) => x.displayName) } : null,
     assets,
     scene: { id: d.scene.id, name: d.scene.name, environment: d.scene.environment },
     programCamera: d.project.programCameraId,

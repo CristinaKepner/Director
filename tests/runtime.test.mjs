@@ -590,3 +590,26 @@ test("export / load roundtrip", () => {
   assert.equal(store.get().shots.length, 3);
   assert.equal(store.get().scene.name, "城市边缘");
 });
+
+// 规划器建场时常常 scene.create{clear} 开一张白纸 —— 而它很可能正是被 reference.replicate
+// 叫起来的。一刀切清空会把那个还在跑的编排任务连同进度一起抹掉，外面只看到「任务凭空消失」，
+// 分不清成了还是废了。跑完的、属于旧镜头的任务可以清，在跑的不行。
+test("scene.create clear 不能删掉还在跑的任务", () => {
+  dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
+  const shotId = store.get().shots[0].id;
+  store.patch((d) => {
+    d.jobs.push({ id: "job_running", kind: "replicate", shotId: null, status: "running", progress: 40, createdAt: new Date().toISOString() });
+    d.jobs.push({ id: "job_done_orchestration", kind: "replicate", shotId: null, status: "done", progress: 100, createdAt: new Date().toISOString() });
+    d.jobs.push({ id: "job_done_shot", kind: "generation", shotId, status: "done", progress: 100, createdAt: new Date().toISOString() });
+    d.jobs.push({ id: "job_queued_shot", kind: "generation", shotId, status: "queued", progress: 0, createdAt: new Date().toISOString() });
+  });
+
+  const r = dispatch("scene.create", { name: "白纸", clear: true }, { source: "agent" });
+  assert.equal(r.ok, true);
+  const ids = store.get().jobs.map((j) => j.id);
+  assert.ok(ids.includes("job_running"), "在跑的编排任务不能删 —— 删了它自己就没法汇报结果");
+  assert.ok(ids.includes("job_queued_shot"), "排队中的生成任务不能删：删了也不会停，只是结果无处可归");
+  assert.ok(ids.includes("job_done_orchestration"), "不属于任何镜头的任务不随镜头一起清");
+  assert.ok(!ids.includes("job_done_shot"), "已经结束、且属于被清掉那些镜头的任务才该清");
+  assert.equal(store.get().shots.length, 0, "镜头确实清干净了");
+});

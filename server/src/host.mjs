@@ -7,6 +7,7 @@ import * as R from "../../core/index.js";
 import { createFilmAssembler } from "./film.mjs";
 import { createJudge } from "./adapters/judge.mjs";
 import { createReferenceReader } from "./adapters/reference.mjs";
+import { createFetcher } from "./fetch.mjs";
 
 const { store, dispatch, persistable, loadProjectData, capabilities, historyInfo, RUNTIME_VERSION } = R;
 
@@ -67,6 +68,11 @@ export function createHost(opts = {}) {
     log(`reference reader: ${reference.model}`);
   }
 
+  // ---- 进料口：链接 → 本地素材。复刻一条片子的第一步 ----
+  const fetcher = createFetcher({ ytdlp: opts.ytdlp, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
+  R.setHooks({ fetcher });
+  log(fetcher.ready ? `link fetcher: yt-dlp (${fetcher.bin})` : "link fetcher: yt-dlp NOT FOUND — reference.fetch 会提示安装（brew install yt-dlp）");
+
   // ---- LLM planner (Agent Director backend) ----
   let planner = null;
   if (typeof opts.llm === "function") {
@@ -75,6 +81,16 @@ export function createHost(opts = {}) {
       log(`llm planner: ${planner.name} @ ${planner.baseUrl} default ${planner.model} (${(planner.models || []).join(", ")})`);
       store.patch((x) => (x.agent.backend = planner.model));
       store.light((x) => (x.health.llm = planner.model));
+      // 规划器也是一个可替换的能力：reference.replicate 这类要「先理解再建场」的 Action
+      // 通过这个 hook 去用它，而不是让界面按顺序去点。换掉 planner，那条链照样成立。
+      R.setHooks({
+        planner: {
+          name: planner.name,
+          ready: true,
+          model: planner.model,
+          build: (brief, meta = {}) => runAgentLlm({ text: brief, mode: "lead", force: true }, normalizeMeta(meta, { source: "agent", actorId: "replicate" })),
+        },
+      });
     }
   }
 

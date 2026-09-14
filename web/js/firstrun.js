@@ -54,6 +54,12 @@ function render() {
         <div class="fr-drop-in"><b>把图片或视频拖到这里</b><span>也可以点一下选文件 · 视频能只取其中几秒</span></div>
       </div>
 
+      <div class="fr-link">
+        <input id="frUrl" type="url" placeholder="或者贴一条视频链接：抖音 / B站 / YouTube / 小红书…" spellcheck="false">
+        <button id="frUrlGo">复刻这条</button>
+      </div>
+      <div class="fr-note fr-linknote">刷到一条想拍成那样的片子，说不清楚也没关系 —— 把链接贴过来。我下下来、读出它的景别机位光位和运镜，在 3D 里搭成你的场景，主体换成你的。</div>
+
       <details class="fr-alt">
         <summary>或者用一句话描述（想得出来的话）</summary>
         <textarea id="frInput" rows="2" placeholder="比如：一条 15 秒的咖啡品牌短片，晨光里的一杯手冲…"></textarea>
@@ -78,6 +84,15 @@ function render() {
     const f = ev.dataTransfer?.files?.[0];
     if (f) accept(f);
   };
+
+  const url = $("frUrl");
+  $("frUrlGo").onclick = () => startFromLink(url.value.trim());
+  url.onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); startFromLink(url.value.trim()); } };
+  // 从浏览器地址栏直接拖一个链接过来也认
+  el.addEventListener("drop", (ev) => {
+    const t = ev.dataTransfer?.getData("text/uri-list") || ev.dataTransfer?.getData("text/plain");
+    if (!ev.dataTransfer?.files?.length && t && /^https?:\/\//i.test(t.trim())) { ev.preventDefault(); url.value = t.trim(); startFromLink(t.trim()); }
+  }, true);
 
   el.querySelectorAll("[data-ex]").forEach((b) => (b.onclick = () => { $("frInput").value = EXAMPLES[b.dataset.ex]; $("frInput").focus(); }));
   $("frSkip").onclick = () => { markSeen(); close(); };
@@ -172,6 +187,41 @@ async function startFromRef() {
   await build(briefFrom(a), set);
 }
 
+// 贴链接 → 一个搭好的工程。
+// 页面这里刻意不再按顺序去点「下载 / 读参照 / 建场」：那三步是一个能力（reference.replicate），
+// Agent 下一句"复刻这条"走的是同一个入口。界面只负责把进度显示出来。
+async function startFromLink(link) {
+  if (!link) return toast("先贴一条链接", true);
+  if (!client.base) return toast("要连上后端才能下链接", true);
+  markSeen();
+  const plan = [
+    { key: "fetch", label: "把链接下下来", state: "run", note: "" },
+    { key: "read", label: "读出景别 / 机位 / 光位 / 运镜", state: "wait", note: "" },
+    { key: "build", label: "在 3D 里把场景和分镜搭出来", state: "wait", note: "" },
+    { key: "blockout", label: "逐镜跑白模预演", state: "wait", note: "" },
+    { key: "film", label: "拼成一条能播的片子", state: "wait", note: "" },
+  ];
+  const set = (k, patch) => { const p = plan.find((x) => x.key === k); if (p) Object.assign(p, patch); steps(plan); };
+  steps(plan);
+  disable(true);
+
+  const r = await dispatch("reference.replicate", { url: link });
+  if (!r?.ok) { set("fetch", { state: "fail", note: r?.hint || r?.error || "这条链接下不了" }); return disable(false); }
+
+  // 后端那三步的进度直接来自 job.phases，不在这里重算
+  const job = await waitJob(r.id, 20 * 60 * 1000, (j) => {
+    for (const ph of j.phases || []) set(ph.key, { state: ph.state === "run" ? "run" : ph.state === "done" ? "done" : ph.state === "fail" ? "fail" : "wait", note: ph.note || (ph.state === "run" ? `${j.progress || 0}%` : "") });
+  });
+  if (job?.status !== "done") {
+    const bad = (job?.phases || []).find((p) => p.state === "fail");
+    set(bad?.key || "fetch", { state: "fail", note: job?.hint || bad?.note || job?.error || "复刻失败" });
+    return disable(false);
+  }
+  for (const ph of job.phases || []) set(ph.key, { state: "done", note: ph.note || "" });
+
+  await shoot(set);
+}
+
 async function startFromText(text) {
   if (!text) return toast("先说一句，或者拖个参照进来", true);
   markSeen();
@@ -210,6 +260,11 @@ async function build(brief, set) {
   const secs = shots.reduce((n, s) => n + (s.range.outFrame - s.range.inFrame), 0) / store.get().project.fps;
   set("build", { state: "done", note: `${shots.length} 个镜头 · 共 ${Math.round(secs)} 秒` });
 
+  await shoot(set);
+}
+
+// 白模只能在页面里跑：录的是真的在出帧的 Program 画面。这一步不在后端，也不该假装在。
+async function shoot(set) {
   set("blockout", { state: "run", note: "" });
   const bo = await runBlockout({ onProgress: (p) => p.phase === "record" && set("blockout", { state: "run", note: `第 ${p.index}/${p.total} 镜 · ${p.title}` }) });
   if (!bo.ok) { set("blockout", { state: "fail", note: bo.hint || bo.error || "录制没成功" }); return disable(false); }
