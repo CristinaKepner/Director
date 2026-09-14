@@ -69,9 +69,9 @@ export function createHost(opts = {}) {
   }
 
   // ---- 进料口：链接 → 本地素材。复刻一条片子的第一步 ----
-  const fetcher = createFetcher({ ytdlp: opts.ytdlp, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
+  const fetcher = createFetcher({ ytdlp: opts.ytdlp, ffmpeg: film.bin, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
   R.setHooks({ fetcher });
-  log(fetcher.ready ? `link fetcher: yt-dlp (${fetcher.bin})` : "link fetcher: yt-dlp NOT FOUND — reference.fetch 会提示安装（brew install yt-dlp）");
+  log(fetcher.ready ? `link fetcher: yt-dlp (${fetcher.bin})${fetcher.ffmpeg ? ` + ffmpeg ${fetcher.ffmpeg}` : " · 没找到 ffmpeg，合流会失败"}` : "link fetcher: yt-dlp NOT FOUND — reference.fetch 会提示安装（brew install yt-dlp）");
 
   // ---- LLM planner (Agent Director backend) ----
   let planner = null;

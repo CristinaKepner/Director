@@ -98,7 +98,12 @@ export function createFetcher(opts = {}) {
   const log = opts.log || (() => {});
   const maxSeconds = opts.maxSeconds ?? 600;
   const maxBytes = opts.maxBytes ?? 600 * 1024 * 1024;
-  const COMMON = ["--no-playlist", "--no-warnings", "--no-progress", "--socket-timeout", "20", "--retries", "3"];
+  // yt-dlp 合流和转码都要 ffmpeg，而它是在 PATH 里找的。打包后的 app 继承的是 launchd 的
+  // PATH（/usr/bin:/bin:/usr/sbin:/sbin），没有 /opt/homebrew/bin —— 于是装了 ffmpeg 的机器
+  // 也会报「合流需要 ffmpeg」。宿主本来就知道 ffmpeg 在哪（成片拼接用的是同一个），直接告诉它。
+  const ffmpeg = opts.ffmpeg || null;
+  const COMMON = ["--no-playlist", "--no-warnings", "--no-progress", "--socket-timeout", "20", "--retries", "3",
+    ...(ffmpeg ? ["--ffmpeg-location", ffmpeg] : [])];
 
   function pick(stem) {
     const hits = fs.readdirSync(mediaDir).filter((f) => f.startsWith(stem + "."));
@@ -111,6 +116,7 @@ export function createFetcher(opts = {}) {
     name: "yt-dlp",
     ready: !!bin && !!mediaDir,
     bin,
+    ffmpeg,
 
     /** 先看看这是什么：标题、时长、封面。不下载，几秒就回。 */
     async probe(rawUrl) {
