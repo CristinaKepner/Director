@@ -52,7 +52,7 @@ export const CARD_STATUSES = ["empty", "blocked", "prompted", "generated", "appr
 const registry = new Map();
 const idempotency = new Map();
 let batchDepth = 0;
-const hooks = { recorder: null, generation: null, capture: null, film: null, judge: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
+const hooks = { recorder: null, generation: null, capture: null, film: null, judge: null, reference: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
 
 // Host integrations (browser recorder, generation adapters). Absent in the CLI: actions degrade gracefully.
 export function setHooks(h) {
@@ -317,7 +317,7 @@ register("project.set-aspect", {
 register("project.set-style", { doc: "设置生成风格描述（进入提示词）", params: { style: "string (en)", styleZh: "string (zh)" }, handler: ({ style, styleZh }) => store.patch((d) => { if (style !== undefined) d.project.style = style; if (styleZh !== undefined) d.project.styleZh = styleZh; }) });
 register("project.set-shading", { doc: "视口着色 shaded/clay/wire", params: { mode: "shaded|clay|wire" }, required: ["mode"], undoable: false, handler: ({ mode }) => store.patch((d) => (d.project.shading = mode)) });
 register("project.set-build-mode", { doc: "构建模式：set 布景 / blocking 调度", params: { mode: "set|blocking" }, required: ["mode"], undoable: false, handler: ({ mode }) => store.patch((d) => (d.project.buildMode = mode)) });
-register("project.set-view", { doc: "视口：free 自由观察 / program 拍摄机", params: { mode: "free|program" }, required: ["mode"], undoable: false, handler: ({ mode }) => store.patch((d) => (d.project.viewMode = mode)) });
+register("project.set-view", { doc: "视口：free 自由观察 / program 拍摄机 / compare 白模与生成左右对照", params: { mode: "free|program|compare" }, required: ["mode"], undoable: false, handler: ({ mode }) => store.patch((d) => (d.project.viewMode = mode)) });
 register("project.set-gizmo", { doc: "Gizmo 模式", params: { mode: "translate|rotate|scale" }, required: ["mode"], undoable: false, handler: ({ mode }) => store.patch((d) => (d.project.gizmoMode = mode)) });
 register("project.select", {
   doc: "在导演台中选中/定位对象",
@@ -1566,6 +1566,65 @@ register("asset.delete", {
   },
 });
 
+// 参照入口：一张图 / 一段视频 → 结构化拍摄参数 + 一句可以直接建场的 brief。
+// 这是给"想不出那句话"的人准备的入口 —— 他们手里有图，图里有最难说清的东西。
+register("reference.analyze", {
+  doc: "读一张参考图或一段参考视频（可指定起止秒数），得到景别/机位/光位/主体/运镜的结构化描述，以及一句可直接建场的 brief",
+  params: { ref: "string（/media/x.jpg、/media/x.mp4 或绝对路径）", from: "number（视频起始秒）", to: "number（视频结束秒）", count: "number（取几帧，默认 6）", hint: "string（导演补充，比如「只看人物不看背景」）" },
+  required: ["ref"],
+  undoable: false,
+  handler({ ref, from, to, count, hint }, meta) {
+    if (!hooks.reference) return { ok: false, error: "NO_READER", hint: "读参照在后端做；连上后端再试" };
+    if (!hooks.reference.ready) return { ok: false, error: "READER_NOT_READY", hint: "需要网关密钥（--llm-key-file）和 ffmpeg" };
+    const id = uid("ref");
+    const job = {
+      id,
+      kind: "reference-read",
+      shotId: null,
+      mode: "analyze",
+      provider: "reference",
+      model: hooks.reference.model,
+      prompt: String(ref),
+      inputs: { ref, from: from ?? null, to: to ?? null },
+      status: "queued",
+      progress: 0,
+      result: null,
+      source: meta.source || "human",
+      createdAt: new Date().toISOString(),
+    };
+    store.patch((d) => d.jobs.push(job));
+
+    Promise.resolve()
+      .then(() => {
+        updateJob(id, { status: "running", progress: 25, note: "抽帧" });
+        return hooks.reference.analyze({ ref, from, to, count, hint });
+      })
+      .then((r) => {
+        if (!r.ok) return updateJob(id, { status: "failed", error: r.error, hint: r.hint });
+        updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "analysis", ...r } });
+        // 最近一次读到的参照挂在工程上：建场时 planner 要用它
+        store.patch((d) => (d.project.reference = { at: new Date().toISOString(), ref, from: from ?? null, to: to ?? null, frames: r.frames, model: r.model, analysis: r.analysis }));
+      })
+      .catch((err) => updateJob(id, { status: "failed", error: "READ_FAILED", message: String(err?.message || err) }));
+
+    return { ok: true, id, queued: true, hint: "读参照中；reference.result 或 SSE 看结果" };
+  },
+});
+
+register("reference.result", {
+  doc: "读回最近一次（或指定任务）的参照分析",
+  params: { id: "string" },
+  undoable: false,
+  handler({ id }) {
+    const d = D();
+    if (id) {
+      const j = d.jobs.find((x) => x.id === id);
+      return j ? { ok: true, status: j.status, data: j.result || null, error: j.error } : { ok: false, error: "NOT_FOUND" };
+    }
+    return { ok: true, data: d.project.reference || null };
+  },
+});
+
 register("context.character", {
   doc: "角色卡：一个角色（或产品）的身份字段、按用途分组的参考资产、以及它出现在哪些镜头",
   params: { id: "string (entityId；不传就列出全部角色)" },
@@ -1687,7 +1746,14 @@ register("generation.prompt", {
 register("generation.submit", {
   doc: `提交生成任务。mode: ${Object.keys(GEN_MODES).join("/")}；provider: ${Object.keys(PROVIDERS).join("/")}；v2v 自动使用圈选 Take 的白模视频`,
   params: { shotId: "string", mode: "t2i|i2i|t2v|i2v|v2v", provider: "providerId", prompt: "string (override)", lang: "en|zh" },
-  validate: ({ mode = "t2v", provider = "seedance-2" }) => (!PROVIDERS[provider] ? { error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) } : !PROVIDERS[provider].modes.includes(mode) ? { error: "MODE_NOT_SUPPORTED", provider, supported: PROVIDERS[provider].modes } : null),
+  validate: ({ mode = "t2v", provider = "seedance-2" }) => {
+    if (!PROVIDERS[provider]) return { error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) };
+    if (!PROVIDERS[provider].modes.includes(mode)) return { error: "MODE_NOT_SUPPORTED", provider, supported: PROVIDERS[provider].modes };
+    // 供应商说这个模式现在做不了，就别把用户的点击变成一个注定失败的排队任务
+    const ready = hooks.generation?.modeReady?.(mode, provider);
+    if (ready && !ready.ok) return { error: ready.error || "MODE_NOT_READY", hint: ready.hint };
+    return null;
+  },
   handler({ shotId, mode = "t2v", provider = "seedance-2", prompt, lang = "en" }, meta) {
     const d0 = D();
     const sid = shotId || d0.project.currentShotId;

@@ -121,6 +121,68 @@ export async function renderShots(opts = {}) {
   };
 }
 
+/**
+ * 改完只重做这一镜 —— 对照那一屏的闭环。
+ *
+ * 顺序是有讲究的：先重录白模。导演刚才在 3D 里改的是机位 / 走位 / 光，
+ * 不重录的话左边还是旧构图，右边却按新构图出，对照就骗人了。
+ * 白模重录完再抓关键帧、重编译提示词，最后才花钱生成这一镜。
+ *
+ * @param opts { shotId, provider, mode, reblock = true, verify = true, onProgress }
+ */
+export async function regenerateShot(opts = {}) {
+  const onProgress = opts.onProgress || (() => {});
+  const d0 = D();
+  const shot = d0.shots.find((s) => s.id === (opts.shotId || d0.project.currentShotId));
+  if (!shot) return { ok: false, error: "NO_SHOT" };
+  const provider = opts.provider || "seedance-2.5";
+
+  // 旧版留着做对照与验收的基准
+  const prev = d0.jobs.filter((j) => j.shotId === shot.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url)).at(-1) || null;
+
+  if (opts.reblock !== false) {
+    onProgress({ phase: "blockout", label: "重录白模，让左边反映你刚才的改动" });
+    const bo = await runBlockout({ shotIds: [shot.id], onProgress: () => {} });
+    if (!bo.ok) return { ok: false, error: bo.error || "REBLOCK_FAILED", hint: bo.hint, stage: "blockout" };
+  }
+
+  onProgress({ phase: "prompt", label: "按改动后的镜头重编译提示词" });
+  await dispatch("generation.prompt", { shotId: shot.id, mode: "video" });
+
+  const card = D().storyboard.find((c) => c.shotId === shot.id);
+  const mode = opts.mode && opts.mode !== "auto" ? opts.mode : card?.keyframes?.[0] ? "i2v" : "t2v";
+  onProgress({ phase: "submit", label: `用 ${provider} 重新生成这一镜（${mode}）` });
+  const sub = await dispatch("generation.submit", { shotId: shot.id, mode, provider });
+  if (!sub?.ok) return { ok: false, error: sub?.error || "SUBMIT_FAILED", hint: sub?.hint, stage: "submit" };
+
+  const job = await waitFor(() => {
+    const j = D().jobs.find((x) => x.id === sub.id);
+    if (j) onProgress({ phase: "generate", label: `生成中 ${j.progress || 0}%`, progress: j.progress });
+    return j && ["done", "failed", "cancelled"].includes(j.status) ? j : null;
+  }, { timeout: opts.timeout || 30 * 60 * 1000, every: 3000 });
+
+  if (job?.status !== "done" || !job.result?.url) {
+    return { ok: false, error: job?.error || "GENERATE_FAILED", message: job?.message, hint: job?.hint, stage: "generate", jobId: sub.id };
+  }
+
+  // 验收：新旧两版逐项比对。这一步才是"人没变"的证据，而不是一句承诺。
+  let verdict = null;
+  if (opts.verify !== false && prev) {
+    onProgress({ phase: "verify", label: "对比新旧两版：要改的改了没有，锁住的有没有漂" });
+    const v = await dispatch("review.verify", { shotId: shot.id, jobId: sub.id, against: prev.id, request: opts.request || "" });
+    if (v?.ok) {
+      const vj = await waitFor(() => {
+        const j = D().jobs.find((x) => x.id === v.id);
+        return j && ["done", "failed"].includes(j.status) ? j : null;
+      }, { timeout: 8 * 60 * 1000, every: 2500 });
+      verdict = vj?.status === "done" ? vj.result : null;
+    }
+  }
+
+  onProgress({ phase: "done", label: "好了" });
+  return { ok: true, shotId: shot.id, jobId: sub.id, url: job.result.url, mode, previous: prev ? { id: prev.id, url: prev.result.url } : null, verdict };
+}
+
 /** 后端 ffmpeg 拼片。source: auto | blockout | generated */
 export async function exportFilm(opts = {}) {
   const onProgress = opts.onProgress || (() => {});
@@ -149,4 +211,4 @@ export async function runPipeline(opts = {}) {
   return steps;
 }
 
-export const film = { runBlockout, renderShots, exportFilm, runPipeline };
+export const film = { runBlockout, renderShots, exportFilm, runPipeline, regenerateShot };

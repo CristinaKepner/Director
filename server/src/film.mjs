@@ -31,6 +31,16 @@ function isExe(p) {
   }
 }
 
+function probeDuration(ffprobe, file) {
+  return new Promise((resolve) => {
+    const c = spawn(ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file], { stdio: ["ignore", "pipe", "ignore"] });
+    let o = "";
+    c.stdout.on("data", (b) => (o += b));
+    c.on("exit", () => resolve(Number(o.trim()) || 0));
+    c.on("error", () => resolve(0));
+  });
+}
+
 function run(bin, args, { onLine } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -90,6 +100,66 @@ export function createFilmAssembler(opts = {}) {
     ready: !!bin,
     bin,
 
+    // 参考素材要读的是"这段里发生了什么"，所以按时间均匀取若干帧交给多模态模型。
+    // 图片直接读原文件；视频按 from–to 区间取样，并把每帧的时间戳一起给出去 ——
+    // 没有时间戳，模型分不清这是推近还是横移。
+    async frames(ref, { count = 6, from = 0, to = null, width = 768 } = {}) {
+      if (!bin) return [];
+      const work = fs.mkdtempSync(path.join(os.tmpdir(), "director-frames-"));
+      try {
+        const file = await localize({ url: ref }, work, 0);
+        if (!file) return [];
+        const asData = (p2) => `data:image/jpeg;base64,${fs.readFileSync(p2).toString("base64")}`;
+        if (/\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(file)) {
+          const out = path.join(work, "still.jpg");
+          await run(bin, ["-y", "-i", file, "-vf", `scale=${width}:-2`, "-frames:v", "1", out]);
+          return [{ t: 0, data: asData(out) }];
+        }
+        const dur = await probeDuration(path.join(path.dirname(bin), "ffprobe"), file);
+        const a = Math.max(0, Number(from) || 0);
+        const b = Math.min(to == null ? dur : Number(to), dur || Number(to) || 0) || dur;
+        const span = Math.max(0.01, b - a);
+        const out = [];
+        for (let i = 0; i < count; i++) {
+          const t = a + (span * (i + 0.5)) / count; // 取每段的中点，避开首尾的黑场与压缩伪影
+          const jpg = path.join(work, `f_${i}.jpg`);
+          try {
+            await run(bin, ["-y", "-ss", String(t), "-i", file, "-frames:v", "1", "-vf", `scale=${width}:-2`, "-q:v", "3", jpg]);
+            out.push({ t: Math.round(t * 100) / 100, data: asData(jpg) });
+          } catch (err) {
+            log(`frames: ${path.basename(file)} @${t.toFixed(2)}s 抽帧失败 ${err.message}`);
+          }
+        }
+        return out;
+      } finally {
+        fs.rmSync(work, { recursive: true, force: true });
+      }
+    },
+
+    // 实测：Ark 的 reference_video 不收 WebM（任务能创建，抓取时才 Bad Request）。
+    // 白模 Take 是 MediaRecorder 出的 webm，所以交给供应商之前要先转成 mp4。
+    // 转完留在媒体目录里，同一段只转一次。
+    async toMp4(ref) {
+      const m = String(ref || "").match(/\/media\/([^/?#]+)/);
+      const name = m ? path.basename(decodeURIComponent(m[1])) : path.basename(String(ref || ""));
+      if (!name) return null;
+      if (/\.mp4$/i.test(name)) return `/media/${name}`;
+      if (!bin) return null;
+      const src = path.join(mediaDir, name);
+      if (!fs.existsSync(src)) return null;
+      const outName = `${name.replace(/\.[^.]+$/, "")}_mp4.mp4`;
+      const out = path.join(mediaDir, outName);
+      if (fs.existsSync(out) && fs.statSync(out).size > 0) return mediaUrl(outName);
+      try {
+        await run(bin, ["-y", "-i", src, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]);
+        log(`ref → mp4: ${name} → ${outName}`);
+        return mediaUrl(outName);
+      } catch (err) {
+        log(`toMp4 failed: ${err.message}`);
+        return null;
+      }
+    },
+
     // 分段续拍要用上一段的最后一帧当下一段的首帧。取倒数第二帧而不是最后一帧：
     // 很多编码器的末帧会有压缩伪影，拿它当首帧会把瑕疵带进下一段。
     async lastFrame(ref, { beforeEnd = 0.08 } = {}) {
@@ -98,12 +168,7 @@ export function createFilmAssembler(opts = {}) {
       try {
         const file = await localize({ url: ref }, work, 0);
         if (!file) return null;
-        const dur = await new Promise((resolve) => {
-          const c = spawn(path.join(path.dirname(bin), "ffprobe"), ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file], { stdio: ["ignore", "pipe", "ignore"] });
-          let o = ""; c.stdout.on("data", (b) => (o += b));
-          c.on("exit", () => resolve(Number(o.trim()) || 0));
-          c.on("error", () => resolve(0));
-        });
+        const dur = await probeDuration(path.join(path.dirname(bin), "ffprobe"), file);
         const at = Math.max(0, dur - beforeEnd);
         const jpg = path.join(work, "tail.jpg");
         await run(bin, ["-y", "-ss", String(at), "-i", file, "-frames:v", "1", "-q:v", "2", jpg]);

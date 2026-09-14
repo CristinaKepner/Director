@@ -80,15 +80,19 @@ function readJson(p) {
   try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; }
 }
 
-function freePort() {
-  return new Promise((resolve, reject) => {
+function freePort(preferred) {
+  const tryPort = (p) => new Promise((resolve) => {
     const s = net.createServer();
-    s.on("error", reject);
-    s.listen(0, "127.0.0.1", () => {
+    s.on("error", () => resolve(null));
+    s.listen(p, "127.0.0.1", () => {
       const { port } = s.address();
       s.close(() => resolve(port));
     });
   });
+  // 端口要稳：页面的 localStorage 是按 origin（含端口）存的，端口每次变
+  // 等于每次换一个域 —— 引导看过没有、界面偏好、单机模式的工程副本，全都留不住。
+  // 所以记住上次用的端口，下次优先复用；被占了再换一个新的并记下来。
+  return (async () => (preferred && (await tryPort(preferred))) || (await tryPort(0)))();
 }
 
 // Credentials. Three sources, first hit wins: the Preferences window (userData/keys/*), a path the user
@@ -122,13 +126,17 @@ function writeKey(file, value) {
 }
 
 async function startBackend() {
-  const port = await freePort();
+  const port = await freePort(prefs.port);
+  if (prefs.port !== port) { prefs.port = port; savePrefs(); }
   const entry = path.join(ROOT, "server", "bin", "director-server.mjs");
   if (!fs.existsSync(entry)) throw new Error(`找不到后端入口：${entry}`);
   fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
   boot(`spawning backend: ${process.execPath} ${entry}`);
-  const args = [entry, "--port", String(port), "--host", "127.0.0.1", "--project", PROJECT_FILE, "--media-dir", MEDIA_DIR, ...keyArgs()];
+    // 全新安装时不要自动建示例：有镜头的工程会把"给我一个参照"那一屏挡掉，
+  // 新用户一上来就掉进一个不知道怎么来的 3D 场景里。空工程 → 首屏正常弹，
+  // 想看示例的人在「工程 → 更多 → 载入示例」里，Agent 也会建议。
+  const args = [entry, "--port", String(port), "--host", "127.0.0.1", "--project", PROJECT_FILE, "--media-dir", MEDIA_DIR, "--demo", "none", ...keyArgs()];
   const child = spawn(process.execPath, args, {
     cwd: ROOT,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production" },
@@ -286,6 +294,7 @@ function buildMenu() {
       label: "工程",
       submenu: [
         { label: "新建空工程", accelerator: "Cmd+N", click: async () => { await backupCurrent("新建工程前"); send("new-project"); } },
+        { label: "从参照开始…", accelerator: "Shift+Cmd+O", click: () => send("from-reference") },
         { label: "打开工程…", accelerator: "Cmd+O", click: openProject },
         { label: "存入工程库…", accelerator: "Shift+Cmd+S", click: saveToLibrary },
         { type: "separator" },

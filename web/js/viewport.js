@@ -24,7 +24,7 @@ let pipFrame, safeFrame, lastRect = { x: 0, y: 0, w: 1, h: 1 };
 let pointerDown = null;
 let fpsAcc = { frames: 0, t: 0 };
 let captureQueue = [];
-let recording = null;
+let recording = null, filmCanvas = null;
 let envSig = "", selSig = "";
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
@@ -445,7 +445,10 @@ function tick() {
       x.health.triangles = info.triangles;
     });
   }
-  if (recording) recording.frames += 1;
+  if (recording) {
+    recording.frames += 1;
+    blitProgram();
+  }
   if (captureQueue.length) {
     const jobs = captureQueue;
     captureQueue = [];
@@ -537,13 +540,34 @@ export function captureProgramFrame() {
 }
 
 // ---------- recorder (MediaRecorder proxy video) ----------
+// 录像器不能直接录 WebGL 画布：画布是整个窗口的形状，节目画面只是中间那块信箱区。
+// 直接 captureStream 录下来的是「带黑边、宽高比等于窗口」的视频 —— 拿去做 v2v 参考时，
+// 模型看到的构图不是导演在 3D 里摆的构图。所以另开一块按工程画幅比例的画布，每帧把节目区
+// 贴过去，录这一块。关键帧走的 grabProgram() 早就是这么裁的，现在视频和关键帧口径一致了。
+function filmSize() {
+  const a = aspectRatio();
+  const even = (n) => Math.max(2, Math.round(n / 2) * 2);
+  return a >= 1 ? { w: 1280, h: even(1280 / a) } : { w: even(1280 * a), h: 1280 };
+}
+
+function blitProgram() {
+  const r = lastRect, dpr = renderer.getPixelRatio();
+  if (!filmCanvas || r.w < 1 || r.h < 1) return;
+  filmCanvas.getContext("2d").drawImage(canvas, r.x * dpr, r.y * dpr, r.w * dpr, r.h * dpr, 0, 0, filmCanvas.width, filmCanvas.height);
+}
+
 const recorderHook = {
   start(take, shot) {
     stopRecording(true);
     const fps = store.get().project.fps;
     let rec = null, chunks = [];
     try {
-      const stream = canvas.captureStream(fps);
+      const size = filmSize();
+      filmCanvas = document.createElement("canvas");
+      filmCanvas.width = size.w;
+      filmCanvas.height = size.h;
+      blitProgram();
+      const stream = filmCanvas.captureStream(fps);
       const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
       if (mime) {
         rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
@@ -566,6 +590,7 @@ function stopRecording(abort = false) {
   const r = recording;
   if (!r) return;
   recording = null;
+  filmCanvas = null;
   store.light((x) => (x.health.recorder = "idle"));
   const finish = (videoUrl) => {
     if (abort) return;

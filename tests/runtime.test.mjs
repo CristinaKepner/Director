@@ -545,6 +545,33 @@ test("shot.beats: a destructive flag must never silently win over the payload", 
   assert.equal(dispatch("shot.beats", { shotId: "shot_01", beats: [] }, { source: "agent" }).error, "NO_BEATS");
 });
 
+test("a doomed mode is refused at dispatch, not queued and failed 40 seconds later", async () => {
+  dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
+  const t = dispatch("take.record", { shotId: "shot_01" }, { source: "cli" });
+  dispatch("take.finish", { id: t.id, videoUrl: "/media/take_a.webm" });
+  dispatch("take.review", { id: t.id, status: "circle" });
+
+  // 供应商说 v2v 现在做不了（没有公网地址给它抓白模视频）
+  R.setHooks({
+    generation: {
+      name: "fake",
+      modeReady: (mode) => (mode === "v2v" ? { ok: false, error: "V2V_NEEDS_PUBLIC_MEDIA", hint: "先开公网，或改用 i2v" } : { ok: true }),
+      submit: (job, update) => setTimeout(() => update(job.id, { status: "done", progress: 100, result: { kind: "video", url: "/m.mp4" } }), 5),
+    },
+  });
+
+  const bad = dispatch("generation.submit", { shotId: "shot_01", mode: "v2v", provider: "seedance-2.5" }, { source: "human" });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error, "V2V_NEEDS_PUBLIC_MEDIA");
+  assert.match(bad.hint, /i2v/);
+  assert.equal(store.get().jobs.filter((j) => j.mode === "v2v").length, 0, "注定失败的任务不该进队列");
+
+  // 能做的模式照常
+  const ok = dispatch("generation.submit", { shotId: "shot_01", mode: "i2v", provider: "seedance-2.5" }, { source: "human" });
+  assert.equal(ok.ok, true);
+  R.setHooks({ generation: null });
+});
+
 test("capabilities expose every action with state permissions", () => {
   const caps = R.capabilities();
   assert.ok(caps.length > 60);

@@ -30,6 +30,8 @@ macOS 的静默自更新（Squirrel.Mac，也就是 electron-updater 走的那�
 #    desktop/package.json → "version": "0.6.0"
 
 # 2. 构建（产物在 desktop/dist：arm64 与 x64 的 dmg / zip）
+#    先卸干净上一次残留的卷，否则 hdiutil detach 会卡住、dmg 打不出来（踩过两次）
+hdiutil detach /Volumes/导演台* -force 2>/dev/null
 cd desktop && npm run dist
 
 # 3. 生成 manifest（自动算 sha256 与体积）

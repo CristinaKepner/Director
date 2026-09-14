@@ -104,12 +104,13 @@ select.state.gen { color: var(--accent); border-color: var(--accent-line); }
 
 /* ---------- left rail + panel ---------- */
 .left { display: flex; background: var(--panel); border-right: 1px solid var(--line); min-height: 0; }
-/* 竖排文字读起来费劲，两个汉字横着写完全放得下 —— 把轨道加宽，字正常横排，
-   窄到放不下时整体等比缩小，而不是把字立起来。 */
-.rail { width: 52px; display: flex; flex-direction: column; gap: 6px; padding: 10px 6px; border-right: 1px solid var(--line); flex: none; }
-.rail button { writing-mode: horizontal-tb; padding: 10px 2px; width: 40px; letter-spacing: .02em; color: var(--muted); background: transparent; border-color: transparent; font-size: 12px; line-height: 1.25; border-radius: var(--r-btn); white-space: normal; word-break: keep-all; }
-@media (max-width: 1180px) { .rail { width: 44px; padding: 8px 4px; } .rail button { width: 36px; font-size: 11px; } }
-@media (max-width: 1000px) { .rail { width: 38px; padding: 6px 3px; } .rail button { width: 32px; font-size: 10px; padding: 8px 1px; } }
+/* 左侧是一条竖着的标签栏，标签文字跟着竖排是对的 —— 它本来就沿着那条边读。
+   要横排的是「功能按钮」：那些是动作，不是边栏标签，竖起来就难读了。
+   窄屏时整体等比缩小，而不是把字立起来或者压成一列。 */
+.rail { width: 40px; display: flex; flex-direction: column; gap: 6px; padding: 12px 5px; border-right: 1px solid var(--line); flex: none; }
+.rail button { writing-mode: vertical-rl; padding: 14px 0; width: 30px; letter-spacing: .22em; color: var(--muted); background: transparent; border-color: transparent; font-size: 12px; border-radius: var(--r-btn); white-space: nowrap; }
+@media (max-width: 1180px) { .rail { width: 36px; padding: 10px 4px; } .rail button { width: 28px; font-size: 11px; letter-spacing: .18em; } }
+@media (max-width: 1000px) { .rail { width: 32px; padding: 8px 3px; } .rail button { width: 26px; font-size: 10px; letter-spacing: .14em; padding: 10px 0; } }
 .rail button:hover { color: var(--text); background: var(--hover); }
 .rail button.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); font-weight: 600; }
 .left-body { width: 300px; display: flex; flex-direction: column; min-height: 0; }
@@ -260,8 +261,10 @@ select.state.gen { color: var(--accent); border-color: var(--accent-line); }
 .shots button .idx { font-family: var(--mono); color: var(--accent); margin-right: 6px; }
 .shots button.on { border-color: var(--accent-line); background: var(--accent-soft); }
 .shots button .n { color: var(--dim); font-family: var(--mono); margin-left: 6px; font-size: 11px; }
-.bottom-tabs { display: flex; gap: 2px; }
-.bottom-tabs button { background: transparent; border: 0; color: var(--muted); padding: 6px 12px; border-radius: var(--r-pill); }
+/* 标签是横排文字，放不下就整条横向滚 —— 折成两行竖着念是最差的解法 */
+.bottom-tabs { display: flex; gap: 2px; flex: none; overflow-x: auto; scrollbar-width: none; max-width: 52vw; }
+.bottom-tabs::-webkit-scrollbar { display: none; }
+.bottom-tabs button { background: transparent; border: 0; color: var(--muted); padding: 6px 11px; border-radius: var(--r-pill); white-space: nowrap; flex: none; }
 .bottom-tabs button:hover { color: var(--text); background: var(--hover); }
 .bottom-tabs button.on { color: var(--accent); background: var(--accent-soft); }
 .bottom-body { height: 250px; overflow: auto; padding: 12px 16px; border-top: 1px solid var(--line); }
@@ -417,3 +420,80 @@ body.desktop.blur .topbar input.ghost { color: var(--muted); }
 .fi-top span { font-size: 11px; color: var(--dim); }
 .fi-sub { margin-top: 2px; font-size: 10px; color: var(--dim); }
 @media (max-width: 1100px) { .film-layout { grid-template-columns: 1fr; } .film-list { border-left: 0; border-top: 1px solid var(--line); padding-left: 0; padding-top: 10px; flex-direction: row; overflow-x: auto; } .film-item { min-width: 160px; } }
+
+
+/* ---------- 首屏：拖参照进来 ---------- */
+.fr-drop { border: 1px dashed var(--line-2); border-radius: var(--r-card); padding: 26px 18px; text-align: center; cursor: pointer; background: var(--surface); transition: border-color .12s, background .12s; }
+.fr-drop:hover, .fr-drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.fr-drop.has, .fr-drop.busy { cursor: default; padding: 12px; text-align: left; }
+.fr-drop.has:hover { border-color: var(--line-2); background: var(--surface); }
+.fr-drop-in b { display: block; font-size: 13px; font-weight: 500; color: var(--text); }
+.fr-drop-in span { display: block; margin-top: 4px; font-size: 11px; color: var(--dim); }
+.fr-prev { width: 100%; max-height: 34vh; border-radius: var(--r-card); background: #000; display: block; object-fit: contain; }
+.fr-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px; font-size: 11px; color: var(--dim); }
+.fr-range b { font-family: var(--mono); color: var(--accent-2); font-weight: 400; }
+.fr-range button { padding: 3px 9px; font-size: 11px; border-radius: var(--r-pill); }
+.fr-alt { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.fr-alt summary { font-size: 12px; color: var(--dim); cursor: pointer; list-style: none; }
+.fr-alt summary::-webkit-details-marker { display: none; }
+.fr-alt summary::before { content: "▸ "; }
+.fr-alt[open] summary::before { content: "▾ "; }
+.fr-alt textarea { margin-top: 10px; }
+
+/* ---------- 白模 ↔ 生成 对照 ---------- */
+.cmp { display: flex; flex-direction: column; gap: 12px; height: 100%; overflow: auto; padding-right: 4px; }
+.cmp-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.cmp-head b { font-size: 13px; }
+.cmp-head span { font-size: 11px; color: var(--dim); flex: 1; }
+.cmp-row { display: grid; grid-template-columns: 1fr 1fr 210px; gap: 10px; align-items: start; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.cmp-cell { min-width: 0; }
+.cmp-tag { font-size: 10px; letter-spacing: .06em; color: var(--dim); font-family: var(--mono); margin-bottom: 4px; }
+.cmp-tag.gen { color: var(--accent-2); }
+.cmp-v { width: 100%; aspect-ratio: 16/9; object-fit: contain; background: #000; border-radius: 7px; display: block; }
+.cmp-meta { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--dim); }
+.cmp-meta b { font-size: 12px; color: var(--text); font-weight: 500; }
+.cmp-meta .ok { color: var(--accent-2); }
+.cmp-meta .warn { color: var(--danger); }
+.cmp-meta button { margin-top: 5px; align-self: flex-start; padding: 4px 12px; font-size: 11px; border-radius: var(--r-pill); }
+.cmp-why { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-card); padding: 12px 14px; font-size: 12px; line-height: 1.7; color: var(--muted); }
+.cmp-why b { color: var(--text); }
+.cmp-why > b { display: block; margin-bottom: 5px; }
+@media (max-width: 1100px) { .cmp-row { grid-template-columns: 1fr 1fr; } .cmp-meta { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 10px; } }
+
+/* 重生成之后：白模 | 上一版 | 新版 三栏并排 —— 让"变的只有该变的"看得见 */
+.cmp-row.three { grid-template-columns: 1fr 1fr 1fr 210px; }
+.cmp-btns { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.cmp-btns button { padding: 4px 12px; font-size: 11px; border-radius: var(--r-pill); }
+.cmp-run { margin-top: 6px; font-size: 11px; color: var(--dim); line-height: 1.5; }
+.cmp-run.ok { color: var(--accent-2); }
+.cmp-run.fail { color: var(--danger); }
+@media (max-width: 1400px) { .cmp-row.three { grid-template-columns: 1fr 1fr 1fr; } .cmp-row.three .cmp-meta { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 10px; } }
+
+
+/* ---------- 舞台对照：占满主画面的左右分屏 ---------- */
+.stage-compare { position: absolute; inset: 0; z-index: 5; background: #050508; display: flex; flex-direction: column; justify-content: center; }
+.stage-compare[hidden] { display: none; }
+.sc-grid { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 0; align-content: center; }
+.sc-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.sc-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.sc-tag { font-size: 11px; font-family: var(--mono); color: var(--dim); letter-spacing: .04em; padding-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-cell.gen .sc-tag { color: var(--accent-2); }
+/* 三格统一成同一个 16:9 画框：白模是 4:3 录的，不给固定画框就会缩成一小块，
+   跟右边两格没法比 —— 对照的前提是两边看起来一样大 */
+.sc-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 62vh; background: #000; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; }
+.sc-v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.sc-none { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 12px; }
+.sc-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px 4px; font-size: 11px; color: var(--dim); }
+.sc-bar b { font-size: 13px; color: var(--text); font-weight: 500; }
+.sc-bar .ok { color: var(--accent-2); }
+.sc-bar .warn { color: var(--danger); }
+.sc-btns { margin-left: auto; display: flex; gap: 6px; }
+.sc-btns button { padding: 5px 14px; font-size: 12px; border-radius: var(--r-pill); }
+.sc-btns button.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.sc-run { font-family: var(--mono); }
+.sc-run.ok { color: var(--accent-2); }
+.sc-run.fail { color: var(--danger); }
+.sc-why { padding: 0 14px 12px; font-size: 12px; line-height: 1.65; color: var(--muted); }
+.sc-why b { color: var(--text); }
+.sc-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
+@media (max-width: 1000px) { .sc-grid, .sc-grid.three { grid-template-columns: 1fr; grid-auto-rows: 1fr; } }

@@ -6,6 +6,7 @@ import path from "node:path";
 import * as R from "../../core/index.js";
 import { createFilmAssembler } from "./film.mjs";
 import { createJudge } from "./adapters/judge.mjs";
+import { createReferenceReader } from "./adapters/reference.mjs";
 
 const { store, dispatch, persistable, loadProjectData, capabilities, historyInfo, RUNTIME_VERSION } = R;
 
@@ -36,6 +37,7 @@ export function createHost(opts = {}) {
       },
       getJob: (id) => store.get().jobs.find((j) => j.id === id) || null,
       publicUrl: opts.publicUrl || null,
+      toMp4: (ref) => film.toMp4(ref), // v2v 参考视频必须是 mp4
       publisher: opts.publisher || null,
       fallback: R.simulatedAdapter,
       log,
@@ -56,6 +58,13 @@ export function createHost(opts = {}) {
     const judge = createJudge({ apiKey: opts.judgeKey, baseUrl: opts.judgeBase, model: opts.judgeModel, ffmpeg: film.bin, mediaDir, log });
     R.setHooks({ judge });
     log(`verify judge: ${judge.model}${judge.ready ? "" : "（缺密钥或 ffmpeg，review.verify 会提示）"}`);
+  }
+
+  // ---- 参照读取：图 / 视频 → 拍摄参数（入口比"说一句话"低得多）----
+  if (opts.judgeKey && film.ready) {
+    const reference = createReferenceReader({ apiKey: opts.judgeKey, baseUrl: opts.judgeBase, model: opts.referenceModel || opts.judgeModel, frames: (ref, o) => film.frames(ref, o), log });
+    R.setHooks({ reference });
+    log(`reference reader: ${reference.model}`);
   }
 
   // ---- LLM planner (Agent Director backend) ----
@@ -303,6 +312,16 @@ export function createHost(opts = {}) {
     fs.writeFileSync(path.join(mediaDir, name), buffer);
     return { ok: true, id: takeId, url: `/media/${name}`, bytes: buffer.length, mime };
   }
+  // 参照素材不属于任何 Take，所以要一条不绑 take 的上传通道。
+  // 文件名由后端生成，绝不用客户端给的名字 —— 那是路径穿越最常见的入口。
+  function saveUpload(buffer, mime = "application/octet-stream", label = "ref") {
+    const ext = MEDIA_EXT[mime.split(";")[0].trim()] || (/^video\//.test(mime) ? ".mp4" : /^image\//.test(mime) ? ".jpg" : ".bin");
+    const name = `${String(label).replace(/[^a-z0-9]/gi, "").slice(0, 12) || "ref"}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}${ext}`;
+    fs.mkdirSync(mediaDir, { recursive: true });
+    fs.writeFileSync(path.join(mediaDir, name), buffer);
+    return { ok: true, url: `/media/${name}`, bytes: buffer.length, mime };
+  }
+
   function mediaPath(name) {
     const safe = path.basename(name);
     const abs = path.join(mediaDir, safe);
@@ -346,6 +365,7 @@ export function createHost(opts = {}) {
     health,
     capabilities,
     saveMedia,
+    saveUpload,
     mediaPath,
     mediaDir,
     projectFile,

@@ -130,13 +130,15 @@ export function createArkAdapter(opts = {}) {
       // Ark only accepts a web URL for reference_video (no data URLs): local take proxies need a public base URL
       const ref = job.inputs?.video;
       if (!ref) throw Object.assign(new Error("no circled take video for this shot"), { code: "NO_REFERENCE_VIDEO" });
-      const m = String(ref).match(/\/media\/([^/?#]+)/);
+      // Ark 不收 webm：先把白模代理转成 mp4，再把那个文件的公网地址给它
+      const usable = (typeof opts.toMp4 === "function" ? await opts.toMp4(ref) : null) || ref;
+      const m = String(usable).match(/\/media\/([^/?#]+)/);
       let url = null;
       const pub = publicUrl();
       if (m && pub) url = `${pub}/media/${m[1]}`;
-      else if (!m && /^https?:\/\//.test(ref) && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(ref)) url = ref;
+      else if (!m && /^https?:\/\//.test(usable) && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(usable)) url = usable;
       else if (m && publisher?.enabled) {
-        const abs = resolveLocal(ref);
+        const abs = resolveLocal(usable);
         if (!abs || !fs.existsSync(abs)) throw Object.assign(new Error("reference video file missing on the backend"), { code: "NO_REFERENCE_VIDEO" });
         update(job.id, { progress: 3, adapter: { name: "ark", model, publishing: publisher.kind } });
         url = (await publisher.publish(abs)).url;
@@ -174,6 +176,18 @@ export function createArkAdapter(opts = {}) {
 
   return {
     name: "ark",
+    // 让运行时在 dispatch 时就知道 v2v 现在能不能做：Ark 的 reference_video 只收公网 URL，
+    // 没有公网地址就必然失败。与其排队几十秒再异步报错，不如当场说清楚。
+    modeReady(mode) {
+      if (mode !== "v2v") return { ok: true };
+      if (publicUrl()) return { ok: true };
+      if (publisher?.enabled) return { ok: true };
+      return {
+        ok: false,
+        error: "V2V_NEEDS_PUBLIC_MEDIA",
+        hint: "v2v 要把白模视频交给 Ark 抓取，它只收公网地址。三选一：启动加 --tunnel cloudflared（只读放开 /media）、--public-url https://<你的地址>、或 --publish feishu。现在可以先用 i2v：拿故事版关键帧当首帧，同样跟着白模的构图走。",
+      };
+    },
     models,
     supports: (provider) => !!models[provider],
     submit(job, update) {

@@ -82,13 +82,16 @@ export function createMediaTunnel(opts = {}) {
   }
 
   function diagnose() {
-    const text = cfLog.join("");
-    if (/failed to dial to edge with quic|QUIC connection failed/i.test(text))
-      return "出网被拦：cloudflared 连不上 Cloudflare 边缘（UDP 7844）。若本机开着 Clash / Surge 这类代理（日志里的 198.18.x.x 就是它的 fake-IP），给 *.argotunnel.com 加一条直连规则，或临时关掉代理再试。";
-    if (/TLS handshake with edge error/i.test(text))
-      return "出网被改写：TCP 7844 能连上但 TLS 握手被中断，通常是本机代理（Clash / Surge）在接管这条连接。给 *.argotunnel.com 加直连规则，或临时关掉代理。";
-    return "cloudflared 拿到了地址但公网访问不通；看 cloudflared 输出排查网络。";
-  }
+  const text = cfLog.join("");
+  const fakeIp = /198\.18\.\d+\.\d+/.test(text);
+  // 实测结论（2026-09）：本机开着 Clash 这类 fake-IP 代理时，光加 DOMAIN-SUFFIX 规则不够 ——
+  // cloudflared 最终是按**裸 IP** 连边缘的，域名规则根本匹配不上，连接又被拐回代理，
+  // QUIC 直接超时、TCP 则是 TLS 握手 EOF。真正管用的是按 IP 段放行。
+  const clashFix = "本机代理（Clash / Surge）在拦。注意：只加 DOMAIN-SUFFIX,argotunnel.com,DIRECT 不够 —— cloudflared 是按裸 IP 连边缘的，域名规则匹配不上。要加的是网段规则：\n  IP-CIDR,198.41.192.0/24,DIRECT,no-resolve\n  IP-CIDR,198.41.200.0/24,DIRECT,no-resolve\n再把 +.argotunnel.com 加进 fake-ip-filter，让 DNS 返回真实地址。";
+  if (/failed to dial to edge with quic|QUIC connection failed/i.test(text)) return `出网被拦：连不上 Cloudflare 边缘（UDP 7844）。${fakeIp ? clashFix : "检查防火墙是否放行 UDP 7844。"}`;
+  if (/TLS handshake with edge error/i.test(text)) return `TCP 7844 能连上但 TLS 握手被中断。${fakeIp ? clashFix : "中间设备在拆这条连接。"}`;
+  return "cloudflared 拿到了地址但公网访问不通；看 cloudflared 输出排查网络。";
+}
 
   async function start() {
     const port = await new Promise((resolve, reject) => {

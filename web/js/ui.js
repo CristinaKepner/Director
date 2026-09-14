@@ -68,6 +68,12 @@ export function bindUI() {
   $("undoBtn").onclick = () => report(dispatch("project.undo"));
   $("redoBtn").onclick = () => report(dispatch("project.redo"));
   $("guideBtn").onclick = () => showGuide(0);
+  // 首屏只在空工程时自动弹，所以必须有一个随时能叫出来的入口 ——
+  // 否则老工程里的人永远看不到"拖个参照进来"这条路。
+  $("fromRefBtn").onclick = async () => {
+    $("menu").hidden = true;
+    (await import("./firstrun.js")).showFirstRun();
+  };
   $("menuBtn").onclick = (e) => {
     e.stopPropagation();
     $("menu").hidden = !$("menu").hidden;
@@ -117,6 +123,7 @@ export function bindUI() {
   // stage
   $("viewFree").onclick = () => dispatch("project.set-view", { mode: "free" });
   $("viewProgram").onclick = () => dispatch("project.set-view", { mode: "program" });
+  $("viewCompare").onclick = () => dispatch("project.set-view", { mode: store.get().project.viewMode === "compare" ? "program" : "compare" });
   $("gizmoSeg").querySelectorAll("[data-gizmo]").forEach((b) => (b.onclick = () => dispatch("project.set-gizmo", { mode: b.dataset.gizmo })));
   $("playBtn").onclick = togglePlay;
   $("recordBtn").onclick = recordCurrent;
@@ -368,6 +375,7 @@ function render(d) {
   renderLight(d);
   renderShotStrip(d);
   renderTabs(d);
+  renderCompare(d);
   if (ui.left === "scene") renderOutliner(d);
   if (ui.left === "props") renderInspector(d);
   renderThread(d);
@@ -763,6 +771,7 @@ function filmJobs(d) {
 }
 
 let filmPick = null;
+let showPrevGen = false; // 对照默认两栏；上一版是可选的第三栏
 
 function renderFilm(el, d) {
   const jobs = filmJobs(d);
@@ -771,6 +780,11 @@ function renderFilm(el, d) {
   const src = cur.result?.url;
   const shotOf = (j) => (j.shotId ? d.shots.find((s) => s.id === j.shotId) : null);
   const kindZh = (j) => (j.kind === "chain" ? `长镜头续拍 · ${(j.parts || []).length} 段` : { auto: "有生成用生成，缺的用白模", blockout: "全部白模", generated: "全部生成" }[j.filmSource] || "成片");
+
+  // 对照：同一镜的白模与生成并排，同步播放。
+  // 这是整个产品最该被看见的一屏 —— 小白 get 不到 3D 的意义，是因为他从没见过
+  // "同一个构图、同一个运动、换一次生成人还是同一个人"。说一百遍不如并排播一次。
+  const pairs = comparePairs(d);
 
   el.innerHTML = `<div class="film-layout">
     <div class="film-main">
@@ -788,6 +802,7 @@ function renderFilm(el, d) {
         ${src && window.director?.revealMedia ? `<button data-reveal-film="${esc(src)}">在访达中显示</button>` : ""}
         ${cur.kind === "chain" ? `<button data-chain="${cur.id}">查看生成过程</button>` : ""}
         ${cur.kind === "chain" && cur.resumable ? `<button data-resume="${cur.shotId}">接着跑</button>` : ""}
+        ${pairs.length ? `<button data-film-mode="compare">在主画面对照</button>` : ""}
         <button data-refilm="auto">重新拼一条</button>
       </div>
       ${cur.kind === "chain" && openChain.has(cur.id) ? chainView(cur) : ""}
@@ -799,6 +814,7 @@ function renderFilm(el, d) {
       </div>`).join("")}
     </div></div>`;
 
+  el.querySelectorAll("[data-film-mode]").forEach((b) => (b.onclick = () => dispatch("project.set-view", { mode: "compare" })));
   el.querySelectorAll("[data-film]").forEach((n) => (n.onclick = () => { filmPick = n.dataset.film; renderFilm(el, store.get()); }));
   el.querySelectorAll("[data-save-film]").forEach((b) => (b.onclick = async () => {
     const ref = b.dataset.saveFilm;
@@ -823,6 +839,111 @@ function renderFilm(el, d) {
   }));
   el.querySelectorAll("[data-resume]").forEach((b) => (b.onclick = () => report(dispatch("shot.chain", { shotId: b.dataset.resume, resume: true }))));
   el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "成片")));
+}
+
+// 每一镜的「白模 ↔ 生成」配对：有这两样才谈得上对照
+function comparePairs(d) {
+  return d.shots.map((s) => {
+    const take = d.takes.find((t) => t.id === s.selectedTake && t.videoUrl) || d.takes.filter((t) => t.shotId === s.id && t.videoUrl).at(-1);
+    const gens = d.jobs.filter((j) => j.shotId === s.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url));
+    const gen = gens.at(-1), prev = gens.length > 1 ? gens.at(-2) : null;
+    return { shot: s, blockout: take?.videoUrl || null, generated: gen?.result?.url || null, previous: prev?.result?.url || null, mode: gen?.mode, refs: (gen?.inputs?.references || []).length, verdict: s.lastVerdict || null };
+  }).filter((p) => p.blockout && p.generated);
+}
+
+// 验收结论：这才是"人没变"的证据，不是一句承诺
+function verdictLine(v) {
+  if (!v) return "";
+  const drift = (v.drift || []).filter((x) => x.changed);
+  const major = drift.filter((x) => x.severity === "major");
+  const applied = v.applied === true ? "改动生效" : v.applied === false ? "改动没生效" : "改动是否生效看不准";
+  if (major.length) return `<span class="warn">${esc(applied)}，但 ${major.map((x) => esc(x.aspect)).join("/")} 漂了</span>`;
+  return `<span class="ok">${esc(applied)}；锁住的没漂${drift.length ? `（${drift.length} 处轻微差异）` : ""}</span>`;
+}
+
+function bindSync(el) {
+  el.querySelectorAll("[data-regen]").forEach((b) => (b.onclick = async () => {
+    const box = el.querySelector("[data-run]");
+    el.querySelectorAll("[data-regen]").forEach((x) => (x.disabled = true));
+    if (box) { box.hidden = false; box.className = "sc-run"; box.textContent = "准备…"; }
+    const { regenerateShot } = await import("./film.js");
+    const r = await regenerateShot({ shotId: b.dataset.regen, onProgress: (p) => box && (box.textContent = p.label || p.phase) });
+    el.querySelectorAll("[data-regen]").forEach((x) => (x.disabled = false));
+    if (box) {
+      box.className = `sc-run ${r.ok ? "ok" : "fail"}`;
+      box.textContent = r.ok
+        ? (r.verdict ? `完成 · ${r.verdict.summary || ""}` : "完成")
+        : `${{ blockout: "重录白模", submit: "提交", generate: "生成" }[r.stage] || ""}失败：${r.hint || r.message || r.error}`;
+    }
+    if (!r.ok) return;
+    el.dataset.key = ""; // 强制重画：这一版变「新版」，上一版挪到中间那格
+    setTimeout(() => renderCompare(store.get()), 1200);
+  }));
+
+  // 一起播 / 一起停，拖任意一个另一个跟上 —— 对照的意义在于同一时刻的同一构图
+  el.querySelectorAll("[data-play]").forEach((b) => (b.onclick = () => {
+    const vs = [...el.querySelectorAll("video[data-sync]")];
+    const playing = vs.some((v) => !v.paused);
+    vs.forEach((v) => { v.currentTime = 0; playing ? v.pause() : v.play().catch(() => {}); });
+    b.textContent = playing ? "一起播" : "暂停";
+  }));
+  el.querySelectorAll("video[data-sync]").forEach((v) => (v.onseeking = () => {
+    el.querySelectorAll("video[data-sync]").forEach((o) => { if (o !== v && Math.abs(o.currentTime - v.currentTime) > 0.15) o.currentTime = v.currentTime; });
+  }));
+}
+
+// 舞台对照：占满主画面的左右分屏。
+// 放在底部抽屉里是错的 —— 那是整个界面最挤的地方，两个视频会被压成两条缝。
+// 对照是这个产品的论证本身，它该占最大的那块地方。
+export function renderCompare(d) {
+  const el = $("compare");
+  if (!el) return;
+  const on = d.project.viewMode === "compare";
+  el.hidden = !on;
+  $("viewCompare")?.classList.toggle("on", on);
+  if (!on) { el.innerHTML = ""; return; }
+
+  const shot = d.shots.find((s) => s.id === d.project.currentShotId) || d.shots[0];
+  if (!shot) { el.innerHTML = `<div class="sc-empty">还没有镜头。</div>`; return; }
+  const p = comparePairs(d).find((x) => x.shot.id === shot.id) || pairFor(d, shot);
+  const three = showPrevGen && !!p.previous;
+  const key = `${shot.id}|${p.blockout}|${p.generated}|${three ? p.previous : ""}|${JSON.stringify(p.verdict || null)}`;
+  if (el.dataset.key === key) return; // 别在播放时被每帧重绘打断
+  el.dataset.key = key;
+
+  const cell = (tag, url, cls = "") => `<div class="sc-cell ${cls}"><div class="sc-tag">${tag}</div><div class="sc-frame">${
+    url ? `<video class="sc-v" data-sync src="${esc(mediaHref(url))}" muted loop playsinline preload="metadata"></video>` : `<div class="sc-none">还没有</div>`
+  }</div></div>`;
+
+  el.innerHTML = `
+    <div class="sc-grid ${three ? "three" : ""}">
+      ${cell("白模 · 免费 · 你改的是这边", p.blockout)}
+      ${three ? cell("生成 · 上一版", p.previous) : ""}
+      ${cell(`生成 · ${esc(p.mode || "")}${three ? " · 新版" : ""} · 计费`, p.generated, "gen")}
+    </div>
+    <div class="sc-bar">
+      <b>${esc(shot.index)} ${esc(shot.title)}</b>
+      <span>${Math.round(shot.lens.focalLength)}mm · ${esc(shot.motion.type)} · ${((shot.range.outFrame - shot.range.inFrame) / d.project.fps).toFixed(1)}s</span>
+      ${p.refs ? `<span class="ok">带了 ${p.refs} 张参考图，人物跨镜是同一个</span>` : `<span class="warn">这一镜没带参考图，身份可能会漂</span>`}
+      ${verdictLine(p.verdict)}
+      <span class="sc-run" data-run hidden></span>
+      <div class="sc-btns">
+        ${p.previous ? `<button data-prev class="${three ? "on" : ""}">${three ? "只看两栏" : "加上一版"}</button>` : ""}
+        <button data-play>一起播</button>
+        <button class="primary" data-regen="${esc(shot.id)}">改完重生成这一镜</button>
+        <button data-close>退出对照</button>
+      </div>
+    </div>
+    <div class="sc-why"><b>左边随便改，不花钱</b>：机位、走位、光、焦段。改完点「改完重生成这一镜」——<b>只重做这一镜</b>，构图跟着白模走，人物靠已批准的参考图锁住。</div>`;
+  bindSync(el);
+  el.querySelector("[data-close]").onclick = () => dispatch("project.set-view", { mode: "program" });
+  el.querySelector("[data-prev]")?.addEventListener("click", () => { showPrevGen = !showPrevGen; el.dataset.key = ""; renderCompare(store.get()); });
+}
+
+function pairFor(d, s) {
+  const take = d.takes.find((t) => t.id === s.selectedTake && t.videoUrl) || d.takes.filter((t) => t.shotId === s.id && t.videoUrl).at(-1);
+  const gens = d.jobs.filter((j) => j.shotId === s.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url));
+  return { shot: s, blockout: take?.videoUrl || null, generated: gens.at(-1)?.result?.url || null, previous: gens.length > 1 ? gens.at(-2).result.url : null, mode: gens.at(-1)?.mode, refs: (gens.at(-1)?.inputs?.references || []).length, verdict: s.lastVerdict || null };
 }
 
 // ---------- agent thread ----------
@@ -1272,6 +1393,9 @@ function renderGen(el, d) {
   const P = shot.prompts;
   const text = P ? (promptTab.mode === "image" ? P.image[promptTab.lang] : promptTab.mode === "v2v" ? P.v2v[promptTab.lang] : promptTab.mode === "negative" ? P.negative[promptTab.lang] : P.video[promptTab.lang]) : "";
   const real = isOnline() && client.generation?.name && client.generation.name !== "simulated" ? Object.keys(client.generation.models || {}) : [];
+  // v2v 要把白模视频交给供应商抓取，没有公网地址就必然失败 —— 别把它摆成默认项等人踩
+  const v2vReady = !!(client.generation?.publicUrl || (client.generation?.publisher && client.generation.publisher !== "none"));
+  const defaultMode = v2vReady ? "v2v" : "i2v";
   const providers = Object.entries(PROVIDERS).sort(([a], [b]) => (real.includes(b) ? 1 : 0) - (real.includes(a) ? 1 : 0));
   const jobs = [...d.jobs].reverse().filter((j) => j.shotId === shot.id).slice(0, 8);
   el.innerHTML = `<div class="gen-layout">
@@ -1285,10 +1409,11 @@ function renderGen(el, d) {
     <div>
       <div class="gen-row">
         <select data-k="provider">${providers.map(([k, v]) => `<option value="${k}">${esc(v.name)}${real.includes(k) ? "" : " · 模拟"}</option>`).join("")}</select>
-        <select data-k="mode">${Object.entries(GEN_MODES).map(([k, v]) => `<option value="${k}" ${k === "v2v" ? "selected" : ""}>${v}</option>`).join("")}</select>
+        <select data-k="mode">${Object.entries(GEN_MODES).map(([k, v]) => `<option value="${k}"${k === defaultMode ? " selected" : ""}${k === "v2v" && !v2vReady ? " disabled" : ""}>${v}${k === "v2v" && !v2vReady ? "（需要公网地址）" : ""}</option>`).join("")}</select>
         <button data-act="submit" class="primary">提交</button>
       </div>
       ${!real.length ? `<div class="empty" style="padding:8px 0;justify-content:flex-start">${isOnline() ? "后端未配置生成密钥：任务只是模拟。" : "单机模式：任务只是模拟，不会真的生成。"}</div>` : ""}
+      ${real.length && !v2vReady ? `<div class="prompt" style="padding:4px 0">v2v 用不了：供应商要从公网抓取白模视频。启动带 <code>--tunnel cloudflared</code> 或 <code>--public-url</code>，或在偏好设置里打开 v2v 公网开关。i2v 同样跟着白模的构图走。</div>` : ""}
       ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}${(j.inputs?.references || []).length ? `<div class="prompt">参考 ${j.inputs.references.length}</div>` : ""}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}${j.kind === "chain" ? `<button data-chain="${j.id}">查看生成过程</button>` : ""}${j.kind === "chain" && j.resumable ? `<button data-resume="${j.shotId}">接着跑</button>` : ""}</div></td></tr>${j.kind === "chain" && openChain.has(j.id) ? `<tr><td colspan="5">${chainView(j)}</td></tr>` : ""}`).join("")}</tbody></table>` : ""}
     </div></div>`;
   el.querySelectorAll("[data-pm]").forEach((b) => (b.onclick = () => {

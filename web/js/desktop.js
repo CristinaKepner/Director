@@ -41,6 +41,7 @@ export function initDesktop() {
       case "drawer": return click("drawerBtn");
       case "agent-focus": return $("agentInput")?.focus();
       case "guide": return click("guideBtn");
+      case "from-reference": return void import("./firstrun.js").then((m) => m.showFirstRun());
       case "drawer-tab": return openDrawer(payload);
       case "film-blockout": return filmBlockout(payload);
       case "film-render": return filmRender(payload);

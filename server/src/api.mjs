@@ -146,6 +146,14 @@ export function createApp(host, opts = {}) {
       });
       return;
     }
+    // 参照素材上传（图 / 视频），不绑 Take
+    if (p === "/api/upload" && m === "POST") {
+      const buf = await readBody(req, MAX_MEDIA);
+      if (!buf.length) return json(res, 400, { ok: false, error: "EMPTY_BODY" });
+      const out = host.saveUpload(buf, req.headers["content-type"] || "application/octet-stream", url.searchParams.get("label") || "ref");
+      log(`upload ← ${buf.length} bytes ${req.headers["content-type"]} → ${out.url}`);
+      return json(res, 200, out);
+    }
     mm = p.match(/^\/api\/takes\/([\w-]+)\/media$/);
     if (mm && m === "POST") {
       const buf = await readBody(req, MAX_MEDIA);
