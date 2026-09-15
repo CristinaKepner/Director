@@ -1,7 +1,7 @@
 // Frontend ↔ backend client. The page keeps a local replica of the Director Runtime (same core modules) for
 // rendering; every state-changing Action is sent to the backend (Source of Truth) and the returned / streamed
 // snapshot is applied back. Pure view actions run locally. Without a reachable backend the page runs standalone.
-import { setThinking } from "./ui.js";
+import { setThinking, refreshCapabilities } from "./ui.js";
 import { store, persistable } from "../../core/store.js";
 import { dispatch as localDispatch, getHooks } from "../../core/actions.js";
 
@@ -103,6 +103,14 @@ function openStream() {
       client.seq = msg.seq || client.seq;
       // 「模型在想什么」的帧不带快照：只更新展示，不碰工程状态
       if (msg.thinking) return setThinking(msg.thinking);
+      // 能力帧同理。后端能做什么不是一次性的事实：隧道要几十秒才建好，
+      // 只在连上那一刻问一次 health，v2v 就会一直停在「需要公网地址」。
+      if (msg.health) {
+        client.service = msg.health.service || client.service;
+        client.generation = msg.health.generation || null;
+        client.llm = msg.health.llm || client.llm;
+        return refreshCapabilities();
+      }
       applyRemote(msg.snapshot, msg.version, { event: msg.event });
     });
     es.onerror = () => {

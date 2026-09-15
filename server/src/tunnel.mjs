@@ -122,7 +122,10 @@ export function createMediaTunnel(opts = {}) {
   // 实测结论（2026-09）：本机开着 Clash 这类 fake-IP 代理时，光加 DOMAIN-SUFFIX 规则不够 ——
   // cloudflared 最终是按**裸 IP** 连边缘的，域名规则根本匹配不上，连接又被拐回代理，
   // QUIC 直接超时、TCP 则是 TLS 握手 EOF。真正管用的是按 IP 段放行。
-  const clashFix = "本机代理（Clash / Surge）在拦。注意：只加 DOMAIN-SUFFIX,argotunnel.com,DIRECT 不够 —— cloudflared 是按裸 IP 连边缘的，域名规则匹配不上。要加的是网段规则：\n  IP-CIDR,198.41.192.0/24,DIRECT,no-resolve\n  IP-CIDR,198.41.200.0/24,DIRECT,no-resolve\n再把 +.argotunnel.com 加进 fake-ip-filter，让 DNS 返回真实地址。";
+  const clashFix = "本机代理（Clash / Surge）在拦。注意：只加 DOMAIN-SUFFIX,argotunnel.com,DIRECT 不够 —— cloudflared 是按裸 IP 连边缘的，域名规则匹配不上。要加的是网段规则：\n  IP-CIDR,198.41.192.0/24,DIRECT,no-resolve\n  IP-CIDR,198.41.200.0/24,DIRECT,no-resolve\n再把 +.argotunnel.com 和 +.trycloudflare.com 加进 fake-ip-filter，让 DNS 返回真实地址；\n  域名规则也加上 DOMAIN-SUFFIX,trycloudflare.com,DIRECT —— 建隧道那一步走的是这个域名，按域名匹配得上。";
+  // 连 tunnel 都建不起来（而不是建起来后不通）：cloudflared 请求 api.trycloudflare.com 就超时了。
+  // 实测本机开着 Clash 时最常见的就是这一条 —— 和边缘连接被拦是同一个病，位置更靠前。
+  if (/failed to request quick Tunnel/i.test(text)) return `cloudflared 连 Cloudflare 的接口（api.trycloudflare.com）就超时了，隧道根本没建起来。${clashFix}`;
   if (/failed to dial to edge with quic|QUIC connection failed/i.test(text)) return `出网被拦：连不上 Cloudflare 边缘（UDP 7844）。${fakeIp ? clashFix : "检查防火墙是否放行 UDP 7844。"}`;
   if (/TLS handshake with edge error/i.test(text)) return `TCP 7844 能连上但 TLS 握手被中断。${fakeIp ? clashFix : "中间设备在拆这条连接。"}`;
   return "cloudflared 拿到了地址但公网访问不通；看 cloudflared 输出排查网络。";
@@ -223,7 +226,7 @@ export function createMediaTunnel(opts = {}) {
       child.on("exit", (code) => {
         // 退出原因只有 cloudflared 自己知道（限流、被拦、参数不对）。不带上它的最后几行，
         // 日志里就只剩一句「退出（code 1）」，等于什么也没说。
-        if (!settled) done(Object.assign(new Error(`cloudflared 退出（code ${code}）`), { code: "TUNNEL_EXITED", cloudflared: tail() }));
+        if (!settled) done(Object.assign(new Error(`cloudflared 退出（code ${code}）。${diagnose()}`), { code: "TUNNEL_EXITED", cloudflared: tail() }));
         else if (!stopping && !abandoned) log(`media tunnel: cloudflared 退出（code ${code}）；v2v 会退回 NO_PUBLIC_MEDIA_URL`);
       });
     });

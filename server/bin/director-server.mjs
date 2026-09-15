@@ -82,6 +82,9 @@ async function startTunnel() {
   try {
     publicUrl = await tunnel.start();
     log(`public media        ${publicUrl}/media/   (v2v 参考视频从这里取)${tunnel.verified ? "" : "   ⚠️ 未经本机验证"}`);
+    // 隧道是后端起来之后几十秒才建好的。页面早就连上了、也早就问过一次 health，
+    // 不主动告诉它，界面上的 v2v 会一直灰着 —— 后端却已经能做了。
+    host.announceHealth();
   } catch (err) {
     // 失败也要收摊：不 stop 的话 cloudflared 子进程和本地媒体服务会一直挂着，
     // 重启几次就攒出一堆孤儿进程（实测见过跨天还活着的）。

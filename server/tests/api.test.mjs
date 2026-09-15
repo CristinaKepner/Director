@@ -112,6 +112,23 @@ test("take protocol: client capture → media upload → finish", async () => {
   await post("/api/actions", { action: "project.set-state", payload: { state: "EDIT" } });
 });
 
+// 后端能做什么不是一次性的事实：隧道要几十秒才建好，而页面只在连上那一刻问过一次 health。
+// 不主动推一帧，界面上的 v2v 就会一直停在灰的「需要公网地址」—— 后端其实早就能做了。
+test("能力变了要主动推给页面，不能只在连上那一刻问一次", async () => {
+  const got = [];
+  const off = host.subscribe((m) => got.push(m));
+  try {
+    host.announceHealth();
+    const frame = got.find((m) => m.health);
+    assert.ok(frame, "应该收到一帧带 health 的消息");
+    assert.ok(frame.seq > 0, "要有 seq，页面按它去重");
+    assert.equal(frame.snapshot, undefined, "能力帧不该捎带整份快照");
+    assert.ok("generation" in frame.health, "页面就是靠 health.generation 判断 v2v 能不能点");
+  } finally {
+    off();
+  }
+});
+
 test("state, project export/import, persistence", async () => {
   const st = await get("/api/state?events=5");
   assert.equal(st.snapshot.events.length <= 5, true);

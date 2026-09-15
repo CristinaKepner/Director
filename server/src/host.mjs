@@ -141,6 +141,16 @@ export function createHost(opts = {}) {
     }
   }
 
+  // 能力变了也要推一帧。隧道是后端起来之后几十秒才建好的，而页面只在连上后端的那一刻
+  // 问过一次 /api/health —— 不推的话，v2v 在界面上永远是灰的「需要公网地址」，
+  // 而后端其实早就能做了。不进工程状态、不 bump version、不进事件日志。
+  function announceHealth() {
+    const msg = { seq: ++broadcastSeq, health: health() };
+    for (const fn of subscribers) {
+      try { fn(msg); } catch (err) { log(`subscriber error ${err.message}`); }
+    }
+  }
+
   function flush() {
     flushQueued = false;
     const d = store.get();
@@ -379,6 +389,7 @@ export function createHost(opts = {}) {
     version,
     save,
     health,
+    announceHealth,
     capabilities,
     saveMedia,
     saveUpload,

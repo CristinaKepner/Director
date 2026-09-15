@@ -979,6 +979,12 @@ const raw = new Set();      // 展开后还想看原始参数的卡片
 const skipped = new Set();  // 待确认方案里被取消勾选的步骤 "<msgId>:<index>"
 const skipCount = (mid) => [...skipped].filter((k) => k.startsWith(`${mid}:`)).length;
 
+// 后端能力变了（典型的是隧道建好了、v2v 从灰的变成能点了），由 SSE 的 health 帧喂进来。
+// 不是工程状态的变化，所以不走 dispatch：重画一次界面就够了。
+export function refreshCapabilities() {
+  render(store.get());
+}
+
 // 规划中的实时思考：由后端 SSE 的 thinking 帧喂进来（见 client.js）。不进工程状态，纯展示。
 let live = null;
 export function setThinking(t) {
