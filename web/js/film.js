@@ -43,6 +43,26 @@ async function waitJob(id, { timeout = 30 * 60 * 1000, onTick } = {}) {
   }, { timeout, every: 3000 });
 }
 
+
+/**
+ * 按自检结果逐条修。每条 finding 自带 fix.action —— 提出问题的那一方本来就知道怎么修，
+ * 没必要让人再去翻菜单找对应的 Action。需要人填内容的（拍谁、怎么拆拍）不自动执行，
+ * 交回给导演。
+ * @param opts { findings, only?: string[]（只修这些 code）, onProgress }
+ */
+export async function applyFixes(opts = {}) {
+  const onProgress = opts.onProgress || (() => {});
+  const list = (opts.findings || []).filter((f) => f.fix?.action && !f.fix.needsInput && (!opts.only || opts.only.includes(f.code)));
+  const out = [];
+  for (const [i, f] of list.entries()) {
+    onProgress({ index: i + 1, total: list.length, label: f.fix.label || f.title, code: f.code, shotId: f.shotId });
+    const r = await dispatch(f.fix.action, f.fix.payload || {});
+    out.push({ code: f.code, shotId: f.shotId, ok: !!r?.ok, error: r?.error });
+  }
+  const manual = (opts.findings || []).filter((f) => f.fix?.needsInput);
+  return { ok: out.every((x) => x.ok), applied: out.filter((x) => x.ok).length, of: list.length, results: out, manual };
+}
+
 /**
  * 逐镜录白模 Take。progress({phase, index, total, shotId, title, takeId})
  * @param opts { shotIds?, keyframes = true, circle = true, onProgress }
@@ -53,6 +73,19 @@ export async function runBlockout(opts = {}) {
   const fps = d0.project.fps;
   const shots = (opts.shotIds ? opts.shotIds.map((id) => d0.shots.find((s) => s.id === id)) : d0.shots).filter(Boolean);
   if (!shots.length) return { ok: false, error: "NO_SHOTS" };
+
+  // 录之前先自检。实测一条 10 分钟的片子 66 镜全部录完、报 ok、拼成 9.8 分钟，
+  // 而画面里大部分是墙 —— 因为一半机位没对准任何东西。那是纯几何问题，几毫秒就能算出来，
+  // 没有理由让人先录十分钟再发现。
+  if (opts.check !== false) {
+    onProgress({ phase: "check", label: "建场自检：看看每一镜画面里有没有东西" });
+    const chk = await dispatch("film.check", { shotIds: shots.map((s) => s.id), provider: opts.provider || "seedance-2.5" });
+    if (chk?.ok && chk.blocking) {
+      onProgress({ phase: "check", label: chk.summary, findings: chk.findings });
+      return { ok: false, error: "CHECK_FAILED", check: chk, hint: chk.summary };
+    }
+    if (chk?.ok) onProgress({ phase: "check", label: chk.summary, findings: chk.findings });
+  }
 
   await dispatch("project.set-view", { mode: "program" });
   const out = [];
@@ -244,4 +277,4 @@ export async function runPipeline(opts = {}) {
   return steps;
 }
 
-export const film = { runBlockout, renderShots, exportFilm, runPipeline, regenerateShot };
+export const film = { runBlockout, renderShots, exportFilm, runPipeline, regenerateShot, applyFixes };

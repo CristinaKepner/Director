@@ -43,7 +43,7 @@ import {
   ASSET_ROLES,} from "./schema.js";
 import { attachPrompts, compileShot } from "./prompts.js";
 import { MODEL_LIBRARY, ROOM_PATTERNS } from "./schema.js";
-import { cameraStateAt, entityStateAt, sequenceLayout } from "./motion.js";
+import { cameraStateAt, entityStateAt, sequenceLayout, subjectPoint, fovFor } from "./motion.js";
 
 export const RUNTIME_VERSION = "director-runtime/0.4";
 export const SHOT_STATUSES = ["draft", "blocking", "rehearsal", "recorded", "review", "approved"];
@@ -832,9 +832,15 @@ register("camera.frame", {
     const A = COVERAGE_ANGLES[angle] || COVERAGE_ANGLES.front_left;
     const st = entityStateAt(ent, d0.project.playhead);
     const { h, max } = subjectSize(ent);
+    // 小道具会把这套人物尺度的算法带进沟里：方向盘 dim=[0.46,0.08,0.46]，
+    // 按自身高度算出来的机位离地 0.15 米 —— 趴在地上拍方向盘。
+    // 机位高度看的是主体在世界里的实际高度（含它挂在哪儿），不是它自己多厚。
+    const eye = (st?.position?.[1] ?? ent.transform.position[1]) + h / 2;
     const dist = Math.max(0.6, S.distance * Math.max(h, max * 0.6));
     const yaw = (st.yaw || 0) + (A.yaw * Math.PI) / 180;
-    const y = height !== undefined ? Number(height) : Math.max(0.15, h * (A.height ?? S.height));
+    // 原来是 h * 比例 —— 主体自己多厚就把机位摆多高。对人物成立（1.7m 身高 → 齐眼），
+    // 对挂在车里的方向盘就是趴在地上拍。改成围绕主体在世界里的实际高度上下摆。
+    const y = height !== undefined ? Number(height) : Math.max(0.15, eye + h * ((A.height ?? S.height) - 0.5));
     const pos = [st.position[0] + Math.sin(yaw) * dist, y, st.position[2] + Math.cos(yaw) * dist];
     const focal = focalLength || S.focal;
     store.patch((d) => {
@@ -2324,6 +2330,277 @@ register("film.plan", {
         assembler: hooks.film ? { name: hooks.film.name, ready: !!hooks.film.ready } : null,
         clips,
       },
+    };
+  },
+});
+
+// 建场自检：录之前先算一遍，这一镜的画面里到底有没有东西。
+//
+// 为什么非要有：实测 astra 规划的一条 10 分钟片子，66 个镜头全部录完、report ok:true、
+// 拼成 9.8 分钟，而画面里大部分是墙 —— 26 个机位只有 4 个被镜头引用，一半机位没有 target。
+// 白模「不花钱」，所以没人会盯着看，于是这种空画面能一路绿灯走到生成端。
+//
+// 这一整套判断是纯本地几何，不用模型、不花钱、几毫秒。能算出来的事就不该让人录十分钟才发现。
+const DEG = Math.PI / 180;
+
+function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+function vlen(a) { return Math.hypot(a[0], a[1], a[2]); }
+function vnorm(a) { const l = vlen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+
+// 实体的包围球中心与半径 —— 用球判断在不在画面里，比逐点算便宜得多，也够用
+// 地板、墙、门柱这些是布景，不是主体。判断「这一镜拍谁」要按语义排，
+// 不能按谁占画幅大排 —— 实测第一版就建议导演把主体设成「车库水泥地」。
+const SUBJECT_RANK = { character: 4, vehicle: 3, animal: 3, prop: 2, food: 2, building: 0, environment: 0 };
+const isSubject = (e) => (SUBJECT_RANK[e.semanticType] ?? 1) > 0;
+
+function entityBall(ent, frame) {
+  const st = entityStateAt(ent, frame);
+  const pos = st?.position || ent.transform.position;
+  const { h, max } = subjectSize(ent);
+  return { c: [pos[0], pos[1] + h / 2, pos[2]], r: Math.max(0.25, max / 2) };
+}
+
+/** 这一帧，这个实体在不在画面里。返回 null=不在；否则给它占画幅多少 */
+function inFrame(d, shot, ent, frame) {
+  const cs = cameraStateAt(d, shot, frame);
+  const cam = d.cameras.find((c) => c.id === shot.cameraId) || d.cameras[0];
+  if (!cs || !cam) return null;
+  const ball = entityBall(ent, frame);
+  const fwd = vnorm(vsub(cs.lookAt || [0, 0, 0], cs.position));
+  const v = vsub(ball.c, cs.position);
+  const dist = vlen(v);
+  if (dist < 1e-3) return { fill: 1, dist };
+  const along = vdot(v, fwd);
+  if (along <= 0.05) return null; // 在机位背后
+  const hfov = fovFor(cs, cam) * DEG;
+  const aspect = ASPECTS[d.project.aspect] || 16 / 9;
+  const vfov = 2 * Math.atan(Math.tan(hfov / 2) / aspect);
+  // 角半径 vs 视锥半角：把包围球的角尺寸算进来，擦边也算在画面里
+  const ang = Math.acos(Math.min(1, Math.max(-1, along / dist)));
+  const angR = Math.atan2(ball.r, Math.max(0.1, along));
+  const half = Math.max(hfov, vfov) / 2;
+  if (ang - angR > half) return null;
+  // 占画幅：主体角直径 / 画面角宽
+  return { fill: Math.min(1, (2 * angR) / hfov), dist };
+}
+
+// 给这一镜重新摆机位。和直接 camera.frame 的区别：如果这个机位被别的镜头共用，
+// 先克隆出一个只属于这一镜的机位再摆 —— 否则「修好第 18 镜」会顺手拆掉共用它的另外 14 镜。
+// 自检的一键修实测就踩过：修了 39 条，错误从 23 涨到 25。
+register("shot.reframe", {
+  doc: "按主体给这一镜重新摆机位。机位若被其他镜头共用，会先克隆一个专属机位，不影响别的镜头",
+  params: { shotId: "string", target: "entityId", size: "shotSize", angle: "coverage", height: "m", focalLength: "mm" },
+  required: ["shotId", "target"],
+  validate: ({ shotId, target }, d) => {
+    if (!d.shots.some((x) => x.id === shotId)) return { error: "NO_SHOT" };
+    if (!d.entities.some((e) => e.id === target)) return { error: "TARGET_NOT_FOUND", target };
+    return null;
+  },
+  handler({ shotId, target, size = "MS", angle, height, focalLength }, meta) {
+    const d0 = D();
+    const shot = d0.shots.find((x) => x.id === shotId);
+    const shared = d0.shots.filter((x) => x.cameraId === shot.cameraId && x.id !== shotId);
+    let camId = shot.cameraId;
+    let cloned = false;
+
+    if (!camId || shared.length) {
+      const src = d0.cameras.find((c) => c.id === camId);
+      const r = dispatch("camera.create", {
+        name: `${shot.index} ${shot.title}`.slice(0, 40),
+        type: src?.type,
+        preset: size,
+        focalLength: focalLength || src?.lens?.focalLength,
+      }, { ...meta, silent: true });
+      if (!r.ok) return r;
+      camId = r.id;
+      cloned = true;
+      store.patch((d) => {
+        const sh = d.shots.find((x) => x.id === shotId);
+        sh.cameraId = camId;
+        sh.cameraPose = null; // 让它跟着新机位走
+      });
+    }
+
+    const f = dispatch("camera.frame", { id: camId, target, size, angle, height, focalLength }, { ...meta, silent: true });
+    if (!f.ok) return f;
+    store.patch((d) => {
+      const sh = d.shots.find((x) => x.id === shotId);
+      if (!sh.targetIds?.length) sh.targetIds = [target];
+      sh.size = size;
+      const cam = d.cameras.find((c) => c.id === camId);
+      if (cam) sh.cameraPose = structuredClone(cam.pose);
+      sh.version = (sh.version || 0) + 1;
+    });
+    return { ok: true, id: shotId, cameraId: camId, cloned, sharedWith: shared.length };
+  },
+});
+
+register("film.check", {
+  doc: "建场自检：逐镜算一遍画面里有没有东西、机位对没对准、镜头能不能生成。纯本地计算，不花钱。每条问题都带一个可以直接执行的修法",
+  params: { shotIds: "string[]（默认全片）", provider: "providerId（用来检查镜长是否超上限，默认 seedance-2.5）" },
+  undoable: false,
+  handler({ shotIds, provider = "seedance-2.5" }) {
+    const d = D();
+    if (!d.shots.length) return { ok: false, error: "NO_SHOTS" };
+    const shots = (shotIds?.length ? shotIds.map((id) => d.shots.find((x) => x.id === id)) : d.shots).filter(Boolean);
+    const fps = d.project.fps;
+    const cap = PROVIDERS[provider]?.maxSeconds || 0;
+    const floor = PROVIDERS[provider]?.minSeconds || 0;
+    const findings = [];
+    const add = (f) => findings.push(f);
+
+    // 机位建了没人用：规划器常常一口气建一堆机位，然后镜头全挤在其中几个上
+    const used = new Set(shots.map((x) => x.cameraId).filter(Boolean));
+    const orphan = d.cameras.filter((c) => !used.has(c.id));
+    if (orphan.length) add({
+      level: "info", code: "CAMERA_UNUSED", cameras: orphan.map((c) => c.id),
+      title: `${orphan.length} 个机位建了没有镜头用`,
+      why: `一共 ${d.cameras.length} 个机位，只有 ${used.size} 个被镜头引用。多半是分镜时忘了把镜头接到机位上。`,
+      fix: null,
+    });
+
+    // 一个机位扛太多镜：这些镜头会长得一模一样
+    const byCam = {};
+    for (const x of shots) if (x.cameraId) (byCam[x.cameraId] ||= []).push(x);
+    for (const [cid, list] of Object.entries(byCam)) {
+      if (list.length < 5) continue;
+      const moving = new Set(list.map((x) => x.motion?.type || "static"));
+      if (moving.size <= 1) add({
+        level: "warn", code: "CAMERA_OVERUSED", cameraId: cid, shotIds: list.map((x) => x.id),
+        title: `${list.length} 个镜头共用机位 ${cid}，而且运镜都一样`,
+        why: "同机位同运镜，这些镜头出来会几乎无法区分。要么给它们各自的机位，要么至少换景别或角度。",
+        fix: null,
+      });
+    }
+
+    for (const x of shots) {
+      const label = `${x.index} ${x.title}`;
+      const secs = (x.range.outFrame - x.range.inFrame) / fps;
+      const cam = d.cameras.find((c) => c.id === x.cameraId);
+
+      if (!cam) {
+        add({ level: "error", code: "NO_CAMERA", shotId: x.id, label, title: "这一镜没有机位", why: "没有机位就没有画面。", fix: { action: "camera.create", payload: {} } });
+        continue;
+      }
+
+      // 最要紧的一条：这一镜的画面里到底有没有东西
+      const probes = [x.range.inFrame, (x.range.inFrame + x.range.outFrame) / 2, x.range.outFrame - 1];
+      const seen = new Map(); // entityId → 最大占幅
+      for (const f of probes) {
+        for (const e of d.entities) {
+          const r = inFrame(d, x, e, f);
+          if (r) seen.set(e.id, Math.max(seen.get(e.id) || 0, r.fill));
+        }
+      }
+      const named = (x.targetIds?.length ? x.targetIds : cam.target ? [cam.target] : []).filter(Boolean);
+
+      // 标题/描述里点名的实体。「03｜轮胎」点的是「公交右前轮胎」。
+      const text = `${x.title || ""} ${x.description || ""}`;
+      const mentionScore = (e) => {
+        const nm = String(e.displayName || "");
+        if (!nm) return 0;
+        if (text.includes(nm)) return 3;
+        if (nm.length > 2 && text.includes(nm.slice(-3))) return 2;
+        if (nm.length > 1 && text.includes(nm.slice(-2))) return 1;
+        return 0;
+      };
+      // 画面里只有地板和墙，等于空镜。布景不算数。
+      const subjects = [...seen.entries()].filter(([id]) => isSubject(d.entities.find((e) => e.id === id) || {}));
+
+      if (!subjects.length) {
+        add({
+          level: "error", code: "EMPTY_FRAME", shotId: x.id, label,
+          title: seen.size ? "画面里只有布景，没有主体" : "画面里什么都没有",
+          why: seen.size
+            ? `整镜三个取样帧里，视锥内只有${[...seen.keys()].slice(0, 3).map((id) => d.entities.find((e) => e.id === id)?.displayName).filter(Boolean).join("、")}这类布景 —— 录出来就是一面墙。`
+            : "整镜三个取样帧里，没有任何实体落在视锥内 —— 录出来是纯空镜。",
+          fix: named.length
+            ? { action: "shot.reframe", payload: { shotId: x.id, target: named[0], size: x.size || "MS" }, label: "按这一镜的主体重新摆机位" }
+            : { action: "shot.update", payload: { id: x.id, targetIds: [] }, label: "先指定这一镜拍谁（填 targetIds）", needsInput: "targetIds" },
+        });
+        continue;
+      }
+
+      // 标题写着「轮胎」，而轮胎不在画面里 —— 这条最值钱：
+      // 它不需要导演事先指定 target，光凭镜头自己的标题就能发现机位摆错了。
+      // 实测那条 10 分钟片子里，正是这一类让画面变成了一堵墙。
+      const calledOut = d.entities
+        .map((e) => [e, mentionScore(e)])
+        .filter(([e, m]) => m >= 2 && isSubject(e) && !seen.has(e.id))
+        .sort((a, b) => b[1] - a[1]);
+      if (calledOut.length) add({
+        level: "error", code: "TITLE_SUBJECT_OFF_FRAME", shotId: x.id, label,
+        entityIds: calledOut.map(([e]) => e.id),
+        title: `镜头叫「${x.title}」，但${calledOut.map(([e]) => e.displayName).slice(0, 2).join("、")}不在画面里`,
+        why: "分镜写的是这个，机位却没对着它。录出来会是一个跟标题无关的画面。",
+        fix: { action: "shot.reframe", payload: { shotId: x.id, target: calledOut[0][0].id, size: x.size || "MCU" }, label: `把机位对准${calledOut[0][0].displayName}` },
+      });
+
+      // 指定了主体，但主体不在画面里
+      const missing = named.filter((id) => !seen.has(id));
+      if (missing.length) add({
+        level: "error", code: "SUBJECT_OFF_FRAME", shotId: x.id, label,
+        entityIds: missing,
+        title: `指定要拍的主体不在画面里：${missing.map((id) => d.entities.find((e) => e.id === id)?.displayName || id).join("、")}`,
+        why: "机位朝向或位置不对，主体在画外。",
+        fix: { action: "shot.reframe", payload: { shotId: x.id, target: missing[0], size: x.size || "MS" }, label: "按这个主体重新摆机位" },
+      });
+
+      // 没指定主体，但画面里有东西 —— 提醒一下，运镜跟随要靠 target
+      if (!named.length) {
+        // 镜头标题和描述里通常已经写明了拍谁（「轮胎」「方向盘擦一遍」），
+        // 先认这个 —— 否则光按「人 > 道具」排，一个拍轮胎的特写会被建议成拍人。
+        const score = ([id, fill]) => {
+          const e = d.entities.find((y) => y.id === id) || {};
+          return [mentionScore(e), SUBJECT_RANK[e.semanticType] ?? 1, fill];
+        };
+        const best = subjects.sort((a, b) => {
+          const sa = score(a), sb = score(b);
+          return sb[0] - sa[0] || sb[1] - sa[1] || sb[2] - sa[2];
+        })[0];
+        add({
+          level: "warn", code: "NO_TARGET", shotId: x.id, label,
+          title: "这一镜没说拍谁",
+          why: "没有 target，运镜就没法跟随主体，提示词里也拿不到主体描述。画面里现在有东西，但那是碰巧。",
+          fix: { action: "shot.update", payload: { id: x.id, targetIds: [best[0]] }, label: `指定为画面里最主要的：${d.entities.find((e) => e.id === best[0])?.displayName || ""}` },
+        });
+      }
+
+      // 主体太小：景别名义上是特写，实际占不到画幅的几分之一
+      const lead = named[0] && seen.has(named[0]) ? seen.get(named[0]) : null;
+      if (lead !== null && lead < 0.08 && ["ECU", "CU", "MCU"].includes(x.size || "")) add({
+        level: "warn", code: "SUBJECT_TOO_SMALL", shotId: x.id, label,
+        title: `写的是 ${x.size}，但主体只占画幅 ${(lead * 100).toFixed(0)}%`,
+        why: "景别和实际构图对不上，生成时提示词说特写、参考画面却是全景。",
+        fix: { action: "shot.reframe", payload: { shotId: x.id, target: named[0], size: x.size }, label: `按 ${x.size} 重新摆机位` },
+      });
+
+      // 生成端的硬约束，录之前就该知道
+      if (cap && secs > cap + 0.05) add({
+        level: "info", code: "NEEDS_CHAIN", shotId: x.id, label, seconds: Math.round(secs * 10) / 10,
+        title: `${secs.toFixed(0)} 秒，超过 ${PROVIDERS[provider].name} 单条 ${cap} 秒上限`,
+        why: x.beats?.length ? `已经拆成 ${x.beats.length} 拍，生成时会走分段续拍。` : "还没拆拍，生成时会被拒。分段是一镜之内的事，不会变成剪辑点。",
+        fix: x.beats?.length ? null : { action: "shot.beats", payload: { shotId: x.id, beats: [] }, label: "按剧情把这一镜拆成拍", needsInput: "beats" },
+      });
+      if (floor && secs < floor - 0.05) add({
+        level: "warn", code: "TOO_SHORT", shotId: x.id, label, seconds: Math.round(secs * 10) / 10,
+        title: `${secs.toFixed(1)} 秒，短于 ${PROVIDERS[provider].name} 的 ${floor} 秒下限`,
+        why: "生成端会把它拉到下限，成片里这一镜会比分镜表长。",
+        fix: { action: "shot.update", payload: { id: x.id, duration: floor }, label: `拉到 ${floor} 秒` },
+      });
+    }
+
+    const n = (lv) => findings.filter((f) => f.level === lv).length;
+    return {
+      ok: true,
+      shots: shots.length,
+      errors: n("error"), warnings: n("warn"), infos: n("info"),
+      blocking: n("error") > 0,
+      findings,
+      summary: n("error")
+        ? `${n("error")} 个镜头录出来会是空画面或拍错主体，建议先修再录`
+        : n("warn") ? `没有致命问题，${n("warn")} 处值得看一眼` : "全片检查通过",
     };
   },
 });

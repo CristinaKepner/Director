@@ -395,13 +395,13 @@ function renderShotStrip(d) {
 }
 function renderTabs(d) {
   const films = filmJobs(d);
-  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, ref: true, gen: !!d.project.currentShotId, film: films.length > 0, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
+  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, ref: true, check: d.shots.length > 0, gen: !!d.project.currentShotId, film: films.length > 0, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
   document.querySelectorAll("[data-bottom]").forEach((b) => {
     const k = b.dataset.bottom;
     b.hidden = !has[k];
     b.classList.toggle("on", ui.drawer && ui.tab === k);
-    const n = { takes: d.takes.length, board: d.storyboard.length, ref: d.jobs.filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind) && ["queued", "running"].includes(j.status)).length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
-    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", ref: "参照", gen: "生成", film: "成片", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
+    const n = { takes: d.takes.length, board: d.storyboard.length, check: checkData?.errors || 0, ref: d.jobs.filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind) && ["queued", "running"].includes(j.status)).length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
+    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", ref: "参照", check: "自检", gen: "生成", film: "成片", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
   });
   if (ui.drawer && !has[ui.tab]) ui.tab = "shots";
 }
@@ -1277,6 +1277,98 @@ async function uploadRef(f, hint) {
   }
 }
 
+
+// 建场自检面板：录之前把「这一镜画面里有没有东西」摆在导演面前，并且每条都能当场改。
+//
+// 这一屏存在的理由很具体：实测 astra 规划的一条 10 分钟片子，66 镜全部录完、报 ok、
+// 拼成 9.8 分钟，画面里大部分是墙 —— 因为一半机位没对准任何东西。白模「不花钱」，
+// 所以没人会盯着看，空画面就这么一路绿灯走到生成端。
+//
+// 每条问题自带一个能直接执行的修法（跟反问选项自带 next 是同一套做法）：
+// 提出问题的那一方本来就知道怎么修，不该让人再去菜单里找对应的 Action。
+// 但要人拿主意的（这一镜到底拍谁、长镜头怎么拆拍）不自动执行 —— 那是导演的活。
+let checkData = null;
+
+export async function runCheck(opts = {}) {
+  const r = await dispatch("film.check", { provider: opts.provider || "seedance-2.5" });
+  checkData = r?.ok ? r : null;
+  if (r?.ok) { ui.tab = "check"; ui.drawer = true; render(store.get()); }
+  return r;
+}
+
+function renderCheck(el, d) {
+  const c = checkData;
+  if (!c) {
+    el.innerHTML = emptyState("还没跑过自检。录白模之前会自动跑一次，也可以现在手动跑。", "现在自检");
+    el.querySelector("[data-empty]").onclick = () => runCheck();
+    return;
+  }
+  const byShot = {};
+  for (const f of c.findings) (byShot[f.shotId || "__film"] ||= []).push(f);
+  const icon = { error: "✗", warn: "!", info: "·" };
+  const auto = c.findings.filter((f) => f.fix?.action && !f.fix.needsInput).length;
+
+  el.innerHTML = `<div class="chk">
+    <div class="chk-head">
+      <b class="${c.errors ? "bad" : c.warnings ? "warn" : "ok"}">${esc(c.summary)}</b>
+      <span>${c.shots} 镜 · ${c.errors} 个会拍空 · ${c.warnings} 处可疑 · ${c.infos} 条提示</span>
+      <div class="actions">
+        ${auto ? `<button id="chkAll" class="primary">一键修 ${auto} 条</button>` : ""}
+        <button id="chkRe">重新自检</button>
+        ${c.blocking ? `<button id="chkSkip" class="danger">不管，直接录</button>` : ""}
+      </div>
+    </div>
+    <div class="chk-run" id="chkRun" hidden></div>
+    ${Object.entries(byShot).map(([sid, list]) => {
+      const sh = d.shots.find((x) => x.id === sid);
+      return `<div class="chk-group">
+        <div class="chk-shot">${sh ? `<b>${esc(sh.index)} ${esc(sh.title)}</b><span>${((sh.range.outFrame - sh.range.inFrame) / d.project.fps).toFixed(1)}s · ${esc(sh.motion?.type || "static")} · ${Math.round(sh.lens?.focalLength || 0)}mm</span>` : "<b>全片</b>"}${sh ? `<button data-goshot="${esc(sid)}">去这一镜</button>` : ""}</div>
+        ${list.map((f, i) => `<div class="chk-item ${esc(f.level)}">
+          <span class="chk-i">${icon[f.level]}</span>
+          <div class="chk-body">
+            <b>${esc(f.title)}</b>
+            <i>${esc(f.why)}</i>
+            ${f.fix ? `<div class="chk-fix">${f.fix.needsInput
+              ? `<em>要你拿主意：${esc(f.fix.label || "")}</em>${sh ? `<button data-goshot="${esc(sid)}">去改</button>` : ""}`
+              : `<button data-fix="${esc(sid)}:${i}">${esc(f.fix.label || "修")}</button><code>${esc(f.fix.action)}</code>`}</div>` : ""}
+          </div>
+        </div>`).join("")}
+      </div>`;
+    }).join("")}
+  </div>`;
+
+  const box = $("chkRun");
+  const say = (t, cls = "") => { if (box) { box.hidden = false; box.className = `chk-run ${cls}`; box.textContent = t; } };
+
+  el.querySelectorAll("[data-fix]").forEach((b) => (b.onclick = async () => {
+    const [sid, i] = b.dataset.fix.split(":");
+    const f = byShot[sid][Number(i)];
+    b.disabled = true;
+    const r = await dispatch(f.fix.action, f.fix.payload || {});
+    if (r?.ok) { say(`改好了：${f.fix.label || f.fix.action}`, "ok"); await runCheck(); }
+    else { b.disabled = false; say(`没改成：${r?.hint || r?.error || "?"}`, "fail"); }
+  }));
+
+  const all = $("chkAll");
+  if (all) all.onclick = async () => {
+    all.disabled = true;
+    const { applyFixes } = await import("./film.js");
+    const r = await applyFixes({ findings: c.findings, onProgress: (p) => say(`${p.index}/${p.total} ${p.label}`) });
+    say(`修了 ${r.applied}/${r.of} 条${r.manual.length ? `；还有 ${r.manual.length} 条要你自己拿主意` : ""}`, r.applied ? "ok" : "fail");
+    await runCheck();
+  };
+  const re = $("chkRe");
+  if (re) re.onclick = () => runCheck();
+  const skip = $("chkSkip");
+  if (skip) skip.onclick = async () => {
+    if (!confirm(`${c.errors} 个镜头会拍出空画面或拍错主体。确定直接录？`)) return;
+    const { runBlockout } = await import("./film.js");
+    say("开始录白模（跳过自检）…");
+    const r = await runBlockout({ check: false, onProgress: (p) => p.phase === "record" && say(`录白模 ${p.index}/${p.total} · ${p.title}`) });
+    say(r.ok ? `录完 ${r.recorded}/${r.of} 镜` : `录制失败：${r.hint || r.error}`, r.ok ? "ok" : "fail");
+  };
+}
+
 function renderBottom(d) {
   const el = $("bottomBody");
   const tab = ui.tab || "shots";
@@ -1285,6 +1377,7 @@ function renderBottom(d) {
   if (tab === "takes") return renderTakes(el, d);
   if (tab === "board") return renderBoard(el, d);
   if (tab === "ref") return renderRef(el, d);
+  if (tab === "check") return renderCheck(el, d);
   if (tab === "gen") return renderGen(el, d);
   if (tab === "film") return renderFilm(el, d);
   if (tab === "assets") return renderAssets(el, d);
