@@ -6,6 +6,7 @@
 //
 // 三步都只走 Action Registry，所以浏览器、桌面端菜单、CLI、Agent 得到的是同一条流水线，每步都在事件日志里。
 import { store } from "../../core/store.js";
+import { PROVIDERS } from "../../core/schema.js";
 import { getHooks } from "../../core/actions.js";
 import { dispatch } from "./client.js";
 
@@ -21,6 +22,25 @@ async function waitFor(test, { timeout = 120000, every = 250 } = {}) {
     if (Date.now() > deadline) return null;
     await sleep(every);
   }
+}
+
+
+// 这一镜放不放得进供应商的单条上限。放不下就得分段续拍 —— 那是一镜之内的技术动作，
+// 不是剪辑决定，所以这里替用户把路走对，而不是让 generation.submit 把 45 秒悄悄截成 30 秒。
+function chainPlan(shot, provider, fps) {
+  const cap = PROVIDERS[provider]?.maxSeconds || 0;
+  const secs = secondsOf(shot, fps);
+  if (!cap || secs <= cap + 0.05) return null;
+  return { seconds: secs, cap, segments: Math.ceil(secs / cap) };
+}
+
+// 分段续拍和普通生成出来的是同一个形状（job.result.url），所以等待逻辑共用一套
+async function waitJob(id, { timeout = 30 * 60 * 1000, onTick } = {}) {
+  return waitFor(() => {
+    const j = D().jobs.find((x) => x.id === id);
+    if (j && onTick) onTick(j);
+    return j && ["done", "failed", "cancelled"].includes(j.status) ? j : null;
+  }, { timeout, every: 3000 });
 }
 
 /**
@@ -98,8 +118,17 @@ export async function renderShots(opts = {}) {
     const label = `${String(shot.index).padStart(2, "0")} ${shot.title}`;
     const card = D().storyboard.find((c) => c.shotId === shot.id);
     const mode = opts.mode && opts.mode !== "auto" ? opts.mode : card?.keyframes?.[0] ? "i2v" : "t2v";
-    onProgress({ phase: "submit", index: i + 1, total: shots.length, shotId: shot.id, title: label, mode });
     await dispatch("generation.prompt", { shotId: shot.id, mode: "video" });
+
+    const long = chainPlan(shot, provider, d0.project.fps);
+    if (long) {
+      onProgress({ phase: "submit", index: i + 1, total: shots.length, shotId: shot.id, title: label, mode: "chain", segments: long.segments });
+      const c = await dispatch("shot.chain", { shotId: shot.id, provider, lang: opts.lang || "en" });
+      submitted.push({ shotId: shot.id, title: label, mode: "chain", segments: long.segments, ok: !!c?.ok, jobId: c?.id, error: c?.error, hint: c?.hint });
+      continue;
+    }
+
+    onProgress({ phase: "submit", index: i + 1, total: shots.length, shotId: shot.id, title: label, mode });
     const r = await dispatch("generation.submit", { shotId: shot.id, mode, provider, lang: opts.lang || "en" });
     submitted.push({ shotId: shot.id, title: label, mode, ok: !!r?.ok, jobId: r?.id, error: r?.error, hint: r?.hint });
   }
@@ -150,16 +179,20 @@ export async function regenerateShot(opts = {}) {
   await dispatch("generation.prompt", { shotId: shot.id, mode: "video" });
 
   const card = D().storyboard.find((c) => c.shotId === shot.id);
-  const mode = opts.mode && opts.mode !== "auto" ? opts.mode : card?.keyframes?.[0] ? "i2v" : "t2v";
-  onProgress({ phase: "submit", label: `用 ${provider} 重新生成这一镜（${mode}）` });
-  const sub = await dispatch("generation.submit", { shotId: shot.id, mode, provider });
+  const long = chainPlan(shot, provider, D().project.fps);
+  const mode = long ? "chain" : opts.mode && opts.mode !== "auto" ? opts.mode : card?.keyframes?.[0] ? "i2v" : "t2v";
+
+  // 长镜头整镜重跑 = 整条链重跑。用户改的是镜，段只是渲染这一镜的实现细节。
+  onProgress({ phase: "submit", label: long ? `这一镜 ${long.seconds.toFixed(1)} 秒，分 ${long.segments} 段续拍` : `用 ${provider} 重新生成这一镜（${mode}）` });
+  const sub = long
+    ? await dispatch("shot.chain", { shotId: shot.id, provider })
+    : await dispatch("generation.submit", { shotId: shot.id, mode, provider });
   if (!sub?.ok) return { ok: false, error: sub?.error || "SUBMIT_FAILED", hint: sub?.hint, stage: "submit" };
 
-  const job = await waitFor(() => {
-    const j = D().jobs.find((x) => x.id === sub.id);
-    if (j) onProgress({ phase: "generate", label: `生成中 ${j.progress || 0}%`, progress: j.progress });
-    return j && ["done", "failed", "cancelled"].includes(j.status) ? j : null;
-  }, { timeout: opts.timeout || 30 * 60 * 1000, every: 3000 });
+  const job = await waitJob(sub.id, {
+    timeout: opts.timeout || 60 * 60 * 1000,
+    onTick: (j) => onProgress({ phase: "generate", label: `${j.note || "生成中"} ${j.progress || 0}%`, progress: j.progress }),
+  });
 
   if (job?.status !== "done" || !job.result?.url) {
     return { ok: false, error: job?.error || "GENERATE_FAILED", message: job?.message, hint: job?.hint, stage: "generate", jobId: sub.id };

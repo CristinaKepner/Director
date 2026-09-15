@@ -1971,15 +1971,40 @@ register("generation.prompt", {
   },
 });
 
+const VIDEO_MODES = ["t2v", "i2v", "v2v"];
+
 register("generation.submit", {
   doc: `提交生成任务。mode: ${Object.keys(GEN_MODES).join("/")}；provider: ${Object.keys(PROVIDERS).join("/")}；v2v 自动使用圈选 Take 的白模视频`,
   params: { shotId: "string", mode: "t2i|i2i|t2v|i2v|v2v", provider: "providerId", prompt: "string (override)", lang: "en|zh", reference: "take|origin（v2v 拿谁当参考视频：白模 Take，还是复刻的原片。默认 take）" },
-  validate: ({ mode = "t2v", provider = "seedance-2" }) => {
+  validate: ({ shotId, mode = "t2v", provider = "seedance-2" }, state) => {
     if (!PROVIDERS[provider]) return { error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) };
     if (!PROVIDERS[provider].modes.includes(mode)) return { error: "MODE_NOT_SUPPORTED", provider, supported: PROVIDERS[provider].modes };
     // 供应商说这个模式现在做不了，就别把用户的点击变成一个注定失败的排队任务
     const ready = hooks.generation?.modeReady?.(mode, provider);
     if (ready && !ready.ok) return { error: ready.error || "MODE_NOT_READY", hint: ready.hint };
+
+    // 镜头比供应商单条上限长：以前这里是 Math.min 悄悄钳到上限 —— 点「重生成这一镜」，
+    // 一个 45 秒的镜头回来 30 秒，报 ok，拼片时那个槽里少 15 秒。没人会发现。
+    //
+    // 分段是模型 30 秒上限逼出来的技术动作，不是导演的剪辑决定，所以这里**不自动**转去分段续拍：
+    // 那会把一次点击变成四次计费。当场拒绝，把该走哪条路说清楚，让人自己决定。
+    const cap = PROVIDERS[provider].maxSeconds || 0;
+    if (cap && VIDEO_MODES.includes(mode)) {
+      const s = state.shots.find((x) => x.id === (shotId || state.project.currentShotId));
+      if (s) {
+        const secs = (s.range.outFrame - s.range.inFrame) / state.project.fps;
+        if (secs > cap + 0.05) {
+          const n = Math.ceil(secs / cap);
+          return {
+            error: "SHOT_TOO_LONG",
+            seconds: Math.round(secs * 10) / 10,
+            maxSeconds: cap,
+            segments: n,
+            hint: `这一镜 ${secs.toFixed(1)} 秒，超过 ${PROVIDERS[provider].name} 单条 ${cap} 秒上限，要分 ${n} 段续拍。先 shot.beats 按剧情拆拍，再 shot.chain 逐段生成；分段是一镜之内的事，不会变成剪辑点。`,
+          };
+        }
+      }
+    }
     return null;
   },
   handler({ shotId, mode = "t2v", provider = "seedance-2", prompt, lang = "en", reference = "take" }, meta) {
@@ -2007,7 +2032,7 @@ register("generation.submit", {
       negative: P.negative[lang],
       promptVersion: s.promptVersions?.at(-1)?.version || 1,
       compiler: P.compiler,
-      seconds: Math.min(seconds, PROVIDERS[provider].maxSeconds || seconds),
+      seconds: Math.min(seconds, PROVIDERS[provider].maxSeconds || seconds), // 兜底；超长镜头在 validate 就被拒了
       aspect: d0.project.aspect,
       // reference inputs for adapters: storyboard keyframe / take thumbnail (i2v, i2i), take proxy video (v2v),
       // and the approved reference assets of the entities in this shot (identity / product consistency)

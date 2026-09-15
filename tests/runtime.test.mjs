@@ -630,3 +630,27 @@ test("坏链接当场拒绝，不排成任务", () => {
   assert.equal(good.ok, true, "正常链接照常排队");
   R.setHooks({ fetcher: null });
 });
+
+// 分镜是导演的剪辑决定，分段是模型 30 秒上限逼出来的技术动作 —— 两回事。
+// 以前 generation.submit 把超长镜头 Math.min 悄悄钳到上限：45 秒的镜头回来 30 秒，报 ok，
+// 拼片时那个槽里少 15 秒，没人会发现。当场拒绝，并说清楚该走哪条路。
+test("超长镜头不能被悄悄截短", () => {
+  dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
+  const d = store.get();
+  const shot = d.shots[0];
+  // 45 秒：超过 seedance-2.5 的 30 秒，也超过 seedance-2 的 12 秒
+  assert.equal(dispatch("shot.update", { id: shot.id, duration: 45 }, { source: "human" }).ok, true);
+
+  const r = dispatch("generation.submit", { shotId: shot.id, mode: "t2v", provider: "seedance-2.5" }, { source: "human" });
+  assert.equal(r.ok, false, "45 秒超过 30 秒上限，该拒");
+  assert.equal(r.error, "SHOT_TOO_LONG");
+  assert.equal(r.maxSeconds, 30);
+  assert.equal(r.segments, 2, "45 / 30 → 2 段");
+  assert.match(r.hint, /shot\.beats/, "要告诉人下一步走哪条路");
+  assert.equal(store.get().jobs.filter((j) => j.shotId === shot.id).length, 0, "一个任务都不该建");
+
+  // 放得下就照常
+  dispatch("shot.update", { id: shot.id, duration: 8 }, { source: "human" });
+  const ok = dispatch("generation.submit", { shotId: shot.id, mode: "t2v", provider: "seedance-2.5" }, { source: "human" });
+  assert.equal(ok.ok, true, "8 秒放得下，正常提交");
+});
