@@ -1,8 +1,9 @@
 # 导演台 Director Console · 产品方案与 Agent Harness
 
-> 状态：2026-09-15。代码在 `feat/film-pipeline-desktop`，客户端 0.5.7。
+> 状态：2026-09-15。代码在 `feat/film-pipeline-desktop`，客户端 0.5.8。
 > 文中带「实测」的数字都是跑出来的，不是查来的；没跑过的会写明。
 > 本版新增：长片的分镜/分段之别（§7.5）、建场自检（§13.5）、以及一条真跑出来的 10 分钟片子（§17.5）。
+> 0.5.8：v2v 在客户端里真的跑通了一条（§18 前四行是为此修的），以及视图三档变回常驻控件。
 
 ---
 
@@ -344,6 +345,12 @@ options: [
 | **规划器的长计划被整份丢掉** | astra 把 10 分钟全片规划出来了（18,482 字符），撞上 token 上限截断，`JSON.parse` 抛错，回落到规则规划器答「没听懂」 | 参照读取器早有 `closeJson()` 抢救，规划器里没有。补上，上限提到 32000。80 个已规划好的镜头不该因为尾巴不完整就全部作废 |
 | **`camera.frame` 把机位摆到地上** | 拍方向盘的机位离地 0.15 米 —— 趴在地上拍 | 机位高度算的是 `h × 比例`，`h` 是主体**自身**高度。对人成立（1.7m → 齐眼），对 `dim=[0.46,0.08,0.46]` 的方向盘就是贴地。改成围绕主体在世界里的实际高度。**这是自检自动修来回震荡的真因**（14→16→11→16 变成 25→8→8→5 收敛） |
 | **修一镜拆掉另外十四镜** | 自检一键修 39 条，错误反而从 23 涨到 25 | 修法直接调 `camera.frame`，而 15 个镜头共用一个机位。新增 `shot.reframe`：机位若被共用，先克隆一个专属的再摆 |
+| **打包后的客户端开不出隧道** | 装了 cloudflared 的机器上，v2v 永远回 `NO_PUBLIC_MEDIA_URL` | 隧道只在 PATH 里找 cloudflared，而从访达启动的 app 继承的是 launchd 的 PATH（没有 `/opt/homebrew/bin`）。ffmpeg / yt-dlp 早就按固定位置探测，隧道这里一直没跟上。补上探测，并给后端进程补回常见安装目录 |
+| **一条隧道没通就判 v2v 死刑** | cloudflared 报 Registered、也给了 `*.trycloudflare.com` 地址，那个主机名却始终不通 | quick tunnel 的随机故障（实测连开三条，前两条不通第三条通）。改成最多换三条；而且本机一次 HTTP 应答都没拿到时不判死 —— Clash 这类代理会掐断到 trycloudflare 的 TLS，而要能取到视频的是 Ark 的服务器，不是这台机器。这种情况标成「已建立但未验证」继续用，日志里说清楚 |
+| **隧道失败留下孤儿进程** | 重启几次攒出一堆 cloudflared，见过跨天还活着的 | 失败路径只把 `tunnel` 置空，没有 `stop()` |
+| **事件日志把工程撑到 48 MB** | 一条 10 分钟的片子，点一下镜头要等将近一秒 | 事件的 before/after 直接存了 base64 缩略图；日志又是状态的一部分，于是每个 Action 的深拷贝、每次自动保存、每条撤销快照都把它整份复制一遍。改成：日志里只留替身（`data:…base64,…(48 KB)`），深拷贝时把日志摘出去，撤销快照不带日志（`restoreSnapshot` 本来就保留当前那一份）。**实测同一个工程 254 → 48 ms/次** |
+| **「按景别放机位」永远是亮的** | 机位没写「看向」时点它，只换来一句 `TARGET_NOT_FOUND` | 违反自己定的「能力按状态暴露，不按存在暴露」。改成先拿这一镜点名的主体兜底，真的一个都没有才灰掉并说清为什么 |
+| **进了对照就找不到视图三档** | 「自由 / Program / 对照」那一组被对照层盖住，回去只剩「退出对照」一条路 | 对照层 z-index 5，HUD 没写 z-index。菜单里也没有对照这一档（`view` 命令把非 program 一律当 free）。HUD 提到 z-index 6、对照底部留出它的高度、菜单补上 Cmd+3 |
 | **从对照切回自由/Program 再进对照是一片黑** | 对照那一屏永远空着，再也回不来 | `dataset.key` 是防重绘的缓存键。退出时清了 `innerHTML` 却留着 key，再进来 key 命中直接 return。顺带 Program 按钮在对照模式下也亮着（判断写的是 `!== "free"`，加第三档后就错了） |
 
 **共性**：全都是「报成功但没做」或「静默丢东西」。这类 bug 比崩溃危险得多——崩溃会被发现，静默失败会被当成模型能力不行。这也反过来印证了第 1 节的立场：**执行了没有，必须能独立验证。**
@@ -358,7 +365,7 @@ options: [
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | `NO_PUBLIC_MEDIA_URL` / `V2V_NEEDS_PUBLIC_MEDIA` | v2v 参考视频必须公网可达 | `--tunnel cloudflared`（只读放开 `/media`）或 `--public-url`；否则用 i2v。**提交前就拒绝**，不排队等四十秒再失败 |
-| `TUNNEL_UNREACHABLE` | 拿到 trycloudflare 地址但公网 530——本机代理（Clash / Surge 的 fake-IP）截断了 cloudflared 到边缘的连接 | 给 `*.argotunnel.com` 或 `198.41.192.0/24`、`198.41.200.0/24` 加直连规则。隧道自测不过就不设置 publicUrl，避免拿到坏地址 |
+| `TUNNEL_UNREACHABLE` | 拿到 trycloudflare 地址但公网不通。两种成因：① quick tunnel 自己的随机故障；② 本机代理（Clash / Surge 的 fake-IP）掐断了到 trycloudflare / argotunnel 的连接 | 最多换三条隧道重试。全都验不过、而且本机一次 HTTP 应答都没拿到时，按「已建立但未验证」继续用 —— 本机连不上不等于 Ark 连不上（实测就是这样出的片）。想让本机也验得过：给 `198.41.192.0/24`、`198.41.200.0/24` 和 `+.trycloudflare.com` 加直连规则 |
 | `InvalidParameter: Bad Request`（v2v，18% 处失败） | Ark 的 `reference_video` 不收 WebM。任务能创建成功，它事后抓取时才失败，报错却回落成参数错误 | `film.toMp4()` 提交前转容器。**A/B 验证：同隧道同内容，webm 失败、mp4 running** |
 | `InputImageSensitiveContentDetected` | 续拍尾帧带人脸触发审核 | 自动降级 t2v，标 `seamSoft` |
 | 网关 400 参数不支持 | 各厂商参数拼法不一（`max_completion_tokens`、固定 temperature、无 `json_object`） | 适配器按错误信息就地协商并记住该模型的写法，最多三次 |
@@ -389,10 +396,13 @@ options: [
 
 | 验证 | 结果 |
 |---|---|
-| 测试 | `npm test` 28 · `npm run test:api` 8，全绿 |
+| 测试 | `npm test` 32 · `npm run test:api` 14，全绿 |
+| **v2v 端到端** | 白模 webm → `film.toMp4` → 隧道 → Ark 取走 → 回一条 6 s / 1280×720 / 24fps 的 mp4。任务 `cgt-20260915213125-4ypla`，130 s 出片。**这条隧道本机验证不过，Ark 照样取到了** |
+| 隧道重试 | 同一次启动里连开三条：前两条主机名始终不通，第三条成了（没有重试就是「v2v 用不了」） |
+| 大工程手感 | 同一个 66 镜工程：`shot.select` 254 → 48 ms、`camera.transform` 412 → 74 ms |
 | 10 分钟片子 | 66 镜全录、拼成 586.6 s（§17.5） |
 | 自检收敛性 | 自动修一轮 25 → 8 → 8 → 5（修 `camera.frame` 高度之前是震荡的） |
 | 对照视图切换 | 无头浏览器复现：修前再进对照 `compareHTML: 0`，修后 `985` |
-| 0.5.7 客户端 | 双架构 dmg 过 `hdiutil verify`；装好的包里实测自检可跑、视图三档互切、超长镜头正确拒绝 |
+| 0.5.8 客户端 | 双架构 dmg 过 `hdiutil verify`；装好的包里实测自检可跑、视图三档互切、超长镜头正确拒绝 |
 | 坏链接 | `file://` / `javascript:` / 非 URL 在 dispatch 当场被拒，不建任务 |
 | yt-dlp 找 ffmpeg | 最小 PATH（`/usr/bin:/bin`）下复现失败，传 `--ffmpeg-location` 后成功 |
