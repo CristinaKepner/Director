@@ -2522,6 +2522,28 @@ register("film.check", {
         continue;
       }
 
+      // 机位埋在某个实心代理体里。语义代理体是没有内部的实心盒子，所以车内戏、室内戏
+      // 会拍到盒子内壁 —— 一整面纯色。实测那条 10 分钟片子里 12 个车内镜头全是这样，
+      // 这才是画面真正难看的原因，比机位没对准严重得多，而且光看「有没有东西在画面里」查不出来。
+      const cs0 = cameraStateAt(d, x, x.range.inFrame);
+      const cp = cs0?.position;
+      if (cp) {
+        const buried = d.entities.find((e) => {
+          if (["building", "environment"].includes(e.semanticType)) return false; // 地面和墙不算
+          const pos = e.transform.position, dim = e.proxy?.dimensions || [1, 1, 1];
+          return cp[0] >= pos[0] - dim[0] / 2 && cp[0] <= pos[0] + dim[0] / 2
+              && cp[1] >= pos[1] && cp[1] <= pos[1] + dim[1]
+              && cp[2] >= pos[2] - dim[2] / 2 && cp[2] <= pos[2] + dim[2] / 2;
+        });
+        if (buried) add({
+          level: "error", code: "CAMERA_INSIDE_PROXY", shotId: x.id, label,
+          entityIds: [buried.id],
+          title: `机位埋在「${buried.displayName}」里面`,
+          why: "语义代理体是实心的，没有内部。机位在它里面，白模拍到的是盒子内壁 —— 一整面纯色。车内戏、室内戏都会这样。",
+          fix: { action: "entity.update", payload: { id: buried.id, hollow: true }, label: `把「${buried.displayName}」改成空心（能拍内部）`, needsInput: "确认这个代理体需要内部空间" },
+        });
+      }
+
       // 标题写着「轮胎」，而轮胎不在画面里 —— 这条最值钱：
       // 它不需要导演事先指定 target，光凭镜头自己的标题就能发现机位摆错了。
       // 实测那条 10 分钟片子里，正是这一类让画面变成了一堵墙。
