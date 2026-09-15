@@ -89,7 +89,7 @@
       ]
     },
     "dmg": {
-      "title": "导演台 ${version}",
+      "title": "导演台 ${version} ${arch}",
       "backgroundColor": "#0b0c10",
       "contents": [
         {
