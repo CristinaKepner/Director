@@ -654,3 +654,18 @@ test("超长镜头不能被悄悄截短", () => {
   const ok = dispatch("generation.submit", { shotId: shot.id, mode: "t2v", provider: "seedance-2.5" }, { source: "human" });
   assert.equal(ok.ok, true, "8 秒放得下，正常提交");
 });
+
+// 视图模式是三档不是两档。加了「对照」之后，仍按「不是 free 就是 program」判断的地方会出错。
+test("视图三档互斥：对照不是 program 的一种", () => {
+  dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
+  for (const m of ["free", "program", "compare"]) {
+    assert.equal(dispatch("project.set-view", { mode: m }, { source: "human" }).ok, true, `${m} 该是合法模式`);
+    assert.equal(store.get().project.viewMode, m);
+  }
+  // 回得去：对照 → 自由 → 对照，状态不能卡住
+  dispatch("project.set-view", { mode: "compare" }, { source: "human" });
+  dispatch("project.set-view", { mode: "free" }, { source: "human" });
+  const back = dispatch("project.set-view", { mode: "compare" }, { source: "human" });
+  assert.equal(back.ok, true);
+  assert.equal(store.get().project.viewMode, "compare", "再进对照要回得来");
+});

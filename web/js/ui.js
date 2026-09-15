@@ -318,7 +318,7 @@ function renderLight(d) {
   }
   $("playBtn").textContent = d.project.playing ? "❚❚" : "▶";
   $("viewFree").classList.toggle("on", d.project.viewMode === "free");
-  $("viewProgram").classList.toggle("on", d.project.viewMode !== "free");
+  $("viewProgram").classList.toggle("on", d.project.viewMode === "program");
   $("gizmoSeg").hidden = !d.project.selectedId || d.project.selectedKind === "shot";
   $("gizmoSeg").querySelectorAll("[data-gizmo]").forEach((b) => b.classList.toggle("on", (d.project.gizmoMode || "translate") === b.dataset.gizmo));
   // selection changed → show its properties (once), never steal the panel afterwards
@@ -902,7 +902,13 @@ export function renderCompare(d) {
   const on = d.project.viewMode === "compare";
   el.hidden = !on;
   $("viewCompare")?.classList.toggle("on", on);
-  if (!on) { el.innerHTML = ""; return; }
+  if (!on) {
+    // dataset.key 是「内容没变就别重绘」的缓存键。退出对照时清了 innerHTML 却留着 key，
+    // 于是再进来时 key 命中、直接 return —— 对照那一屏永远是一片黑，再也回不来。
+    el.innerHTML = "";
+    delete el.dataset.key;
+    return;
+  }
 
   const shot = d.shots.find((s) => s.id === d.project.currentShotId) || d.shots[0];
   if (!shot) { el.innerHTML = `<div class="sc-empty">还没有镜头。</div>`; return; }
