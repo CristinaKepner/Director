@@ -5,6 +5,7 @@ export { STATE_MACHINE };
 
 const listeners = new Set();
 const HISTORY_LIMIT = 80;
+const EMPTY = Object.freeze([]); // 深拷贝时给 events 占位，绝不写入
 let history = []; // [{ snapshot, eventId, label }]
 let future = [];
 
@@ -97,7 +98,19 @@ export const store = {
     this.notify(info);
   },
   patch(mutator, event, info = {}) {
-    const clone = structuredClone(this.data);
+    // 事件日志只追加，没有任何 handler 会去动它 —— 可它是状态的一部分，于是每个 Action
+    // 的深拷贝都要把它整份复制一遍。一条 10 分钟的片子里事件日志能占到状态的一大半
+    // （before/after 里带着 base64 缩略图），结果点一下镜头要等将近一秒。
+    // 拷贝时把它摘出去、拷完原样接回来：省下的正是这一半。
+    const events = this.data.events;
+    this.data.events = EMPTY;
+    let clone;
+    try {
+      clone = structuredClone(this.data);
+    } finally {
+      this.data.events = events;
+    }
+    clone.events = events;
     mutator(clone);
     this.set(clone, event, info);
   },
@@ -110,7 +123,7 @@ export const store = {
 
 // ---- history ----
 export function pushHistory(label, eventId) {
-  history.push({ snapshot: persistable(store.data), label, eventId });
+  history.push({ snapshot: persistable(store.data, { events: 0 }), label, eventId });
   if (history.length > HISTORY_LIMIT) history.shift();
   future = [];
 }
@@ -127,7 +140,7 @@ export function clearHistory() {
 export function undo() {
   const entry = history.pop();
   if (!entry) return { ok: false, error: "NOTHING_TO_UNDO" };
-  future.push({ snapshot: persistable(store.data), label: entry.label, eventId: entry.eventId });
+  future.push({ snapshot: persistable(store.data, { events: 0 }), label: entry.label, eventId: entry.eventId });
   restoreSnapshot(entry.snapshot);
   return { ok: true, label: entry.label, eventId: entry.eventId };
 }
@@ -135,7 +148,7 @@ export function undo() {
 export function redo() {
   const entry = future.pop();
   if (!entry) return { ok: false, error: "NOTHING_TO_REDO" };
-  history.push({ snapshot: persistable(store.data), label: entry.label, eventId: entry.eventId });
+  history.push({ snapshot: persistable(store.data, { events: 0 }), label: entry.label, eventId: entry.eventId });
   restoreSnapshot(entry.snapshot);
   return { ok: true, label: entry.label };
 }
@@ -178,10 +191,12 @@ export function resetAgent(prev = {}) {
   return { ...fresh, mode: prev.mode ?? fresh.mode, backend: prev.backend ?? fresh.backend };
 }
 
-export function persistable(d = store.data) {
-  const { agent, health, ...rest } = d;
+// events：要留多少条事件。先截断再深拷贝 —— 反过来会先把整份日志复制一遍再扔掉。
+// 撤销栈的快照传 0：restoreSnapshot 本来就保留当前的事件日志，快照里那一份纯属白带。
+export function persistable(d = store.data, { events = 200 } = {}) {
+  const { agent, health, events: log, ...rest } = d;
   const copy = structuredClone(rest);
-  copy.events = copy.events.slice(0, 200);
+  copy.events = events ? structuredClone((log || []).slice(0, events)) : [];
   copy.project.playing = false;
   copy.project.recording = null;
   copy.takes = copy.takes.map((t) => ({ ...t, videoUrl: t.videoUrl && t.videoUrl.startsWith("blob:") ? null : t.videoUrl }));

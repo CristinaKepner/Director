@@ -106,9 +106,22 @@ function keyArgs() {
   pick("--ark-key-file", ARK_KEY_FILE, prefs.arkKeyFile, ".ark-key");
   pick("--llm-key-file", LLM_KEY_FILE, prefs.llmKeyFile, ".aigw-key");
   if (prefs.llmModel) out.push("--llm-model", prefs.llmModel);
-  // v2v 需要 Ark 能取到白模视频：开一条只读、只含 /media 的公网隧道（控制接口不出网）
-  if (prefs.tunnel) out.push("--tunnel", "cloudflared");
+  // v2v 需要 Ark 能取到白模视频。两条路，自有地址优先：给了地址就不用再开隧道。
+  if (prefs.publicUrl) out.push("--public-url", prefs.publicUrl);
+  else if (prefs.tunnel) out.push("--tunnel", "cloudflared");
   return out;
+}
+
+// 从访达 / Dock 启动的 app 继承的是 launchd 的 PATH（/usr/bin:/bin:/usr/sbin:/sbin），
+// 没有 /opt/homebrew/bin —— 装了 cloudflared 的机器上隧道照样 spawn ENOENT，v2v 直接没了。
+// 后端对 ffmpeg / yt-dlp / cloudflared 都会按固定位置探测，但探测兜底也是查 PATH，
+// 而且 yt-dlp 自己还要在 PATH 里找别的工具。所以在这里就把常见的安装位置补回去。
+const TOOL_DIRS = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+function toolPath() {
+  const seen = new Set();
+  return [...(process.env.PATH || "").split(path.delimiter), ...TOOL_DIRS]
+    .filter((d) => d && !seen.has(d) && (seen.add(d), true))
+    .join(path.delimiter);
 }
 
 function keyState() {
@@ -139,7 +152,7 @@ async function startBackend() {
   const args = [entry, "--port", String(port), "--host", "127.0.0.1", "--project", PROJECT_FILE, "--media-dir", MEDIA_DIR, "--demo", "none", ...keyArgs()];
   const child = spawn(process.execPath, args, {
     cwd: ROOT,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production" },
+    env: { ...process.env, PATH: toolPath(), ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const tap = (buf) => {
@@ -360,6 +373,7 @@ function buildMenu() {
         { type: "separator" },
         { label: "自由观察", accelerator: "Cmd+1", click: () => send("view", "free") },
         { label: "Program 视角", accelerator: "Cmd+2", click: () => send("view", "program") },
+        { label: "对照（白模 ↔ 生成）", accelerator: "Cmd+3", click: () => send("view", "compare") },
         { label: "回到全景", accelerator: "Cmd+0", click: () => send("reset-view") },
         { label: "聚焦选中", accelerator: "Cmd+F", click: () => send("focus") },
         { type: "separator" },
@@ -588,7 +602,7 @@ async function showDiagnostics() {
       `火山密钥    ${k.hasArk ? `已配置 ${k.ark}` : "未配置 — Seedance / Seedream 会走模拟队列"}`,
       `规划模型    ${h?.llm?.current || "rules 规则规划器"}${k.hasLlm ? "" : "（未配置网关密钥）"}`,
       `拼接器      ${plan?.data?.assembler?.ready ? "ffmpeg 就绪" : "找不到 ffmpeg — brew install ffmpeg"}`,
-      `v2v 公网    ${h?.generation?.publicUrl || (prefs.tunnel ? "隧道未建立（看后端日志）" : "未开启 — 偏好设置里可打开")}`,
+      `v2v 公网    ${h?.generation?.publicUrl ? `${h.generation.publicUrl}（${prefs.publicUrl ? "自有地址" : "隧道"}）` : prefs.publicUrl ? `${prefs.publicUrl}（后端还没确认）` : prefs.tunnel ? "隧道未建立（看后端日志）" : "未开启 — 偏好设置里可打开"}`,
       `版本        ${app.getVersion()} · 更新源 ${prefs.updateFeed || DEFAULT_FEED || "未配置"}${prefs.autoUpdate === false ? "（自动检查关闭）" : ""}`,
       `数据        ${DATA_DIR}（工程库 · 媒体）`,
       `应用状态    ${USER}（密钥 · 偏好 · 日志）`,
@@ -630,6 +644,8 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
   <label for="tunnel" style="margin:0;color:#e8e8ea">把白模视频只读放到公网，让 Seedance 能取到</label>
 </div>
 <div class="hint">只放开 /media 的只读读取，地址随机；控制接口始终留在本机。需要 cloudflared（brew install cloudflared）。不开就只能用 i2v / t2v。</div>
+<input id="publicUrl" placeholder="或：自己的公网地址 https://…（填了就不开隧道）" autocomplete="off" spellcheck="false" style="margin-top:8px">
+<div class="hint">已经有能从公网访问到本机 /media 的地址（自建反代、内网穿透、云主机）就填这里 —— 不依赖 cloudflared，也绕开本机代理拦截。留空则按上面的开关走隧道。</div>
 <label style="margin-top:18px">更新</label>
 <div style="display:flex;align-items:center;gap:8px;margin:2px 0 5px">
   <input type="checkbox" id="auto" style="width:auto;margin:0">
@@ -652,12 +668,13 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
     $("llmState").innerHTML = s.hasLlm ? '<span class="ok">已配置 ' + s.llm + '</span>' : '<span class="warn">未配置</span>';
     $("model").innerHTML = ['<option value="">默认（后端决定）</option>', ...s.models.map((m) => '<option value="' + m + '"' + (m === s.llmModel ? " selected" : "") + '>' + m + '</option>')].join("");
     $("tunnel").checked = !!s.tunnel;
+    $("publicUrl").value = s.publicUrl || "";
     $("auto").checked = s.autoUpdate !== false;
     $("feed").value = s.updateFeed || "";
     $("feed").placeholder = s.defaultFeed;
   });
   $("cancel").onclick = () => window.prefsApi.close();
-  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ ark: $("ark").value, llm: $("llm").value, llmModel: $("model").value, tunnel: $("tunnel").checked, autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
+  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ ark: $("ark").value, llm: $("llm").value, llmModel: $("model").value, tunnel: $("tunnel").checked, publicUrl: $("publicUrl").value.trim(), autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
   $("clear").onclick = () => window.prefsApi.save({ ark: "", llm: "", llmModel: "", clear: true });
 </script>`;
 
@@ -683,7 +700,7 @@ function openPrefs() {
   const { html, pre } = prefsFiles();
   prefsWin = new BrowserWindow({
     width: 520,
-    height: 560,
+    height: 640,
     parent: win,
     resizable: false,
     minimizable: false,
@@ -698,7 +715,7 @@ function openPrefs() {
 
 ipcMain.handle("prefs:load", async () => {
   const h = await backendHealth();
-  return { ...keyState(), keysDir: KEYS_DIR, models: h?.llm?.models || [], tunnel: !!prefs.tunnel, autoUpdate: prefs.autoUpdate !== false, updateFeed: prefs.updateFeed || "", defaultFeed: DEFAULT_FEED };
+  return { ...keyState(), keysDir: KEYS_DIR, models: h?.llm?.models || [], tunnel: !!prefs.tunnel, publicUrl: prefs.publicUrl || "", autoUpdate: prefs.autoUpdate !== false, updateFeed: prefs.updateFeed || "", defaultFeed: DEFAULT_FEED };
 });
 ipcMain.handle("prefs:close", () => prefsWin?.close());
 ipcMain.handle("prefs:save", async (_e, v) => {
@@ -712,6 +729,15 @@ ipcMain.handle("prefs:save", async (_e, v) => {
     if (v.llmModel !== undefined) { if (v.llmModel) prefs.llmModel = v.llmModel; else delete prefs.llmModel; }
   }
   if (v.tunnel !== undefined) { if (v.tunnel) prefs.tunnel = true; else delete prefs.tunnel; }
+  // 地址写错了比没填更难查：不是 http(s) 就当没填，并且说一声，别让后端拿着坏地址去提交
+  if (v.publicUrl !== undefined) {
+    const u = String(v.publicUrl || "").trim().replace(/\/+$/, "");
+    if (u && /^https?:\/\//.test(u)) prefs.publicUrl = u;
+    else {
+      if (u) dialog.showErrorBox("公网地址没保存", `「${u}」不是一个 http(s) 地址，已忽略。填形如 https://media.example.com 的地址，或留空改用隧道。`);
+      delete prefs.publicUrl;
+    }
+  }
   if (v.autoUpdate !== undefined) {
     prefs.autoUpdate = !!v.autoUpdate;
     if (prefs.autoUpdate) delete prefs.skipVersion; // 重新打开自动检查 = 不再跳过之前跳过的版本

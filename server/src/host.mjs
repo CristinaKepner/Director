@@ -112,8 +112,8 @@ export function createHost(opts = {}) {
 
   // ---- snapshot / broadcast ----
   function snapshot(eventsLimit = 120) {
-    const s = persistable(store.get());
-    s.events = s.events.slice(0, eventsLimit);
+    // 截断交给 persistable：先拷 200 条再切掉 80 条，等于每次广播白拷一遍
+    const s = persistable(store.get(), { events: eventsLimit });
     s.agent = structuredClone(store.get().agent);
     s.history = historyInfo();
     return s;

@@ -317,8 +317,11 @@ function renderLight(d) {
     renderBottom(d);
   }
   $("playBtn").textContent = d.project.playing ? "❚❚" : "▶";
+  // 三档一起刷。只刷两档的话，对照那一档的高亮只能等一次全量渲染，
+  // 中间这段时间三个按钮会同时是灭的 —— 看上去像这一组失效了。
   $("viewFree").classList.toggle("on", d.project.viewMode === "free");
   $("viewProgram").classList.toggle("on", d.project.viewMode === "program");
+  $("viewCompare").classList.toggle("on", d.project.viewMode === "compare");
   $("gizmoSeg").hidden = !d.project.selectedId || d.project.selectedKind === "shot";
   $("gizmoSeg").querySelectorAll("[data-gizmo]").forEach((b) => b.classList.toggle("on", (d.project.gizmoMode || "translate") === b.dataset.gizmo));
   // selection changed → show its properties (once), never steal the panel afterwards
@@ -573,13 +576,19 @@ function inspectEntity(el, e, d) {
 function inspectCamera(el, c, d) {
   $("inspectorTitle").textContent = c.name;
   const ents = d.entities.filter((e) => !["environment"].includes(e.semanticType));
+  // 「按景别放机位」没有主体就算不出机位，后端会回 TARGET_NOT_FOUND。
+  // 以前这个按钮永远亮着，点了只弹一句报错 —— 违反「能力按状态暴露，不按存在暴露」。
+  // 机位自己没写「看向」时，先拿这一镜点名要拍的主体兜底；真的一个都没有才灰掉。
+  const shotAim = (d.shots.find((x) => x.id === d.project.currentShotId)?.targetIds || []).find((id) => ents.some((e) => e.id === id)) || "";
+  const aim = c.target || shotAim;
+  const aimName = ents.find((e) => e.id === aim)?.displayName || "";
   el.innerHTML = `
     ${field("名称", `<input data-k="name" value="${esc(c.name)}" />`)}
     ${field("焦距", slider("focal", c.lens.focalLength, 12, 200, 1))}
     ${field("高度", slider("height", c.pose.position[1], 0.1, 12, 0.05))}
     ${field("看向", `<select data-k="target"><option value="">（无）</option>${options(ents.map((e) => e.id), c.target || "", Object.fromEntries(ents.map((e) => [e.id, e.displayName])))}</select>`)}
     ${field("景别", `<div class="xyz" style="grid-template-columns:1fr 1fr"><select data-k="size">${options(Object.keys(SHOT_SIZES), c.preset || "MS", Object.fromEntries(Object.entries(SHOT_SIZES).map(([k, v]) => [k, `${v.zh} ${k}`])))}</select><select data-k="angle">${options(Object.keys(COVERAGE_ANGLES), "front_left", Object.fromEntries(Object.entries(COVERAGE_ANGLES).map(([k, v]) => [k, v.zh])))}</select></div>`)}
-    <div class="btn-row"><button data-act="frame" class="primary">按景别放机位</button><button data-act="pilot">设为 Program</button><button data-act="key">加关键帧</button></div>
+    <div class="btn-row"><button data-act="frame" class="primary"${aim ? "" : " disabled"} title="${aim ? `按景别把机位摆到${esc(aimName)}前面${c.target ? "" : "（这一镜点名要拍它）"}` : "先在「看向」里选一个主体，或给这一镜指定拍谁 —— 不知道拍谁就算不出机位"}>按景别放机位</button><button data-act="pilot">设为 Program</button><button data-act="key">加关键帧</button></div>
     ${more("镜头", `
       ${field("光圈", `<select data-k="aperture">${options([1.4, 1.8, 2, 2.8, 4, 5.6, 8, 11], c.lens.aperture, Object.fromEntries([1.4, 1.8, 2, 2.8, 4, 5.6, 8, 11].map((a) => [a, `f/${a}`])))}</select>`)}
       ${field("位置", xyz("cpos", c.pose.position))}
@@ -596,7 +605,7 @@ function inspectCamera(el, c, d) {
       else dispatch("camera.transform", { id: c.id, height: Number(inp.value) }, { silent: true });
     };
   });
-  el.querySelector('[data-act="frame"]').onclick = () => report(dispatch("camera.frame", { id: c.id, target: el.querySelector('[data-k="target"]').value || c.target, size: el.querySelector('[data-k="size"]').value, angle: el.querySelector('[data-k="angle"]').value }));
+  el.querySelector('[data-act="frame"]').onclick = () => report(dispatch("camera.frame", { id: c.id, target: el.querySelector('[data-k="target"]').value || aim, size: el.querySelector('[data-k="size"]').value, angle: el.querySelector('[data-k="angle"]').value }));
   el.querySelector('[data-act="pilot"]').onclick = () => dispatch("camera.pilot", { id: c.id });
   el.querySelector('[data-act="key"]').onclick = () => report(dispatch("motion.keyframe", {}));
 }

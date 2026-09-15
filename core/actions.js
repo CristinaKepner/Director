@@ -171,7 +171,24 @@ export function dispatch(name, payload = {}, meta = {}) {
   return out;
 }
 
+// 事件日志记的是「谁把什么改成了什么」，不是媒体本身。before / after 里直接躺着
+// 一张 48 KB 的 base64 缩略图时，200 条日志就是十几兆 —— 它跟着状态被每个 Action
+// 深拷贝一遍，还跟着工程文件写进磁盘（实测一个工程 48 MB，点一下要等一秒）。
+// 也不只是快慢：事件面板把 before/after 当文本 diff 显示，一整串 base64 谁也读不了。
+const DATA_URL = /^data:[\w.+/-]+;base64,/;
+function lean(v) {
+  if (typeof v === "string") return v.length > 256 && DATA_URL.test(v) ? `${v.slice(0, v.indexOf(",") + 1)}…(${Math.round(v.length / 1365)} KB)` : v;
+  if (Array.isArray(v)) return v.map(lean);
+  if (v && typeof v === "object") {
+    const o = {};
+    for (const k of Object.keys(v)) o[k] = lean(v[k]);
+    return o;
+  }
+  return v;
+}
+
 function logEvent(partial) {
+  for (const k of ["before", "after", "payload"]) if (partial[k] && typeof partial[k] === "object") partial[k] = lean(partial[k]);
   store.patch(() => {}, emitEvent(partial));
 }
 

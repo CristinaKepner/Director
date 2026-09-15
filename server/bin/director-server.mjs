@@ -78,11 +78,14 @@ async function startTunnel() {
     log(`--tunnel ${TUNNEL} 不认识；目前只支持 cloudflared`);
     return;
   }
-  tunnel = createMediaTunnel({ mediaDir: host.mediaDir, bin: process.env.CLOUDFLARED || "cloudflared", log });
+  tunnel = createMediaTunnel({ mediaDir: host.mediaDir, bin: process.env.CLOUDFLARED || null, log });
   try {
     publicUrl = await tunnel.start();
-    log(`public media        ${publicUrl}/media/   (v2v 参考视频从这里取)`);
+    log(`public media        ${publicUrl}/media/   (v2v 参考视频从这里取)${tunnel.verified ? "" : "   ⚠️ 未经本机验证"}`);
   } catch (err) {
+    // 失败也要收摊：不 stop 的话 cloudflared 子进程和本地媒体服务会一直挂着，
+    // 重启几次就攒出一堆孤儿进程（实测见过跨天还活着的）。
+    tunnel?.stop();
     tunnel = null;
     log(`media tunnel 启动失败：${err.message}；v2v 仍会返回 NO_PUBLIC_MEDIA_URL，其它功能不受影响`);
   }

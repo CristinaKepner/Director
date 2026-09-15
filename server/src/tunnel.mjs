@@ -14,16 +14,45 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 
+// 打包后的 app 继承的是 launchd 的 PATH（/usr/bin:/bin:/usr/sbin:/sbin），里面没有
+// /opt/homebrew/bin —— 装了 cloudflared 的机器上照样 spawn ENOENT，v2v 直接没了。
+// ffmpeg 和 yt-dlp 早就按固定位置探测（film.mjs / fetch.mjs），隧道这里一直没跟上。
+const CANDIDATES = ["/opt/homebrew/bin/cloudflared", "/usr/local/bin/cloudflared", "/opt/local/bin/cloudflared", "/usr/bin/cloudflared"];
+
+export function findCloudflared(explicit) {
+  const tries = [explicit, process.env.CLOUDFLARED, ...CANDIDATES].filter(Boolean);
+  for (const p of tries) if (isExe(p)) return p;
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    const p = path.join(dir, "cloudflared");
+    if (isExe(p)) return p;
+  }
+  return null;
+}
+
+function isExe(p) {
+  try {
+    fs.accessSync(p, fs.constants.X_OK);
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+// cloudflared 报出来的地址不止一个：api.trycloudflare.com 是它自己的接口，会出现在
+// 日志和报错里。不排掉的话，一条连接失败的日志就能让我们把接口地址当成隧道地址去验证。
+export const QUICK_TUNNEL_URL = /https:\/\/(?!api\.|www\.)[a-z0-9-]+\.trycloudflare\.com/i;
+
 const TYPES = { ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp" };
 
 export function createMediaTunnel(opts = {}) {
   const mediaDir = path.resolve(opts.mediaDir);
   const log = opts.log || (() => {});
-  const bin = opts.bin || "cloudflared";
+  const bin = findCloudflared(opts.bin); // null = 这台机器上没有
   const prefix = "/" + crypto.randomBytes(9).toString("base64url"); // not a secret, just not enumerable
   let server = null;
   let child = null;
   let publicUrl = null;
+  let verified = false; // 本机确实从公网把探针文件取回来过
   const cfLog = []; // cloudflared 自己的输出，失败时用来给出可执行的建议
 
   // read-only, single-file, no listing, no traversal
@@ -63,17 +92,21 @@ export function createMediaTunnel(opts = {}) {
     // 1×1 transparent PNG
     fs.writeFileSync(probe, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
     try {
-      const deadline = Date.now() + 45_000;
+      const deadline = Date.now() + 40_000;
       let last = 0;
+      let everHttp = false; // 边缘答过话（哪怕是 404 / 530）—— 这条隧道确实在公网上存在
+      let why = "";
       for (;;) {
         try {
-          const r = await fetch(`${url}/media/${name}`, { signal: AbortSignal.timeout(8000) });
+          const r = await fetch(`${url}/media/${name}`, { signal: AbortSignal.timeout(12_000) });
           last = r.status;
+          everHttp = true;
           if (r.ok) return { ok: true };
         } catch (err) {
           last = err.name === "TimeoutError" ? 408 : 0;
+          why = err.cause?.message || err.message || err.name;
         }
-        if (Date.now() > deadline) return { ok: false, status: last };
+        if (Date.now() > deadline) return { ok: false, status: last, everHttp, why };
         await new Promise((r) => setTimeout(r, 3000));
       }
     } finally {
@@ -93,22 +126,67 @@ export function createMediaTunnel(opts = {}) {
   return "cloudflared 拿到了地址但公网访问不通；看 cloudflared 输出排查网络。";
 }
 
-  async function start() {
+  async function listenLocal() {
+    if (server) return `http://127.0.0.1:${server.address().port}`;
     const port = await new Promise((resolve, reject) => {
-      app.on("error", reject);
+      app.once("error", reject);
       app.listen(0, "127.0.0.1", () => resolve(app.address().port));
     });
     server = app;
     const local = `http://127.0.0.1:${port}`;
     log(`media tunnel: local origin ${local}${prefix}/media/`);
+    return local;
+  }
 
+  // 一条隧道能不能用，不是它给不给地址决定的。实测（2026-09）：quick tunnel 有相当比例
+  // 拿到了 *.trycloudflare.com 地址、cloudflared 也报 Registered，但那个主机名在公网上
+  // 一直不解析 / 不路由 —— 隔几分钟再试还是连不上。而当场换一条隧道就通了。
+  // 所以「拿到地址 → 验证不过 → 报失败」是把一次随机故障当成了环境故障。
+  const RETRYABLE = new Set(["TUNNEL_UNREACHABLE", "TUNNEL_TIMEOUT", "TUNNEL_EXITED"]);
+
+  async function start({ attempts = 3 } = {}) {
+    // 没找到就当场说清楚去哪儿装，而不是 spawn 出一个 ENOENT 再翻译错误
+    if (!bin) throw Object.assign(new Error(`找不到 cloudflared（找过 ${CANDIDATES.join("、")} 和 PATH）。brew install cloudflared，或用 CLOUDFLARED=/路径 指过去`), { code: "TUNNEL_NOT_INSTALLED" });
+    const local = await listenLocal();
+    let last = null;
+    for (let i = 1; i <= attempts; i++) {
+      cfLog.length = 0;
+      const lastRound = i >= attempts;
+      try {
+        publicUrl = await attempt(local);
+        verified = true;
+        return publicUrl;
+      } catch (err) {
+        last = err;
+        // 最后一轮、而且失败原因是「本机判不了」：保留这条隧道用下去，别把本机代理
+        // 的毛病变成「v2v 用不了」。会明确标成未验证，出问题时日志里说得清。
+        if (lastRound && err.unverifiable) {
+          publicUrl = err.url;
+          verified = false;
+          log(`media tunnel: ${publicUrl}/media/  ⚠️ 本机验证不过，按「已建立但未验证」用下去。若 Ark 报取不到视频，多半是本机代理在拦 trycloudflare.com：${diagnose()}`);
+          return publicUrl;
+        }
+        try { child?.kill("SIGTERM"); } catch {}
+        child = null;
+        if (lastRound || !RETRYABLE.has(err.code)) break;
+        log(`media tunnel: 第 ${i} 条隧道没通（${err.code}），换一条重试`);
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    throw last;
+  }
+
+  function attempt(local) {
     return new Promise((resolve, reject) => {
       child = spawn(bin, ["tunnel", "--no-autoupdate", "--url", local], { stdio: ["ignore", "pipe", "pipe"] });
       let settled = false;
+      let abandoned = false; // 这一条已经判死、准备换一条：它之后的退出不值得再报一次
       let candidate = null;
+      let registered = false; // cloudflared 说它已经连上边缘了
       const done = (err, url) => {
         if (settled) return;
         settled = true;
+        abandoned = !!err;
         clearTimeout(timer);
         err ? reject(err) : resolve(url);
       };
@@ -117,12 +195,20 @@ export function createMediaTunnel(opts = {}) {
         const s = buf.toString();
         cfLog.push(s);
         if (cfLog.length > 200) cfLog.shift();
-        const m = s.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+        if (/Registered tunnel connection/i.test(s)) registered = true;
+        const m = s.match(QUICK_TUNNEL_URL);
         if (m && !candidate) {
           candidate = `${m[0]}${prefix}`;
           log(`media tunnel: 拿到地址 ${candidate}/media/，正在验证可达性…`);
           verify(candidate).then((v) => {
-            if (!v.ok) return done(Object.assign(new Error(`${candidate} 不可达（HTTP ${v.status || "无响应"}）。${diagnose()}`), { code: "TUNNEL_UNREACHABLE", cloudflared: cfLog.slice(-6).join("") }));
+            if (!v.ok) {
+              // 本机一次 HTTP 应答都没拿到、而 cloudflared 已经注册上边缘 —— 这时候
+              // 「不可达」只是**本机**的结论：Clash 这类代理经常把到 trycloudflare.com 的
+              // TLS 直接掐断。真正要能取到视频的是 Ark 的服务器，不是这台机器。
+              // 所以这种情况不判死，标成「验不了」，交给上面决定用不用。
+              const blind = !v.everHttp && registered;
+              return done(Object.assign(new Error(`${candidate} ${blind ? `本机验不了（${v.why || "连接被中断"}）` : `不可达（HTTP ${v.status || "无响应"}）`}。${diagnose()}`), { code: "TUNNEL_UNREACHABLE", unverifiable: blind, url: candidate, cloudflared: cfLog.slice(-6).join("") }));
+            }
             publicUrl = candidate;
             log(`media tunnel: ${publicUrl}/media/  (只读，只有 /media，控制接口不出网)`);
             done(null, publicUrl);
@@ -134,7 +220,7 @@ export function createMediaTunnel(opts = {}) {
       child.on("error", (err) => done(Object.assign(new Error(`启动 cloudflared 失败：${err.message}（brew install cloudflared）`), { code: "TUNNEL_SPAWN_FAILED" })));
       child.on("exit", (code) => {
         if (!settled) done(Object.assign(new Error(`cloudflared 退出（code ${code}）`), { code: "TUNNEL_EXITED" }));
-        else if (!stopping) log(`media tunnel: cloudflared 退出（code ${code}）；v2v 会退回 NO_PUBLIC_MEDIA_URL`);
+        else if (!stopping && !abandoned) log(`media tunnel: cloudflared 退出（code ${code}）；v2v 会退回 NO_PUBLIC_MEDIA_URL`);
       });
     });
   }
@@ -146,5 +232,5 @@ export function createMediaTunnel(opts = {}) {
     try { server?.close(); } catch {}
   }
 
-  return { start, stop, get url() { return publicUrl; }, prefix };
+  return { start, stop, get url() { return publicUrl; }, get verified() { return verified; }, prefix };
 }

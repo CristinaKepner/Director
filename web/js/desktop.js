@@ -33,7 +33,8 @@ export function initDesktop() {
       case "delete": return click("deleteSel");
       case "play": return click("playBtn");
       case "record": return click("recordBtn");
-      case "view": return click(payload === "program" ? "viewProgram" : "viewFree");
+      // 视图三档：菜单和 HUD 上那一组是同一件事，少一档就会出现「菜单能去、按钮回不来」
+      case "view": return click({ program: "viewProgram", compare: "viewCompare" }[payload] || "viewFree");
       case "reset-view": return resetView();
       case "focus": return focusSelected();
       case "new-shot": return click("newShotBtn");

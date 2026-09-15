@@ -157,7 +157,10 @@ select.state.gen { color: var(--accent); border-color: var(--accent-line); }
 .safe-frame .thirds { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px); background-size: 33.333% 33.333%; }
 .safe-frame .action-safe { position: absolute; inset: 5%; border: 1px dashed rgba(255, 255, 255, .16); }
 .safe-frame .center { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 1px solid rgba(255,255,255,.35); border-radius: 50%; }
-.hud { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; background: rgba(13, 14, 19, .72); border: 1px solid var(--line-2); border-radius: var(--r-pill); padding: 7px 9px; backdrop-filter: saturate(180%) blur(20px); box-shadow: var(--shadow); }
+/* z-index 6 是有意的：对照那层是 5。HUD 被盖住的时候，「自由 / Program / 对照」这一组
+   就从界面上消失了，进了对照只剩「退出对照」一条路回去 —— 视图三档是常驻控件，
+   任何模式下都该在原地。 */
+.hud { position: absolute; z-index: 6; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; background: rgba(13, 14, 19, .72); border: 1px solid var(--line-2); border-radius: var(--r-pill); padding: 7px 9px; backdrop-filter: saturate(180%) blur(20px); box-shadow: var(--shadow); }
 .hud > button { border-radius: var(--r-pill); }
 .tc { font-family: var(--mono); font-size: 13px; color: var(--accent-2); padding: 0 8px; letter-spacing: .02em; }
 
@@ -471,7 +474,8 @@ body.desktop.blur .topbar input.ghost { color: var(--muted); }
 
 
 /* ---------- 舞台对照：占满主画面的左右分屏 ---------- */
-.stage-compare { position: absolute; inset: 0; z-index: 5; background: #050508; display: flex; flex-direction: column; justify-content: center; }
+/* 底部留出 HUD 的高度：对照内容不该被那一组按钮压在下面 */
+.stage-compare { position: absolute; inset: 0; z-index: 5; background: #050508; display: flex; flex-direction: column; justify-content: center; padding-bottom: 76px; }
 .stage-compare[hidden] { display: none; }
 .sc-grid { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 0; align-content: center; }
 .sc-grid.three { grid-template-columns: 1fr 1fr 1fr; }

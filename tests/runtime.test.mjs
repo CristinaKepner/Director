@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as R from "../core/index.js";
 
-const { dispatch, store, summarize } = R;
+const { dispatch, store, summarize, persistable } = R;
 
 test("demo city-edge builds the product-doc scene", () => {
   const r = dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
@@ -668,4 +668,27 @@ test("视图三档互斥：对照不是 program 的一种", () => {
   const back = dispatch("project.set-view", { mode: "compare" }, { source: "human" });
   assert.equal(back.ok, true);
   assert.equal(store.get().project.viewMode, "compare", "再进对照要回得来");
+});
+
+// 事件日志是「谁把什么改成了什么」，不是媒体仓库。before / after 里躺着 base64 缩略图时，
+// 200 条日志能有十几兆 —— 它跟着状态被每个 Action 深拷贝一遍、跟着工程写进磁盘，
+// 实测一个工程 48 MB、点一下镜头要等将近一秒。
+test("事件日志不夹带 base64，也不跟着撤销快照复制一遍", () => {
+  dispatch("scene.demo", { name: "city-edge" }, { source: "cli" });
+  const shot = store.get().shots[0];
+  const big = `data:image/jpeg;base64,${"A".repeat(60_000)}`;
+  assert.equal(dispatch("storyboard.add", { shotId: shot.id, keyframes: [big] }, { source: "human" }).ok, true);
+
+  const evt = store.get().events.find((e) => e.action === "storyboard.add");
+  const dump = JSON.stringify(evt);
+  assert.ok(!dump.includes("AAAAAAAAAA"), "事件日志里不该留着整串 base64");
+  assert.match(dump, /data:image\/jpeg;base64,…\(\d+ KB\)/, "该留一个看得懂的替身");
+  assert.ok(dump.length < 4000, `一条事件 ${dump.length} 字节，太胖了`);
+
+  // 图本身还在工程里 —— 瘦的是日志，不是内容
+  assert.equal(store.get().storyboard.find((c) => c.shotId === shot.id).keyframes[0], big);
+
+  // 撤销快照不带事件日志：restoreSnapshot 本来就保留当前那一份
+  assert.equal(persistable(store.get(), { events: 0 }).events.length, 0);
+  assert.ok(persistable(store.get()).events.length > 0);
 });
