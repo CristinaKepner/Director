@@ -114,6 +114,8 @@ export function createMediaTunnel(opts = {}) {
     }
   }
 
+  const tail = (n = 4) => cfLog.slice(-n).join("").trim().split("\n").slice(-n).join("\n");
+
   function diagnose() {
   const text = cfLog.join("");
   const fakeIp = /198\.18\.\d+\.\d+/.test(text);
@@ -190,7 +192,7 @@ export function createMediaTunnel(opts = {}) {
         clearTimeout(timer);
         err ? reject(err) : resolve(url);
       };
-      const timer = setTimeout(() => done(Object.assign(new Error(candidate ? `${candidate} 验证超时。${diagnose()}` : "cloudflared 在 120s 内没有给出公网地址"), { code: "TUNNEL_TIMEOUT" })), 120_000);
+      const timer = setTimeout(() => done(Object.assign(new Error(candidate ? `${candidate} 验证超时。${diagnose()}` : "cloudflared 在 120s 内没有给出公网地址"), { code: "TUNNEL_TIMEOUT", cloudflared: tail() })), 120_000);
       const scan = (buf) => {
         const s = buf.toString();
         cfLog.push(s);
@@ -207,7 +209,7 @@ export function createMediaTunnel(opts = {}) {
               // TLS 直接掐断。真正要能取到视频的是 Ark 的服务器，不是这台机器。
               // 所以这种情况不判死，标成「验不了」，交给上面决定用不用。
               const blind = !v.everHttp && registered;
-              return done(Object.assign(new Error(`${candidate} ${blind ? `本机验不了（${v.why || "连接被中断"}）` : `不可达（HTTP ${v.status || "无响应"}）`}。${diagnose()}`), { code: "TUNNEL_UNREACHABLE", unverifiable: blind, url: candidate, cloudflared: cfLog.slice(-6).join("") }));
+              return done(Object.assign(new Error(`${candidate} ${blind ? `本机验不了（${v.why || "连接被中断"}）` : `不可达（HTTP ${v.status || "无响应"}）`}。${diagnose()}`), { code: "TUNNEL_UNREACHABLE", unverifiable: blind, url: candidate, cloudflared: tail(6) }));
             }
             publicUrl = candidate;
             log(`media tunnel: ${publicUrl}/media/  (只读，只有 /media，控制接口不出网)`);
@@ -219,7 +221,9 @@ export function createMediaTunnel(opts = {}) {
       child.stderr.on("data", scan);
       child.on("error", (err) => done(Object.assign(new Error(`启动 cloudflared 失败：${err.message}（brew install cloudflared）`), { code: "TUNNEL_SPAWN_FAILED" })));
       child.on("exit", (code) => {
-        if (!settled) done(Object.assign(new Error(`cloudflared 退出（code ${code}）`), { code: "TUNNEL_EXITED" }));
+        // 退出原因只有 cloudflared 自己知道（限流、被拦、参数不对）。不带上它的最后几行，
+        // 日志里就只剩一句「退出（code 1）」，等于什么也没说。
+        if (!settled) done(Object.assign(new Error(`cloudflared 退出（code ${code}）`), { code: "TUNNEL_EXITED", cloudflared: tail() }));
         else if (!stopping && !abandoned) log(`media tunnel: cloudflared 退出（code ${code}）；v2v 会退回 NO_PUBLIC_MEDIA_URL`);
       });
     });

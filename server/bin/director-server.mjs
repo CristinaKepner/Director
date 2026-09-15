@@ -88,6 +88,7 @@ async function startTunnel() {
     tunnel?.stop();
     tunnel = null;
     log(`media tunnel 启动失败：${err.message}；v2v 仍会返回 NO_PUBLIC_MEDIA_URL，其它功能不受影响`);
+    if (err.cloudflared) log(`cloudflared 最后几行：\n${err.cloudflared}`);
   }
 }
 let tunnel = null;
