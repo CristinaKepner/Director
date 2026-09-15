@@ -8,7 +8,7 @@ export const LLM_DEFAULTS = {
   // 建一整条片子（几十个 Action + 拆拍）推理模型要一两分钟；90 s 会把正常规划掐掉，
   // 然后回退到规则规划器输出一堆"没听懂" —— 那比多等一会儿糟得多。
   timeoutMs: 300_000,
-  maxTokens: 12000,
+  maxTokens: 32000, // 一条 10 分钟片子的建场计划实测 18k+ 字符，12000 会截在半路
   temperature: 0.2,
 };
 
@@ -164,10 +164,41 @@ ${tools}
 ${JSON.stringify(summary).slice(0, 6000)}`;
   }
 
+  // 截断的 JSON：砍掉最后一个不完整的元素，再按栈把括号补齐。
+  // 长片的计划动辄两万字符，撞上上限就停在数组中间 —— 整份丢掉等于 80 个已经规划好的
+  // 镜头全部作废、回落到规则规划器答「没听懂」。少几个镜头比什么都没有强得多。
+  function closeJson(raw) {
+    for (let end = raw.length; end > 200; end = raw.lastIndexOf(",", end - 1)) {
+      const head = raw.slice(0, end);
+      const stack = [];
+      let inStr = false, esc = false;
+      for (const ch of head) {
+        if (esc) { esc = false; continue; }
+        if (ch === "\\") { esc = true; continue; }
+        if (ch === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (ch === "{" || ch === "[") stack.push(ch === "{" ? "}" : "]");
+        else if (ch === "}" || ch === "]") stack.pop();
+      }
+      if (inStr) continue;
+      try { return JSON.parse(head + stack.reverse().join("")); } catch {}
+    }
+    return null;
+  }
+
   function parsePlan(text) {
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) throw Object.assign(new Error("no JSON in model reply"), { code: "BAD_PLAN" });
-    const j = JSON.parse(m[0]);
+    let j, truncated = false;
+    try {
+      j = JSON.parse(m[0]);
+    } catch (err) {
+      j = closeJson(m[0]);
+      if (!j) throw Object.assign(new Error(`计划解析失败：${err.message}（原文 ${m[0].length} 字符）`), { code: "BAD_PLAN" });
+      truncated = true;
+      j.notes = [...(Array.isArray(j.notes) ? j.notes : []), `模型输出被截断（${m[0].length} 字符），这份计划只包含能完整读出来的部分；缺的镜头再说一次「接着往下建」就行`];
+      log(`llm: 计划被截断，抢救出 ${(j.steps || []).length} 步`);
+    }
     const steps = (Array.isArray(j.steps) ? j.steps : []).filter((s) => s && typeof s.action === "string").map((s) => ({ action: s.action.trim(), payload: s.payload && typeof s.payload === "object" ? s.payload : {}, label: String(s.label || s.action), role: ROLE_OF(s.action) }));
     const ask = (Array.isArray(j.ask) ? j.ask : [])
       .filter((a) => a && typeof a.question === "string")
@@ -179,7 +210,7 @@ ${JSON.stringify(summary).slice(0, 6000)}`;
       }))
       .filter((a) => a.options.length >= 2);
     const suggest = (Array.isArray(j.suggest) ? j.suggest : []).map(String).filter((x) => x.trim()).slice(0, 3);
-    return { steps, notes: Array.isArray(j.notes) ? j.notes.map(String) : [], reply: typeof j.reply === "string" ? j.reply : "", needsConfirm: !!j.needsConfirm, ask, suggest };
+    return { steps, notes: Array.isArray(j.notes) ? j.notes.map(String) : [], reply: typeof j.reply === "string" ? j.reply : "", needsConfirm: !!j.needsConfirm, ask, suggest, truncated };
   }
 
   return {
