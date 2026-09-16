@@ -40,7 +40,7 @@ window.__dc.dispatch = dispatch; // async: routes to backend when online
 window.__dc.local = localDispatch; // sync: local replica only (tests / debugging)
 window.__dc.client = client;
 window.__dc.desktop = isDesktop;
-window.__dc.film = film; // 白模逐镜录制 · 逐镜生成 · ffmpeg 拼片（桌面端菜单与自动化都走这里）
+window.__dc.film = film; // 草片逐镜录制 · 逐镜生成 · ffmpeg 拼片（桌面端菜单与自动化都走这里）
 window.__dc.ready = true;
 window.__dc.firstRun = showFirstRun; // 顶栏「?」之外的入口：随时能再来一次
 // 空工程 → 一句话出片；已经有工程的老用户走原来的四步引导

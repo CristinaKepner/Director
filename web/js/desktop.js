@@ -121,15 +121,15 @@ async function filmBlockout(payload) {
   const ids = shotScope(payload);
   const total = ids?.length || store.get().shots.length;
   if (!total) return toast("还没有镜头：先让 Agent 出一版分镜", true);
-  if (!(await confirmNative(`录制白模：${total} 个镜头`, "逐镜把 Program 画面录成代理视频，抓关键帧进故事版，并自动 Circle。期间别切走窗口。"))) return;
-  if (!begin("录制白模")) return;
+  if (!(await confirmNative(`录制草片：${total} 个镜头`, "逐镜把 Program 画面录成代理视频，抓关键帧进故事版，并自动 Circle。期间别切走窗口。"))) return;
+  if (!begin("录制草片")) return;
   try {
     const r = await runBlockout({
       shotIds: ids,
-      onProgress: (p) => p.phase !== "done" && step(`录白模 ${p.index}/${p.total} · ${p.title}`, p.index / p.total),
+      onProgress: (p) => p.phase !== "done" && step(`录草片 ${p.index}/${p.total} · ${p.title}`, p.index / p.total),
     });
-    end(r.ok ? `白模录完：${r.recorded}/${r.of} 镜` : `录制失败：${r.error || "没有成功的镜头"}`, !r.ok);
-    native()?.notify?.({ title: "白模录制完成", body: `${r.recorded}/${r.of} 镜` });
+    end(r.ok ? `草片录完：${r.recorded}/${r.of} 镜` : `录制失败：${r.error || "没有成功的镜头"}`, !r.ok);
+    native()?.notify?.({ title: "草片录制完成", body: `${r.recorded}/${r.of} 镜` });
   } catch (err) {
     end(`录制出错：${err.message || err}`, true);
   }
@@ -179,7 +179,7 @@ async function filmExport(payload = {}) {
 }
 
 async function filmPipeline(payload = {}) {
-  if (!(await confirmNative("一条龙：录白模 → 拼白模片 → 逐镜生成 → 拼成片", "全程可能十几分钟，生成会真实计费。中途可以关窗口中断。"))) return;
+  if (!(await confirmNative("一条龙：录草片 → 拼草片片 → 逐镜生成 → 拼成片", "全程可能十几分钟，生成会真实计费。中途可以关窗口中断。"))) return;
   await filmBlockout({});
   await filmExport({ source: "blockout" });
   await filmRender(payload);

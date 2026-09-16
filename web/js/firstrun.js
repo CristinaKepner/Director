@@ -44,32 +44,60 @@ function render() {
   el.hidden = false;
   el.innerHTML = `
     <div class="fr-card">
-      <div class="fr-head">
-        <h1>给我一个参照</h1>
-        <p>拖一张图或一段视频进来。我读出它的景别、机位高度、焦段、光位和主体，在 3D 里把场景搭出来，再出一条能播的白模片。大约一两分钟，不花钱。</p>
+      <div class="fr-head"><h1>想复刻哪条片子？</h1></div>
+
+      <div class="fr-entries">
+        <button class="fr-entry on" data-entry="link" data-tip="抖音 / B站 / YouTube 都行" data-tip-sub="把那一段下下来，读出机位站在哪、镜头多长、光从哪边打 —— 这些用嘴说要专业词，用图给只要贴一下。">
+          <span class="fr-ico"><svg class="gi"><use href="#i-link"/></svg></span><b>贴个链接</b>
+        </button>
+        <button class="fr-entry" data-entry="file" data-tip="手里有图或视频" data-tip-sub="一张截图也够。画面里本来就藏着最难说清的东西：主体多大、站在画面哪一侧、镜头是仰是俯。">
+          <span class="fr-ico"><svg class="gi"><use href="#i-upload"/></svg></span><b>拖个文件</b>
+        </button>
+        <button class="fr-entry" data-entry="text" data-tip="什么都没有也能开始" data-tip-sub="排第三是有原因的：没有参照可比，机位和光全靠猜，出来什么样只能看了才知道。">
+          <span class="fr-ico"><svg class="gi"><use href="#i-msg"/></svg></span><b>说一句话</b>
+        </button>
       </div>
 
-      <div class="fr-drop" id="frDrop">
-        <input type="file" id="frFile" accept="image/*,video/*" hidden>
-        <div class="fr-drop-in"><b>把图片或视频拖到这里</b><span>也可以点一下选文件 · 视频能只取其中几秒</span></div>
+      <div class="fr-pane" data-pane="link">
+        <div class="fr-link">
+          <input id="frUrl" type="url" placeholder="贴一条视频链接…" spellcheck="false">
+          <button id="frUrlGo" class="primary">复刻</button>
+        </div>
       </div>
 
-      <div class="fr-link">
-        <input id="frUrl" type="url" placeholder="或者贴一条视频链接：抖音 / B站 / YouTube / 小红书…" spellcheck="false">
-        <button id="frUrlGo">复刻这条</button>
+      <div class="fr-pane" data-pane="file" hidden>
+        <div class="fr-drop" id="frDrop">
+          <input type="file" id="frFile" accept="image/*,video/*" hidden>
+          <div class="fr-drop-in"><b>把图片或视频拖到这里</b><span>点一下也能选 · 视频可以只取几秒</span></div>
+        </div>
       </div>
-      <div class="fr-note fr-linknote">刷到一条想拍成那样的片子，说不清楚也没关系 —— 把链接贴过来。我下下来、读出它的景别机位光位和运镜，在 3D 里搭成你的场景，主体换成你的。</div>
 
-      <details class="fr-alt">
-        <summary>或者用一句话描述（想得出来的话）</summary>
-        <textarea id="frInput" rows="2" placeholder="比如：一条 15 秒的咖啡品牌短片，晨光里的一杯手冲…"></textarea>
+      <div class="fr-pane" data-pane="text" hidden>
+        <textarea id="frInput" rows="2" placeholder="比如：一条 15 秒的咖啡短片，晨光里的一杯手冲…"></textarea>
         <div class="fr-ex">${EXAMPLES.map((t, i) => `<button data-ex="${i}">${esc(t)}</button>`).join("")}</div>
-        <div class="fr-actions"><button id="frGoText">按这句话开始</button></div>
-      </details>
+        <div class="fr-actions"><button id="frGoText" class="primary">按这句话开始</button></div>
+      </div>
+
+      <div class="fr-flow">
+        ${[["#i-camera", "草片", "在 3D 里把机位和走位搭出来，录成一条能播的草片。不花钱，改多少次都行。"],
+           ["#i-columns", "对一对", "草片和原片并排看：机位高度、主体大小、运动方向对上了没有。这一步决定后面花的钱值不值。"],
+           ["#i-sparkles", "生成", "对上了再交给模型。构图跟着草片走，人物靠参考图锁住，不会每一镜换张脸。这一步开始计费。"],
+           ["#i-clapper", "成片", "拼成一条完整的片子。没生成的镜头先用草片顶上，整体节奏随时看得见。"]]
+          .map(([icon, label, tip], i) => `${i ? `<svg class="gi fr-arrow"><use href="#i-arrow"/></svg>` : ""}<span class="fr-step-ico" data-tip="${esc(label)}" data-tip-sub="${esc(tip)}"><svg class="gi"><use href="${icon}"/></svg><i>${esc(label)}</i></span>`).join("")}
+      </div>
 
       <div class="fr-actions"><button id="frSkip">我自己来</button></div>
       <div class="fr-steps" id="frSteps" hidden></div>
     </div>`;
+
+  // 三个入口，一次露一个：选哪个就显示哪个的输入
+  el.querySelectorAll("[data-entry]").forEach((b) => (b.onclick = () => {
+    el.querySelectorAll("[data-entry]").forEach((x) => x.classList.toggle("on", x === b));
+    el.querySelectorAll("[data-pane]").forEach((x) => (x.hidden = x.dataset.pane !== b.dataset.entry));
+    if (b.dataset.entry === "link") $("frUrl")?.focus();
+    if (b.dataset.entry === "file") $("frFile")?.click();
+    if (b.dataset.entry === "text") $("frInput")?.focus();
+  }));
 
   const drop = $("frDrop"), file = $("frFile");
   drop.onclick = () => file.click();
@@ -168,7 +196,7 @@ async function startFromRef() {
   const plan = [
     { key: "read", label: "读参照：景别 / 机位 / 光位 / 主体", state: "run", note: "" },
     { key: "build", label: "在 3D 里把场景搭出来", state: "wait", note: "" },
-    { key: "blockout", label: "逐镜跑白模预演", state: "wait", note: "" },
+    { key: "blockout", label: "逐镜跑草片预演", state: "wait", note: "" },
     { key: "film", label: "拼成一条能播的片子", state: "wait", note: "" },
   ];
   const set = (k, patch) => { Object.assign(plan.find((p) => p.key === k), patch); steps(plan); };
@@ -198,7 +226,7 @@ async function startFromLink(link) {
     { key: "fetch", label: "把链接下下来", state: "run", note: "" },
     { key: "read", label: "读出景别 / 机位 / 光位 / 运镜", state: "wait", note: "" },
     { key: "build", label: "在 3D 里把场景和分镜搭出来", state: "wait", note: "" },
-    { key: "blockout", label: "逐镜跑白模预演", state: "wait", note: "" },
+    { key: "blockout", label: "逐镜跑草片预演", state: "wait", note: "" },
     { key: "film", label: "拼成一条能播的片子", state: "wait", note: "" },
   ];
   const set = (k, patch) => { const p = plan.find((x) => x.key === k); if (p) Object.assign(p, patch); steps(plan); };
@@ -227,7 +255,7 @@ async function startFromText(text) {
   markSeen();
   const plan = [
     { key: "build", label: "理解需求，搭出场景和分镜", state: "run", note: "" },
-    { key: "blockout", label: "逐镜跑白模预演", state: "wait", note: "" },
+    { key: "blockout", label: "逐镜跑草片预演", state: "wait", note: "" },
     { key: "film", label: "拼成一条能播的片子", state: "wait", note: "" },
   ];
   const set = (k, patch) => { Object.assign(plan.find((p) => p.key === k), patch); steps(plan); };
@@ -296,13 +324,13 @@ function done(film) {
   const el = $("firstrun");
   if (!el) return;
   el.querySelector(".fr-card").innerHTML = `
-    <div class="fr-head"><h1>白模片出来了</h1><p>镜头、走位、光位、焦段都在里面，画面质感还没有。下一步拿它去生成——<b>构图和运动照着白模走，所以人物不会每次换一张脸</b>。</p></div>
+    <div class="fr-head"><h1>草片片出来了</h1><p>镜头、走位、光位、焦段都在里面，画面质感还没有。下一步拿它去生成——<b>构图和运动照着草片走，所以人物不会每次换一张脸</b>。</p></div>
     <video class="fr-video" src="${esc(mediaHref(film.url))}" controls autoplay muted loop playsinline></video>
     <div class="fr-actions">
       <button id="frOpen" class="primary">进导演台改</button>
       <button id="frRender">用 Seedance 出画面（计费）</button>
     </div>
-    <div class="fr-note">白模免费，改多少次都不花钱：机位、走位、光、焦段随便调，调好再生成。生成按镜头计费，一条十几秒的片子通常几分钟出完。生成完可以在底部「成片 → 对照」里和白模并排看。</div>`;
+    <div class="fr-note">草片免费，改多少次都不花钱：机位、走位、光、焦段随便调，调好再生成。生成按镜头计费，一条十几秒的片子通常几分钟出完。生成完可以在底部「成片 → 对照」里和草片并排看。</div>`;
   $("frOpen").onclick = close;
   $("frRender").onclick = async () => {
     close();
@@ -310,6 +338,6 @@ function done(film) {
     toast("开始逐镜生成，进度看底部「生成」");
     const r = await renderShots({ provider: "seedance-2.5", mode: "auto" });
     const ok = (r.results || []).filter((x) => x.status === "done").length;
-    toast(ok ? `生成完成 ${ok} 镜，底部「成片 → 对照」可以和白模并排看` : "生成没成功，看任务里的错误", !ok);
+    toast(ok ? `生成完成 ${ok} 镜，底部「成片 → 对照」可以和草片并排看` : "生成没成功，看任务里的错误", !ok);
   };
 }

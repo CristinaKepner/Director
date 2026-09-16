@@ -78,7 +78,7 @@ export async function runBlockout(opts = {}) {
   // 而画面里大部分是墙 —— 因为一半机位没对准任何东西。那是纯几何问题，几毫秒就能算出来，
   // 没有理由让人先录十分钟再发现。
   if (opts.check !== false) {
-    onProgress({ phase: "check", label: "建场自检：看看每一镜画面里有没有东西" });
+    onProgress({ phase: "check", label: "建场检查：看看每一镜画面里有没有东西" });
     const chk = await dispatch("film.check", { shotIds: shots.map((s) => s.id), provider: opts.provider || "seedance-2.5" });
     if (chk?.ok && chk.blocking) {
       onProgress({ phase: "check", label: chk.summary, findings: chk.findings });
@@ -203,7 +203,7 @@ export async function regenerateShot(opts = {}) {
   const prev = d0.jobs.filter((j) => j.shotId === shot.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url)).at(-1) || null;
 
   if (opts.reblock !== false) {
-    onProgress({ phase: "blockout", label: "重录白模，让左边反映你刚才的改动" });
+    onProgress({ phase: "blockout", label: "重录草片，让左边反映你刚才的改动" });
     const bo = await runBlockout({ shotIds: [shot.id], onProgress: () => {} });
     if (!bo.ok) return { ok: false, error: bo.error || "REBLOCK_FAILED", hint: bo.hint, stage: "blockout" };
   }

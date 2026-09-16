@@ -568,3 +568,72 @@ body.desktop.blur .topbar input.ghost { color: var(--muted); }
 .chk-fix { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
 .chk-fix code { color: var(--muted); font-size: 10.5px; }
 .chk-fix em { color: #f5c26b; font-style: normal; font-size: 11px; }
+
+/* ---------- 图标优先：0.6.0 ----------
+   界面上不写句子。标签最多四个字，说明退到停上去才出现的那句话里。
+   图标是 Lucide 的原始 24×24 路径，内联在 index.html 的雪碧图里。 */
+.gi { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.rail .gi, .seg-ico .gi { width: 19px; height: 19px; }
+
+/* 一个气泡，位置由 JS 算。动态渲染出来的控件也能用，而且不会被祖先的 overflow 裁掉 */
+.tipbox { position: fixed; z-index: 90; max-width: 260px; padding: 8px 11px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line-2); box-shadow: 0 14px 36px rgba(0, 0, 0, .6); pointer-events: none; opacity: 0; transition: opacity .12s ease; }
+.tipbox.on { opacity: 1; }
+.tipbox b { display: block; font-size: 12px; font-weight: 500; color: var(--text); }
+.tipbox span { display: block; font-size: 11px; line-height: 1.55; color: var(--dim); margin-top: 3px; }
+
+/* 左轨：只有图标 */
+.rail button { writing-mode: horizontal-tb; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; letter-spacing: 0; }
+
+/* 视图三档：标签只给当前那一个 */
+.seg-ico button { display: flex; align-items: center; gap: 7px; padding: 5px 9px; white-space: nowrap; }
+.seg-ico button b { font-weight: 600; font-size: 12px; display: none; white-space: nowrap; }
+.seg-ico button.on b { display: inline; }
+.hud .icon { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+#recordBtn { display: flex; align-items: center; gap: 7px; }
+#recordBtn b { font-weight: 600; font-size: 12px; }
+#recordBtn .gi { color: var(--rec); }
+
+/* 四段流水线：图标 + 数字，文字只给当前那一段 */
+.pipe { display: flex; align-items: center; gap: 2px; background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px; flex: none; }
+.pipe button { display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 9px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted); position: relative; }
+.pipe button:hover { background: var(--hover); color: var(--text); }
+.pipe button.on { background: var(--accent-soft); color: var(--text); }
+.pipe button b { font-weight: 600; font-size: 12px; display: none; white-space: nowrap; }
+.pipe button i { font-family: var(--mono); font-size: 11px; font-style: normal; color: var(--dim); display: none; }
+.pipe button.on b, .pipe button.on i { display: inline; }
+.pipe button.on { padding: 0 12px; }
+.pipe button em { position: absolute; top: 1px; left: 20px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: var(--r-pill); font-family: var(--mono); font-size: 9px; font-style: normal; display: none; place-items: center; color: var(--accent-ink); }
+.pipe button.has-badge em { display: grid; }
+.pipe button.bad em { background: var(--danger); }
+.pipe button.busy em { background: var(--accent); }
+.pipe button.ok em { background: var(--ok); }
+#moreTabs { top: auto; bottom: 46px; right: 52px; left: auto; }
+
+/* 镜头条：缩略图。有 Take 缩略图或故事版关键帧就用真的，没有就画个空框 */
+.shots button { position: relative; width: 62px; height: 36px; padding: 0; border-radius: 6px; overflow: hidden; background: var(--sunken); flex: none; }
+.shots button img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .85; }
+.shots button .idx { position: absolute; left: 4px; top: 3px; font-family: var(--mono); font-size: 9px; color: var(--dim); margin: 0; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+.shots button.on { border-color: var(--accent-line); }
+.shots button.on .idx { color: var(--accent); }
+.shots button .ph { position: absolute; inset: 0; }
+.shots button .ph::before { content: ""; position: absolute; left: 0; right: 0; top: 60%; height: 1px; background: rgba(197,184,255,.14); }
+.shots button .ph::after { content: ""; position: absolute; left: 46%; top: 26%; width: 8px; height: 19px; border-radius: 4px; background: #3a3e4c; }
+.shots button .warn { position: absolute; right: 3px; bottom: 3px; color: var(--danger); }
+.shots button .warn .gi { width: 12px; height: 12px; stroke-width: 1.9; }
+
+/* 首屏：三张入口卡 + 四步。一屏只问一件事 */
+.fr-entries { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.fr-entry { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 10px 14px; border-radius: var(--r-card); background: var(--surface); }
+.fr-entry b { font-size: 14px; font-weight: 500; color: var(--muted); }
+.fr-entry .fr-ico { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: rgba(197, 184, 255, .07); color: var(--muted); }
+.fr-entry .gi { width: 22px; height: 22px; stroke-width: 1.6; }
+.fr-entry:hover { border-color: var(--accent-line); }
+.fr-entry.on { border-color: var(--accent-line); background: var(--accent-soft); }
+.fr-entry.on b { color: var(--text); }
+.fr-entry.on .fr-ico { background: rgba(118, 87, 255, .18); color: var(--accent); }
+.fr-pane { margin-bottom: 14px; }
+.fr-flow { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 12px 10px; margin: 4px 0 14px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--sunken); }
+.fr-step-ico { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: var(--r-pill); color: var(--muted); }
+.fr-step-ico:hover { background: var(--hover); color: var(--text); }
+.fr-step-ico i { font-style: normal; font-size: 12px; }
+.fr-arrow { width: 14px; height: 14px; color: var(--dim); }

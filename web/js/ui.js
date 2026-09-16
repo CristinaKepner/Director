@@ -51,6 +51,42 @@ function openLeft(which) {
   applyUi();
   render(store.get());
 }
+// 气泡：界面上不写句子，说明停上去才出现。做成一个全局元素 + 事件委托，
+// 而不是每个控件裹一层 —— 动态渲染出来的镜头条、流水线一样能用，
+// 也不会被祖先的 overflow:hidden 裁掉（画板稿里正是栽在这上面）。
+let tipEl = null, tipFor = null;
+function showTip(target) {
+  if (!tipEl) tipEl = $("tip");
+  if (!tipEl || !target?.dataset.tip) return;
+  tipFor = target;
+  tipEl.innerHTML = `<b>${esc(target.dataset.tip)}</b>${target.dataset.tipSub ? `<span>${esc(target.dataset.tipSub)}</span>` : ""}`;
+  tipEl.hidden = false;
+  const r = target.getBoundingClientRect();
+  const t = tipEl.getBoundingClientRect();
+  const pad = 8;
+  let left = r.left + r.width / 2 - t.width / 2;
+  left = Math.max(pad, Math.min(left, window.innerWidth - t.width - pad));
+  // 上方放不下就翻到下方
+  const above = r.top - t.height - 9;
+  tipEl.style.left = `${Math.round(left)}px`;
+  tipEl.style.top = `${Math.round(above > pad ? above : r.bottom + 9)}px`;
+  tipEl.classList.add("on");
+}
+function hideTip(target) {
+  if (target && target !== tipFor) return;
+  tipFor = null;
+  if (tipEl) { tipEl.classList.remove("on"); tipEl.hidden = true; }
+}
+function bindTips() {
+  const pick = (ev) => ev.target.closest?.("[data-tip]");
+  document.addEventListener("mouseover", (ev) => { const t = pick(ev); if (t) showTip(t); });
+  document.addEventListener("mouseout", (ev) => { const t = pick(ev); if (t) hideTip(t); });
+  document.addEventListener("focusin", (ev) => { const t = pick(ev); if (t) showTip(t); });
+  document.addEventListener("focusout", () => hideTip());
+  document.addEventListener("click", () => hideTip());
+  window.addEventListener("scroll", () => hideTip(), true);
+}
+
 export function openDrawer(tab) {
   if (tab) ui.tab = tab;
   ui.drawer = tab ? true : !ui.drawer;
@@ -149,8 +185,17 @@ export function bindUI() {
     }
   });
   // bottom
-  document.querySelectorAll("[data-bottom]").forEach((btn) => (btn.onclick = () => openDrawer(btn.dataset.bottom)));
+  document.querySelectorAll("[data-bottom]").forEach((btn) => (btn.onclick = () => { $("moreTabs").hidden = true; openDrawer(btn.dataset.bottom); }));
   $("drawerBtn").onclick = () => openDrawer();
+  bindTips();
+  // 「更多」：主路径之外的七个面板收在这里，一个都没少
+  $("moreBtn").onclick = (e) => {
+    e.stopPropagation();
+    $("moreTabs").hidden = !$("moreTabs").hidden;
+  };
+  document.addEventListener("click", (e) => {
+    if (!$("moreTabs").hidden && !e.target.closest("#moreTabs") && !e.target.closest("#moreBtn")) $("moreTabs").hidden = true;
+  });
   document.addEventListener("keydown", onKey);
 
   store.subscribe((d, info) => {
@@ -317,7 +362,8 @@ function renderLight(d) {
     lastFullRender = performance.now();
     renderBottom(d);
   }
-  $("playBtn").textContent = d.project.playing ? "❚❚" : "▶";
+  $("playBtn").querySelector("use").setAttribute("href", d.project.playing ? "#i-pause" : "#i-play");
+  $("playBtn").dataset.tip = d.project.playing ? "暂停" : "播放";
   // 三档一起刷。只刷两档的话，对照那一档的高亮只能等一次全量渲染，
   // 中间这段时间三个按钮会同时是灭的 —— 看上去像这一组失效了。
   $("viewFree").classList.toggle("on", d.project.viewMode === "free");
@@ -346,7 +392,11 @@ function render(d) {
   const st = $("statePill");
   st.value = d.project.currentState;
   st.className = `state ${["ARMED", "RECORDING"].includes(d.project.currentState) ? "hot" : d.project.currentState === "GENERATING" ? "gen" : "edit"}`;
-  $("recordBtn").textContent = d.project.recording ? "■ 停止" : "● 录制";
+  const recOn = !!d.project.recording;
+  $("recordBtn").querySelector("use").setAttribute("href", recOn ? "#i-stop" : "#i-rec");
+  $("recordBtn").querySelector("b").textContent = recOn ? "停" : "录";
+  $("recordBtn").dataset.tip = recOn ? "停止录制" : "录草片";
+  $("recordBtn").dataset.tipSub = recOn ? "录到这儿为止，这条就存下来了" : "把这一镜在 3D 里录成一段视频。不花钱，录多少次都行";
   $("recordBtn").classList.toggle("live", !!d.project.recording);
   const h = isOnline() ? d.history || { undo: 0, redo: 0, labels: [] } : historyInfo();
   $("undoBtn").disabled = !h.undo;
@@ -391,23 +441,71 @@ function render(d) {
 // ---------- shot strip + tabs ----------
 function renderShotStrip(d) {
   const el = $("shotStrip");
-  el.innerHTML = d.shots.map((s) => `<button data-shot="${s.id}" class="${s.id === d.project.currentShotId ? "on" : ""}" title="${esc(MOTION_TYPES[s.motion.type]?.zh || s.motion.type)} · ${((s.range.outFrame - s.range.inFrame) / d.project.fps).toFixed(1)} s · ${Math.round(s.lens.focalLength)} mm"><span class="idx">${esc(s.index)}</span>${esc(s.title)}${s.takes.length ? `<span class="n">T${s.takes.length}</span>` : ""}</button>`).join("");
+  // 一格一镜，画的是这一镜真长什么样：优先故事版关键帧，其次 Take 缩略图，都没有就画个空框。
+  // 标题、时长和状态退到气泡里 —— 扫一眼靠图，看细节才停上去。
+  const badShots = new Set((checkData?.findings || []).filter((f) => f.level === "error" && f.shotId).map((f) => f.shotId));
+  el.innerHTML = d.shots.map((s) => {
+    const card = d.storyboard.find((c) => c.shotId === s.id);
+    const take = d.takes.find((t) => t.id === s.selectedTake) || d.takes.filter((t) => t.shotId === s.id).at(-1);
+    const thumb = card?.keyframes?.[0] || take?.thumbnail || null;
+    const secs = ((s.range.outFrame - s.range.inFrame) / d.project.fps).toFixed(1);
+    const bad = badShots.has(s.id);
+    const state = take?.videoUrl ? "草片录好了" : "草片还没录";
+    const tip = `${secs} 秒 · ${Math.round(s.lens.focalLength)}mm · ${MOTION_TYPES[s.motion.type]?.zh || s.motion.type} · ${state}${bad ? " · 检查没过" : ""}`;
+    return `<button data-shot="${s.id}" class="${s.id === d.project.currentShotId ? "on" : ""}" data-tip="${esc(s.index + " " + s.title)}" data-tip-sub="${esc(tip)}">${
+      thumb ? `<img src="${esc(mediaHref(thumb))}" alt="" />` : `<span class="ph"></span>`
+    }<span class="idx">${esc(s.index)}</span>${bad ? `<span class="warn"><svg class="gi"><use href="#i-alert"/></svg></span>` : ""}</button>`;
+  }).join("");
   el.querySelectorAll("[data-shot]").forEach((b) => {
     b.onclick = () => dispatch("shot.select", { id: b.dataset.shot });
     b.ondblclick = () => openDrawer("timeline");
   });
 }
+// 四段流水线代替十一个平铺 tab。功能一个没少：主路径四段留在外面，
+// 其余七个收进「更多」—— 排的是发现路径，不是砍能力。
+const PIPE_TIP = {
+  check: ["检查", "录之前先算一遍：这一镜的画面里到底有没有东西。有问题的会拦住，不让你白录"],
+  takes: ["草片", "在 3D 里把每一镜录成视频。不花钱——机位、走位改到满意了再往下走"],
+  gen: ["生成", "交给模型出真画面。构图跟着草片走，人物靠参考图锁住。这一步计费"],
+  film: ["成片", "把所有镜头拼成一条。还没生成的用草片顶上，先看整体节奏"],
+};
+
 function renderTabs(d) {
   const films = filmJobs(d);
-  const has = { shots: true, timeline: !!d.project.currentShotId, takes: d.takes.length > 0, board: d.storyboard.length > 0, ref: true, check: d.shots.length > 0, gen: !!d.project.currentShotId, film: films.length > 0, assets: (d.assets || []).length > 0, log: ui.moreTabs || d.events.length > 40, health: ui.moreTabs || d.events.length > 40 };
-  document.querySelectorAll("[data-bottom]").forEach((b) => {
+  const busy = d.jobs.filter((j) => ["queued", "running"].includes(j.status));
+  const recorded = d.shots.filter((s) => d.takes.some((t) => t.shotId === s.id && t.videoUrl)).length;
+  const generated = d.shots.filter((s) => d.jobs.some((j) => j.shotId === s.id && j.status === "done" && j.result?.url)).length;
+  const errors = checkData?.errors || 0;
+
+  const num = { check: d.shots.length ? (errors ? `${errors} 处要看` : "都过了") : "—", takes: d.shots.length ? `${recorded}/${d.shots.length}` : "—", gen: d.shots.length ? `${generated}/${d.shots.length}` : "—", film: films.at(-1)?.result?.seconds ? timecode(Math.round(films.at(-1).result.seconds * d.project.fps), d.project.fps).slice(3, 8) : "—" };
+  const badge = { check: errors || 0, takes: 0, gen: busy.filter((j) => j.kind !== "replicate").length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length };
+  const kind = { check: "bad", takes: "ok", gen: "busy", film: "busy" };
+
+  for (const b of $("pipe").querySelectorAll("[data-bottom]")) {
+    const k = b.dataset.bottom;
+    const on = ui.drawer && ui.tab === k;
+    b.classList.toggle("on", on);
+    b.querySelector("i").textContent = num[k];
+    b.classList.toggle("has-badge", badge[k] > 0);
+    b.classList.remove("bad", "busy", "ok");
+    if (badge[k] > 0) b.classList.add(kind[k]);
+    b.querySelector("em").textContent = badge[k] > 99 ? "99+" : String(badge[k] || "");
+    b.dataset.tip = `${PIPE_TIP[k][0]} · ${num[k]}`;
+    b.dataset.tipSub = PIPE_TIP[k][1];
+  }
+
+  // 「更多」里的七个：没内容的就不摆出来
+  const has = { shots: d.shots.length > 0, timeline: !!d.project.currentShotId, board: d.storyboard.length > 0, ref: true, assets: (d.assets || []).length > 0, log: true, health: true };
+  const label = { shots: "镜头清单", timeline: "时间线", board: "故事版", ref: "参照", assets: "资产", log: "事件", health: "状态" };
+  const extra = { board: d.storyboard.length, ref: d.jobs.filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind) && ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length };
+  for (const b of $("moreTabs").querySelectorAll("[data-bottom]")) {
     const k = b.dataset.bottom;
     b.hidden = !has[k];
     b.classList.toggle("on", ui.drawer && ui.tab === k);
-    const n = { takes: d.takes.length, board: d.storyboard.length, check: checkData?.errors || 0, ref: d.jobs.filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind) && ["queued", "running"].includes(j.status)).length, gen: d.jobs.filter((j) => ["queued", "running"].includes(j.status)).length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length }[k];
-    b.textContent = { shots: "镜头", timeline: "时间线", takes: "Take", board: "故事版", ref: "参照", check: "自检", gen: "生成", film: "成片", assets: "资产", log: "事件", health: "状态" }[k] + (n ? ` ${n}` : "");
-  });
-  if (ui.drawer && !has[ui.tab]) ui.tab = "shots";
+    b.textContent = label[k] + (extra[k] ? ` ${extra[k]}` : "");
+  }
+  $("moreBtn").classList.toggle("on", ui.drawer && !PIPE_TIP[ui.tab]);
+  if (ui.drawer && !has[ui.tab] && !PIPE_TIP[ui.tab]) ui.tab = "check";
 }
 
 // ---------- outliner ----------
@@ -522,7 +620,7 @@ function inspectEntity(el, e, d) {
     ${field("朝向", slider("yaw", e.transform.rotation[1], -3.1416, 3.1416, 0.01))}
     ${isChar ? field("姿势", `<select data-k="pose">${options([...Object.keys(POSES), "custom"], e.pose)}</select>`) : ""}
     ${field("外观", `<input data-cont="look" value="${esc(e.continuity?.look || "")}" placeholder="long dark coat…" />`)}
-    ${field("模型", `<select data-k="model"><option value="">白模代理</option>${Object.entries(MODEL_LIBRARY).map(([k, m]) => `<option value="${k}" ${e.assetRef === m.url ? "selected" : ""}>${esc(m.zh)}</option>`).join("")}${e.assetRef && !Object.values(MODEL_LIBRARY).some((m) => m.url === e.assetRef) ? `<option value="__custom" selected>${esc(e.assetRef)}</option>` : ""}</select>`)}
+    ${field("模型", `<select data-k="model"><option value="">草片代理</option>${Object.entries(MODEL_LIBRARY).map(([k, m]) => `<option value="${k}" ${e.assetRef === m.url ? "selected" : ""}>${esc(m.zh)}</option>`).join("")}${e.assetRef && !Object.values(MODEL_LIBRARY).some((m) => m.url === e.assetRef) ? `<option value="__custom" selected>${esc(e.assetRef)}</option>` : ""}</select>`)}
     <div class="btn-row"><button data-act="lookat">Program 看向它</button><button data-act="focus">聚焦</button><button data-act="dup">复制</button></div>
     ${["character", "vehicle", "weapon", "prop"].includes(e.semanticType) ? `<div class="btn-row"><button data-act="ref" class="primary">生成参考图</button>${(d.assets || []).filter((a) => a.entityId === e.id && a.approved).map((a) => `<img class="thumb clickable" style="width:48px" data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" title="${esc(a.label)}" />`).join("")}${(d.assets || []).some((a) => a.entityId === e.id && !a.approved) ? `<button data-act="assets">待批准</button>` : ""}</div>` : ""}
     ${more("形体", `
@@ -790,7 +888,7 @@ function renderFilm(el, d) {
   const cur = jobs.find((j) => j.id === filmPick) || jobs.find((j) => j.result?.url) || jobs[0];
   const src = cur.result?.url;
   const shotOf = (j) => (j.shotId ? d.shots.find((s) => s.id === j.shotId) : null);
-  const kindZh = (j) => (j.kind === "chain" ? `长镜头续拍 · ${(j.parts || []).length} 段` : { auto: "有生成用生成，缺的用白模", blockout: "全部白模", generated: "全部生成" }[j.filmSource] || "成片");
+  const kindZh = (j) => (j.kind === "chain" ? `长镜头续拍 · ${(j.parts || []).length} 段` : { auto: "有生成用生成，缺的用草片", blockout: "全部草片", generated: "全部生成" }[j.filmSource] || "成片");
 
   // 对照：同一镜的白模与生成并排，同步播放。
   // 这是整个产品最该被看见的一屏 —— 小白 get 不到 3D 的意义，是因为他从没见过
@@ -884,7 +982,7 @@ function bindSync(el) {
       box.className = `sc-run ${r.ok ? "ok" : "fail"}`;
       box.textContent = r.ok
         ? (r.verdict ? `完成 · ${r.verdict.summary || ""}` : "完成")
-        : `${{ blockout: "重录白模", submit: "提交", generate: "生成" }[r.stage] || ""}失败：${r.hint || r.message || r.error}`;
+        : `${{ blockout: "重录草片", submit: "提交", generate: "生成" }[r.stage] || ""}失败：${r.hint || r.message || r.error}`;
     }
     if (!r.ok) return;
     el.dataset.key = ""; // 强制重画：这一版变「新版」，上一版挪到中间那格
@@ -939,7 +1037,7 @@ export function renderCompare(d) {
   el.innerHTML = `
     <div class="sc-grid ${[withRef, three, !!p.generated || !withRef].filter(Boolean).length > 2 ? "three" : ""}">
       ${withRef ? cell("原片 · 你要复刻的那条", origin, "origin") : ""}
-      ${cell("白模 · 免费 · 你改的是这边", p.blockout)}
+      ${cell("草片 · 免费 · 你改的是这边", p.blockout)}
       ${three ? cell("生成 · 上一版", p.previous) : ""}
       ${withRef && !p.generated ? "" : cell(`生成 · ${esc(p.mode || "")}${three ? " · 新版" : ""} · 计费`, p.generated, "gen")}
     </div>
@@ -959,8 +1057,8 @@ export function renderCompare(d) {
       </div>
     </div>
     <div class="sc-why">${withRef && !p.generated
-      ? `<b>对着原片调白模</b>：机位高度、焦段、运动轨迹、主体在画面里的位置 —— 这些对上了，生成出来才像。白模改多少次都不花钱，对齐了再花钱生成。`
-      : `<b>左边随便改，不花钱</b>：机位、走位、光、焦段。改完点「改完重生成这一镜」——<b>只重做这一镜</b>，构图跟着白模走，人物靠已批准的参考图锁住。`}</div>`;
+      ? `<b>对着原片调草片</b>：机位高度、焦段、运动轨迹、主体在画面里的位置 —— 这些对上了，生成出来才像。草片改多少次都不花钱，对齐了再花钱生成。`
+      : `<b>左边随便改，不花钱</b>：机位、走位、光、焦段。改完点「改完重生成这一镜」——<b>只重做这一镜</b>，构图跟着草片走，人物靠已批准的参考图锁住。`}</div>`;
   bindSync(el);
   el.querySelector("[data-close]").onclick = () => dispatch("project.set-view", { mode: "program" });
   el.querySelector("[data-prev]")?.addEventListener("click", () => { showPrevGen = !showPrevGen; el.dataset.key = ""; renderCompare(store.get()); });
@@ -1181,7 +1279,7 @@ function closePreview() {
 const GUIDE = [
   { h: "这是导演台", p: ["中间是画面。点物体、机位或灯就能选中，拖 Gizmo 移动；<kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> 切换移动 / 旋转 / 缩放，<kbd>P</kbd> 切到拍摄机视角。", "左侧栏默认收起：选中东西时自动打开属性，点「场景」看全部对象。"] },
   { h: "用一句话指挥", p: ["右边的输入框就是导演的话筒：「把 Program 机位降到 0.4m 并 look-at 主角」「03 镜改成环绕 120 度」「让对手举枪」。", "每一步都是一个 Action，可撤销；⚙ 里可以切换 GPT / DeepSeek，或改成先出方案再确认。"] },
-  { h: "镜头与 Take", p: ["底部是镜头条。点镜头选中，<kbd>Space</kbd> 预演，「● 录制」录下白模代理视频作为 Take。", "有了 Take，「Take」「故事版」标签才会出现——需要时才补上。"] },
+  { h: "镜头与 Take", p: ["底部是镜头条。点镜头选中，<kbd>Space</kbd> 预演，「● 录制」录下草片代理视频作为 Take。", "有了 Take，「Take」「故事版」标签才会出现——需要时才补上。"] },
   { h: "生成与迭代", p: ["在「生成」里编译提示词、提交 Seedance / Seedream，结果会回到对话、生成表和故事版里，点开就能看。", "看完不满意，直接在对话框里说：「主角外套换成红色再生成一次」。"] },
 ];
 function showGuide(i) {
@@ -1245,11 +1343,11 @@ function renderRef(el, d) {
       </tbody></table>
       <div class="ref-two">
         <div class="ref-path">
-          <b>先走白模</b><span>在 3D 里把机位走位搭出来，和原片并排对齐，改到满意再花钱生成。慢一点，但运镜是你的，改哪一镜都只重做那一镜。</span>
+          <b>先走草片</b><span>在 3D 里把机位走位搭出来，和原片并排对齐，改到满意再花钱生成。慢一点，但运镜是你的，改哪一镜都只重做那一镜。</span>
           <div class="actions"><button id="refRebuild" class="primary">按这份参数建场</button>${d.shots.length ? `<button id="refCompare">和原片并排看</button>` : ""}</div>
         </div>
         <div class="ref-path">
-          <b>直接照着原片生成</b><span>把原片整条当参考视频交给 Seedance，运动和构图跟它走，主体换成你已批准的参考图。快，也计费；运镜是原片的，想改就得回到白模那条路。</span>
+          <b>直接照着原片生成</b><span>把原片整条当参考视频交给 Seedance，运动和构图跟它走，主体换成你已批准的参考图。快，也计费；运镜是原片的，想改就得回到草片那条路。</span>
           <div class="actions"><button id="refDirect" ${d.shots.length ? "" : "disabled title='先建场，才有镜头可生成'"}>用原片直接生成这一镜</button>${cur.ref ? `<button data-preview="${esc(cur.ref)}" data-kind="video">看原片</button>` : ""}</div>
         </div>
       </div>
@@ -1335,7 +1433,7 @@ export async function runCheck(opts = {}) {
 function renderCheck(el, d) {
   const c = checkData;
   if (!c) {
-    el.innerHTML = emptyState("还没跑过自检。录白模之前会自动跑一次，也可以现在手动跑。", "现在自检");
+    el.innerHTML = emptyState("还没跑过检查。录草片之前会自动跑一次，也可以现在手动跑。", "现在检查");
     el.querySelector("[data-empty]").onclick = () => runCheck();
     return;
   }
@@ -1350,7 +1448,7 @@ function renderCheck(el, d) {
       <span>${c.shots} 镜 · ${c.errors} 个会拍空 · ${c.warnings} 处可疑 · ${c.infos} 条提示</span>
       <div class="actions">
         ${auto ? `<button id="chkAll" class="primary">一键修 ${auto} 条</button>` : ""}
-        <button id="chkRe">重新自检</button>
+        <button id="chkRe">重新检查</button>
         ${c.blocking ? `<button id="chkSkip" class="danger">不管，直接录</button>` : ""}
       </div>
     </div>
@@ -1399,8 +1497,8 @@ function renderCheck(el, d) {
   if (skip) skip.onclick = async () => {
     if (!confirm(`${c.errors} 个镜头会拍出空画面或拍错主体。确定直接录？`)) return;
     const { runBlockout } = await import("./film.js");
-    say("开始录白模（跳过自检）…");
-    const r = await runBlockout({ check: false, onProgress: (p) => p.phase === "record" && say(`录白模 ${p.index}/${p.total} · ${p.title}`) });
+    say("开始录草片（跳过检查）…");
+    const r = await runBlockout({ check: false, onProgress: (p) => p.phase === "record" && say(`录草片 ${p.index}/${p.total} · ${p.title}`) });
     say(r.ok ? `录完 ${r.recorded}/${r.of} 镜` : `录制失败：${r.hint || r.error}`, r.ok ? "ok" : "fail");
   };
 }
@@ -1586,7 +1684,7 @@ function renderBoard(el, d) {
     const take = d.takes.find((t) => t.id === c.selectedTake);
     const gen = [...d.jobs].reverse().find((j) => j.shotId === c.shotId && j.status === "done" && j.result?.url);
     const running = d.jobs.filter((j) => j.shotId === c.shotId && ["queued", "running"].includes(j.status));
-    const hero = gen ? (gen.result.kind === "image" ? `<img class="kf" data-preview="${esc(gen.result.url)}" data-kind="image" src="${esc(mediaHref(gen.result.url))}" title="生成结果 · ${esc(gen.model)}" />` : `<video class="kf" data-preview="${esc(gen.result.url)}" data-kind="video" src="${esc(mediaHref(gen.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()" title="生成结果 · ${esc(gen.model)}"></video>`) : take?.videoUrl ? `<video class="kf" data-preview="${esc(take.videoUrl)}" data-kind="video" src="${esc(mediaHref(take.videoUrl))}" muted loop playsinline poster="${c.keyframes?.[0] || ""}" onmouseenter="this.play()" onmouseleave="this.pause()" title="白模 Take"></video>` : c.keyframes?.[0] ? `<img class="kf" src="${c.keyframes[0]}" />` : `<div class="kf"></div>`;
+    const hero = gen ? (gen.result.kind === "image" ? `<img class="kf" data-preview="${esc(gen.result.url)}" data-kind="image" src="${esc(mediaHref(gen.result.url))}" title="生成结果 · ${esc(gen.model)}" />` : `<video class="kf" data-preview="${esc(gen.result.url)}" data-kind="video" src="${esc(mediaHref(gen.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()" title="生成结果 · ${esc(gen.model)}"></video>`) : take?.videoUrl ? `<video class="kf" data-preview="${esc(take.videoUrl)}" data-kind="video" src="${esc(mediaHref(take.videoUrl))}" muted loop playsinline poster="${c.keyframes?.[0] || ""}" onmouseenter="this.play()" onmouseleave="this.pause()" title="草片 Take"></video>` : c.keyframes?.[0] ? `<img class="kf" src="${c.keyframes[0]}" />` : `<div class="kf"></div>`;
     return `<article class="card ${s?.id === d.project.currentShotId ? "sel" : ""}" data-card="${c.id}">
       <h3><span><span class="idx mono" style="color:var(--accent)">${esc(s?.index)}</span> ${esc(s?.title)}</span>${gen ? badge("generated") : badge(c.status)}</h3>
       ${hero}
@@ -1666,8 +1764,8 @@ function renderGen(el, d) {
         <button data-act="submit" class="primary">提交</button>
       </div>
       ${!real.length ? `<div class="empty" style="padding:8px 0;justify-content:flex-start">${isOnline() ? "后端未配置生成密钥：任务只是模拟。" : "单机模式：任务只是模拟，不会真的生成。"}</div>` : ""}
-      ${real.length && v2vPending ? `<div class="prompt" style="padding:4px 0">正在建公网隧道，建好了这一项会自己亮起来（实测一到两分钟，常要换两三条）。等不及就先用 i2v —— 它同样跟着白模的构图走。</div>` : ""}
-      ${real.length && !v2vReady && !v2vPending ? `<div class="prompt" style="padding:4px 0">v2v 用不了：供应商要从公网抓取白模视频。启动带 <code>--tunnel cloudflared</code> 或 <code>--public-url</code>，或在偏好设置里打开 v2v 公网开关。i2v 同样跟着白模的构图走。</div>` : ""}
+      ${real.length && v2vPending ? `<div class="prompt" style="padding:4px 0">正在建公网隧道，建好了这一项会自己亮起来（实测一到两分钟，常要换两三条）。等不及就先用 i2v —— 它同样跟着草片的构图走。</div>` : ""}
+      ${real.length && !v2vReady && !v2vPending ? `<div class="prompt" style="padding:4px 0">v2v 用不了：供应商要从公网抓取草片视频。启动带 <code>--tunnel cloudflared</code> 或 <code>--public-url</code>，或在偏好设置里打开 v2v 公网开关。i2v 同样跟着草片的构图走。</div>` : ""}
       ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}${(j.inputs?.references || []).length ? `<div class="prompt">参考 ${j.inputs.references.length}</div>` : ""}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}${j.kind === "chain" ? `<button data-chain="${j.id}">查看生成过程</button>` : ""}${j.kind === "chain" && j.resumable ? `<button data-resume="${j.shotId}">接着跑</button>` : ""}</div></td></tr>${j.kind === "chain" && openChain.has(j.id) ? `<tr><td colspan="5">${chainView(j)}</td></tr>` : ""}`).join("")}</tbody></table>` : ""}
     </div></div>`;
   el.querySelectorAll("[data-pm]").forEach((b) => (b.onclick = () => {

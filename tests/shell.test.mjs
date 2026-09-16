@@ -14,7 +14,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 
 test("HUD 上三档都在，而且在同一组里", () => {
   const html = read("web/index.html");
-  const seg = html.match(/<div class="seg">([\s\S]*?)<\/div>/)?.[1] || "";
+  const seg = html.match(/<div class="seg[^"]*">([\s\S]*?)<\/div>/)?.[1] || "";
   for (const id of ["viewFree", "viewProgram", "viewCompare"]) assert.ok(seg.includes(`id="${id}"`), `${id} 不在 HUD 的那一组里`);
 });
 
@@ -32,4 +32,31 @@ test("菜单和 HUD 是同一组三档，少一档就会出现「菜单能去、
   for (const mode of ["free", "program", "compare"]) assert.ok(main.includes(`send("view", "${mode}")`), `舞台菜单缺 ${mode}`);
   const bridge = read("web/js/desktop.js");
   assert.match(bridge, /case "view":[\s\S]{0,200}compare/, "desktop.js 的 view 命令没处理 compare");
+});
+
+// 0.6.0 把十一个平铺 tab 收成四段流水线。「收起来」不等于「删掉」——
+// 少一个面板就是真的少一块功能，所以十一个 data-bottom 一个都不能丢。
+test("四段流水线之外的七个面板，必须还能打开", () => {
+  const html = read("web/index.html");
+  const tabs = [...html.matchAll(/data-bottom="([a-z]+)"/g)].map((m) => m[1]);
+  const want = ["shots", "timeline", "takes", "board", "ref", "check", "gen", "film", "assets", "log", "health"];
+  for (const k of want) assert.ok(tabs.includes(k), `面板 ${k} 没有入口了`);
+  const pipe = html.match(/<div class="pipe" id="pipe">([\s\S]*?)<\/div>/)?.[1] || "";
+  assert.deepEqual([...pipe.matchAll(/data-bottom="([a-z]+)"/g)].map((m) => m[1]), ["check", "takes", "gen", "film"], "主路径就是这四段");
+});
+
+// 界面上不写句子：说明退到 data-tip 里。图标必须指向雪碧图里真有的符号，
+// 指错了是静默失败 —— 画面上只会少一个图标，不报错。
+test("每个图标引用都要有对应的 symbol", () => {
+  const html = read("web/index.html");
+  const defined = new Set([...html.matchAll(/<symbol id="([\w-]+)"/g)].map((m) => m[1]));
+  const used = [...html.matchAll(/<use href="#([\w-]+)"/g)].map((m) => m[1]);
+  for (const f of ["web/js/ui.js", "web/js/firstrun.js", "web/js/film.js", "web/js/desktop.js"]) {
+    const js = read(f);
+    for (const m of js.matchAll(/setAttribute\("href", [^)]*?"#([\w-]+)"/g)) used.push(m[1]);
+    for (const m of js.matchAll(/href="#([\w-]+)"/g)) used.push(m[1]);
+  }
+  const missing = [...new Set(used)].filter((id) => !defined.has(id));
+  assert.deepEqual(missing, [], "这些图标引用没有对应的 symbol");
+  assert.ok(html.includes('id="tip"'), "气泡元素得在页面里");
 });

@@ -373,7 +373,7 @@ function buildMenu() {
         { type: "separator" },
         { label: "自由观察", accelerator: "Cmd+1", click: () => send("view", "free") },
         { label: "Program 视角", accelerator: "Cmd+2", click: () => send("view", "program") },
-        { label: "对照（白模 ↔ 生成）", accelerator: "Cmd+3", click: () => send("view", "compare") },
+        { label: "对照（草片 ↔ 生成）", accelerator: "Cmd+3", click: () => send("view", "compare") },
         { label: "回到全景", accelerator: "Cmd+0", click: () => send("reset-view") },
         { label: "聚焦选中", accelerator: "Cmd+F", click: () => send("focus") },
         { type: "separator" },
@@ -385,7 +385,7 @@ function buildMenu() {
       // 模式（i2v / v2v / t2v）、单镜重跑、分开导出白模/生成，都是用到才去「更多」里找。
       label: "成片",
       submenu: [
-        { label: "录白模", accelerator: "Shift+Cmd+R", enabled: st.shots > 0, click: () => send("film-blockout") },
+        { label: "录草片", accelerator: "Shift+Cmd+R", enabled: st.shots > 0, click: () => send("film-blockout") },
         { label: "按分镜生成", accelerator: "Shift+Cmd+G", enabled: st.shots > 0, click: () => send("film-render", { provider: "seedance-2.5", mode: "auto" }) },
         { label: "导出成片…", accelerator: "Alt+Cmd+E", enabled: st.clips > 0, click: () => send("film-export", { source: "auto" }) },
         { type: "separator" },
@@ -393,17 +393,17 @@ function buildMenu() {
         {
           label: "更多",
           submenu: [
-            { label: "只处理当前镜头：录白模", enabled: !!st.currentShotId, click: () => send("film-blockout", { current: true }) },
+            { label: "只处理当前镜头：录草片", enabled: !!st.currentShotId, click: () => send("film-blockout", { current: true }) },
             { label: "只处理当前镜头：生成", enabled: !!st.currentShotId, click: () => send("film-render", { provider: "seedance-2.5", mode: "auto", current: true }) },
             { type: "separator" },
             { label: "生成模式：首帧参考 i2v", enabled: st.shots > 0, click: () => send("film-render", { provider: "seedance-2.5", mode: "i2v" }) },
-            { label: "生成模式：白模参考 v2v", enabled: st.shots > 0, click: () => send("film-render", { provider: "seedance-2.5", mode: "v2v" }) },
+            { label: "生成模式：草片参考 v2v", enabled: st.shots > 0, click: () => send("film-render", { provider: "seedance-2.5", mode: "v2v" }) },
             { label: "生成模式：纯文生视频 t2v", enabled: st.shots > 0, click: () => send("film-render", { provider: "seedance-2.5", mode: "t2v" }) },
             { type: "separator" },
-            { label: "只导出白模成片…", enabled: st.takes > 0, click: () => send("film-export", { source: "blockout" }) },
+            { label: "只导出草片成片…", enabled: st.takes > 0, click: () => send("film-export", { source: "blockout" }) },
             { label: "只导出生成成片…", enabled: st.generated > 0, click: () => send("film-export", { source: "generated" }) },
             { type: "separator" },
-            { label: "跑完整条：白模 → 生成 → 成片", enabled: st.shots > 0, click: () => send("film-pipeline", { provider: "seedance-2.5", mode: "auto" }) },
+            { label: "跑完整条：草片 → 生成 → 成片", enabled: st.shots > 0, click: () => send("film-pipeline", { provider: "seedance-2.5", mode: "auto" }) },
             { label: "批准全部参考图", enabled: st.pendingAssets > 0, click: approveAllAssets },
             { label: "显示媒体文件夹", click: () => shell.openPath(MEDIA_DIR) },
           ],
@@ -568,7 +568,7 @@ async function showFilmPlan() {
   const d = r?.data;
   if (!d) return dialog.showErrorBox("成片清单", r?.error || "拿不到清单");
   const rows = d.clips
-    .map((c) => `${String(c.index ?? "").padStart(2, "0")}  ${c.startTc}–${c.endTc}  ${String(c.seconds).padStart(4)}s  ${c.missing ? "— 缺素材" : c.kind === "generated" ? "生成" : "白模"}  ${c.title}`)
+    .map((c) => `${String(c.index ?? "").padStart(2, "0")}  ${c.startTc}–${c.endTc}  ${String(c.seconds).padStart(4)}s  ${c.missing ? "— 缺素材" : c.kind === "generated" ? "生成" : "草片"}  ${c.title}`)
     .join("\n");
   dialog.showMessageBox(win, {
     type: "info",
@@ -641,7 +641,7 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
 <label style="margin-top:18px">视频生视频（v2v）</label>
 <div style="display:flex;align-items:center;gap:8px;margin:2px 0 5px">
   <input type="checkbox" id="tunnel" style="width:auto;margin:0">
-  <label for="tunnel" style="margin:0;color:#e8e8ea">把白模视频只读放到公网，让 Seedance 能取到</label>
+  <label for="tunnel" style="margin:0;color:#e8e8ea">把草片视频只读放到公网，让 Seedance 能取到</label>
 </div>
 <div class="hint">只放开 /media 的只读读取，地址随机；控制接口始终留在本机。需要 cloudflared（brew install cloudflared）。不开就只能用 i2v / t2v。</div>
 <input id="publicUrl" placeholder="或：自己的公网地址 https://…（填了就不开隧道）" autocomplete="off" spellcheck="false" style="margin-top:8px">
@@ -784,7 +784,7 @@ ipcMain.handle("desktop:film-done", async (_e, info = {}) => {
   const r = await dialog.showMessageBox(win, {
     type: "info",
     title: "成片已生成",
-    message: `${info.kind === "blockout" ? "白模成片" : "成片"}完成：${info.clips || "?"} 镜 · ${Math.round(info.seconds || 0)}s${mb}`,
+    message: `${info.kind === "blockout" ? "草片成片" : "成片"}完成：${info.clips || "?"} 镜 · ${Math.round(info.seconds || 0)}s${mb}`,
     detail: src || info.url,
     buttons: ["播放", "另存为…", "在访达中显示", "好"],
     defaultId: 0,
