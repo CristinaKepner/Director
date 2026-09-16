@@ -54,9 +54,12 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const generation = ARK_KEY ? (ctx) => createArkAdapter({ apiKey: ARK_KEY, baseUrl: process.env.ARK_BASE_URL, models: ARK_MODELS, ...ctx }) : null;
 const llm = LLM_KEY ? (ctx) => createLlmPlanner({ apiKey: LLM_KEY, baseUrl: LLM_BASE, model: LLM_MODEL, timeoutMs: LLM_TIMEOUT || undefined, ...ctx }) : null;
 let publicUrl = PUBLIC_URL; // --tunnel fills this in once cloudflared reports its hostname
+// 隧道要一两分钟才建得起来（实测常要换两三条）。这段时间里界面只会说「v2v 需要公网地址」——
+// 看着和「这台机器做不了」一模一样，而其实再等四十秒就好了。所以把「正在建」也当成一种状态报出去。
+let tunnelState = TUNNEL ? "starting" : "off";
 const publisher = createPublisher({ kind: PUBLISH, feishuTokenFile: FEISHU_TOKEN_FILE, feishuParentNode: FEISHU_PARENT, log });
 const JUDGE_MODEL = process.env.JUDGE_MODEL || arg("--judge-model", null); // 验收用的多模态模型，默认 gemini-3.1-pro-preview
-const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: () => publicUrl, publisher, ffmpeg: FFMPEG, judgeKey: LLM_KEY, judgeBase: LLM_BASE, judgeModel: JUDGE_MODEL, log });
+const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: () => publicUrl, tunnelState: () => tunnelState, publisher, ffmpeg: FFMPEG, judgeKey: LLM_KEY, judgeBase: LLM_BASE, judgeModel: JUDGE_MODEL, log });
 const { server } = createApp(host, { static: STATIC, token: TOKEN, cors: CORS, log });
 
 server.listen(PORT, HOST, () => {
@@ -80,7 +83,8 @@ async function startTunnel() {
   }
   tunnel = createMediaTunnel({ mediaDir: host.mediaDir, bin: process.env.CLOUDFLARED || null, log });
   try {
-    publicUrl = await tunnel.start();
+    publicUrl = await tunnel.start({ onAttempt: (n) => { tunnelState = `starting:${n}`; host.announceHealth(); } });
+    tunnelState = tunnel.verified ? "up" : "unverified";
     log(`public media        ${publicUrl}/media/   (v2v 参考视频从这里取)${tunnel.verified ? "" : "   ⚠️ 未经本机验证"}`);
     // 隧道是后端起来之后几十秒才建好的。页面早就连上了、也早就问过一次 health，
     // 不主动告诉它，界面上的 v2v 会一直灰着 —— 后端却已经能做了。
@@ -90,6 +94,8 @@ async function startTunnel() {
     // 重启几次就攒出一堆孤儿进程（实测见过跨天还活着的）。
     tunnel?.stop();
     tunnel = null;
+    tunnelState = "failed";
+    host.announceHealth();
     log(`media tunnel 启动失败：${err.message}；v2v 仍会返回 NO_PUBLIC_MEDIA_URL，其它功能不受影响`);
     if (err.cloudflared) log(`cloudflared 最后几行：\n${err.cloudflared}`);
   }

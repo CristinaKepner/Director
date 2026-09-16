@@ -1643,6 +1643,11 @@ function renderGen(el, d) {
   const real = isOnline() && client.generation?.name && client.generation.name !== "simulated" ? Object.keys(client.generation.models || {}) : [];
   // v2v 要把白模视频交给供应商抓取，没有公网地址就必然失败 —— 别把它摆成默认项等人踩
   const v2vReady = !!(client.generation?.publicUrl || (client.generation?.publisher && client.generation.publisher !== "none"));
+  // 但「还没建好」和「这台机器做不了」是两回事。隧道实测要一两分钟、常要换两三条，
+  // 这段时间里一句「需要公网地址」会让人以为没救了 —— 其实再等四十秒就好。
+  const tun = String(client.generation?.tunnel || "off");
+  const v2vPending = !v2vReady && tun.startsWith("starting");
+  const v2vNote = v2vPending ? `（正在建公网隧道${/:(\d+)/.test(tun) ? ` · 第 ${tun.split(":")[1]} 条` : ""}…）` : "（需要公网地址）";
   const defaultMode = v2vReady ? "v2v" : "i2v";
   const providers = Object.entries(PROVIDERS).sort(([a], [b]) => (real.includes(b) ? 1 : 0) - (real.includes(a) ? 1 : 0));
   const jobs = [...d.jobs].reverse().filter((j) => j.shotId === shot.id).slice(0, 8);
@@ -1657,11 +1662,12 @@ function renderGen(el, d) {
     <div>
       <div class="gen-row">
         <select data-k="provider">${providers.map(([k, v]) => `<option value="${k}">${esc(v.name)}${real.includes(k) ? "" : " · 模拟"}</option>`).join("")}</select>
-        <select data-k="mode">${Object.entries(GEN_MODES).map(([k, v]) => `<option value="${k}"${k === defaultMode ? " selected" : ""}${k === "v2v" && !v2vReady ? " disabled" : ""}>${v}${k === "v2v" && !v2vReady ? "（需要公网地址）" : ""}</option>`).join("")}</select>
+        <select data-k="mode">${Object.entries(GEN_MODES).map(([k, v]) => `<option value="${k}"${k === defaultMode ? " selected" : ""}${k === "v2v" && !v2vReady ? " disabled" : ""}>${v}${k === "v2v" && !v2vReady ? v2vNote : ""}</option>`).join("")}</select>
         <button data-act="submit" class="primary">提交</button>
       </div>
       ${!real.length ? `<div class="empty" style="padding:8px 0;justify-content:flex-start">${isOnline() ? "后端未配置生成密钥：任务只是模拟。" : "单机模式：任务只是模拟，不会真的生成。"}</div>` : ""}
-      ${real.length && !v2vReady ? `<div class="prompt" style="padding:4px 0">v2v 用不了：供应商要从公网抓取白模视频。启动带 <code>--tunnel cloudflared</code> 或 <code>--public-url</code>，或在偏好设置里打开 v2v 公网开关。i2v 同样跟着白模的构图走。</div>` : ""}
+      ${real.length && v2vPending ? `<div class="prompt" style="padding:4px 0">正在建公网隧道，建好了这一项会自己亮起来（实测一到两分钟，常要换两三条）。等不及就先用 i2v —— 它同样跟着白模的构图走。</div>` : ""}
+      ${real.length && !v2vReady && !v2vPending ? `<div class="prompt" style="padding:4px 0">v2v 用不了：供应商要从公网抓取白模视频。启动带 <code>--tunnel cloudflared</code> 或 <code>--public-url</code>，或在偏好设置里打开 v2v 公网开关。i2v 同样跟着白模的构图走。</div>` : ""}
       ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}${(j.inputs?.references || []).length ? `<div class="prompt">参考 ${j.inputs.references.length}</div>` : ""}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}${j.kind === "chain" ? `<button data-chain="${j.id}">查看生成过程</button>` : ""}${j.kind === "chain" && j.resumable ? `<button data-resume="${j.shotId}">接着跑</button>` : ""}</div></td></tr>${j.kind === "chain" && openChain.has(j.id) ? `<tr><td colspan="5">${chainView(j)}</td></tr>` : ""}`).join("")}</tbody></table>` : ""}
     </div></div>`;
   el.querySelectorAll("[data-pm]").forEach((b) => (b.onclick = () => {

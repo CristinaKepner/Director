@@ -149,7 +149,7 @@ export function createMediaTunnel(opts = {}) {
   // 所以「拿到地址 → 验证不过 → 报失败」是把一次随机故障当成了环境故障。
   const RETRYABLE = new Set(["TUNNEL_UNREACHABLE", "TUNNEL_TIMEOUT", "TUNNEL_EXITED"]);
 
-  async function start({ attempts = 3 } = {}) {
+  async function start({ attempts = 3, onAttempt = () => {} } = {}) {
     // 没找到就当场说清楚去哪儿装，而不是 spawn 出一个 ENOENT 再翻译错误
     if (!bin) throw Object.assign(new Error(`找不到 cloudflared（找过 ${CANDIDATES.join("、")} 和 PATH）。brew install cloudflared，或用 CLOUDFLARED=/路径 指过去`), { code: "TUNNEL_NOT_INSTALLED" });
     const local = await listenLocal();
@@ -157,6 +157,7 @@ export function createMediaTunnel(opts = {}) {
     for (let i = 1; i <= attempts; i++) {
       cfLog.length = 0;
       const lastRound = i >= attempts;
+      try { onAttempt(i); } catch {}
       try {
         publicUrl = await attempt(local);
         verified = true;
