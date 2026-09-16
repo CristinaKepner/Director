@@ -11,9 +11,9 @@
     "start:api": "node server/bin/director-server.mjs --port 5175 --api-only",
     "build:web": "node tools/build-web.mjs",
     "build:studio": "cd private/studio && bun install && bun run build",
-    "test": "node --test tests/runtime.test.mjs tests/shell.test.mjs",
+    "test": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs",
     "test:api": "node --test server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs",
-    "test:all": "node --test tests/runtime.test.mjs tests/shell.test.mjs server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs",
+    "test:all": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs",
     "smoke": "node tools/smoke.mjs",
     "cli": "node server/bin/director.mjs"
   },

@@ -4,6 +4,7 @@
 import { store, persistable, historyInfo } from "../../core/store.js";
 import { timecode, getHooks } from "../../core/actions.js";
 import { DEMOS } from "../../core/demo.js";
+import { REPLICATE_MODES } from "../../core/reference-plan.js";
 import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
 import { dispatch, client, isOnline } from "./client.js";
 import { focusSelected, resetView } from "./viewport.js";
@@ -1205,8 +1206,14 @@ function hideGuide() {
 // 放在剪辑区而不是只放在首屏，是因为复刻不是一次性的开场动作 —— 片子做到一半想换个运镜、
 // 想照着另一条的打光重来一遍，都该是随手一贴。这里和首屏调的是同一个 Action，
 // Agent 说"复刻这条链接"走的也是它，所以三个入口不会各自长歪。
+// 上次选的复刻模式。不进工程状态：这是「这台机器上的这个人这次想干什么」，不是作品的一部分。
+let refMode = "motion";
+
 function renderRef(el, d) {
   const jobs = (d.jobs || []).filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind)).slice().reverse();
+  // 编译出来的计划是一份能读的中间产物：这一场到底是怎么建出来的，每一步为什么。
+  // 以前这里是一段发给模型的散文，看不见也对不上；现在摆出来，翻错了一眼就能指出来。
+  const plan = jobs.find((j) => j.kind === "replicate" && j.result?.steps?.length)?.result;
   const cur = d.project.reference;
   const a = cur?.analysis;
   const running = jobs.find((j) => ["queued", "running"].includes(j.status));
@@ -1215,7 +1222,8 @@ function renderRef(el, d) {
     <div class="ref-in">
       <div class="ref-row">
         <input id="refUrl" type="url" placeholder="贴一条视频链接：抖音 / B站 / YouTube…" spellcheck="false" ${running ? "disabled" : ""}>
-        <input id="refHint" type="text" placeholder="想复刻它的什么？（可留空，例：只要运镜，主体换成我的产品）" spellcheck="false" ${running ? "disabled" : ""}>
+        <select id="refMode" title="复刻它的哪一部分" ${running ? "disabled" : ""}>${Object.entries(REPLICATE_MODES).map(([k, v]) => `<option value="${k}"${k === refMode ? " selected" : ""}>${esc(v.zh)}</option>`).join("")}<option value=""${refMode ? "" : " selected"}>先问我</option></select>
+        <input id="refHint" type="text" placeholder="另外补充（可留空，例：主体换成一罐冷萃咖啡）" spellcheck="false" ${running ? "disabled" : ""}>
         <button id="refGo" class="primary" ${running ? "disabled" : ""}>复刻</button>
       </div>
       <div class="ref-drop" id="refDrop"><input type="file" id="refFile" accept="image/*,video/*" hidden><span>或把本地图片 / 视频拖到这里</span></div>
@@ -1247,23 +1255,30 @@ function renderRef(el, d) {
       </div>
     </div>` : `<div class="ref-empty">还没读过参照。贴一条链接，或者拖一个本地文件进来。</div>`}
 
+    ${plan ? `<details class="ref-plan"><summary>这一场是怎么建出来的 · ${esc(plan.summary || "")}</summary>
+      <ol>${plan.steps.map((st) => `<li><code>${esc(st.action)}</code><span>${esc(st.why || "")}</span></li>`).join("")}</ol>
+      ${(plan.warnings || []).length ? `<div class="ref-warn">${plan.warnings.map((w) => `<div>⚠ ${esc(w)}</div>`).join("")}</div>` : ""}
+      ${plan.refined ? `<div class="ref-warn"><div>${plan.refined.ok ? `按你的补充又调了 ${plan.refined.steps} 步` : `补充那句没调动：${esc(plan.refined.reply || "")}`}</div></div>` : ""}
+    </details>` : ""}
+
     ${jobs.length ? `<table class="grid"><thead><tr><th>来源</th><th>阶段</th><th>结果</th><th></th></tr></thead><tbody>
       ${jobs.slice(0, 8).map((j) => `<tr class="row"><td title="${esc(j.prompt || "")}">${esc((j.inputs?.title || j.prompt || j.id).slice(0, 60))}</td><td>${badge(j.status)}${j.status === "running" ? ` ${j.progress || 0}%` : ""}</td><td>${esc(j.result?.shots ? j.result.shots + " 个镜头" : j.result?.url ? "素材已就位" : j.hint || j.error || j.note || "")}</td><td>${j.result?.ref || j.result?.url ? `<button data-preview="${esc(j.result.ref || j.result.url)}" data-kind="video">看</button>` : ""}</td></tr>`).join("")}
     </tbody></table>` : ""}
   </div>`;
 
   const urlIn = $("refUrl"), hintIn = $("refHint");
+  $("refMode").onchange = (ev) => { refMode = ev.target.value; };
   const go = () => {
     const u = urlIn.value.trim();
     if (!u) return toast("先贴一条链接", true);
-    report(dispatch("reference.replicate", { url: u, hint: hintIn.value.trim() || undefined }));
+    report(dispatch("reference.replicate", { url: u, mode: refMode || undefined, hint: hintIn.value.trim() || undefined }));
   };
   $("refGo").onclick = go;
   urlIn.onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); go(); } };
 
   const drop = $("refDrop"), file = $("refFile");
   drop.onclick = () => file.click();
-  file.onchange = () => file.files[0] && uploadRef(file.files[0], hintIn.value.trim());
+  file.onchange = () => file.files[0] && uploadRef(file.files[0], hintIn.value.trim(), refMode);
   drop.ondragover = (ev) => { ev.preventDefault(); drop.classList.add("over"); };
   drop.ondragleave = () => drop.classList.remove("over");
   drop.ondrop = (ev) => {
@@ -1271,19 +1286,19 @@ function renderRef(el, d) {
     drop.classList.remove("over");
     const t = ev.dataTransfer?.getData("text/uri-list") || ev.dataTransfer?.getData("text/plain");
     const f = ev.dataTransfer?.files?.[0];
-    if (f) return uploadRef(f, hintIn.value.trim());
+    if (f) return uploadRef(f, hintIn.value.trim(), refMode);
     if (t && /^https?:\/\//i.test(t.trim())) { urlIn.value = t.trim(); go(); }
   };
 
   const rb = $("refRebuild");
-  if (rb) rb.onclick = () => report(dispatch("reference.replicate", { ref: cur.ref, from: cur.from ?? undefined, to: cur.to ?? undefined, hint: hintIn.value.trim() || undefined }));
+  if (rb) rb.onclick = () => report(dispatch("reference.replicate", { ref: cur.ref, from: cur.from ?? undefined, to: cur.to ?? undefined, mode: refMode || undefined, hint: hintIn.value.trim() || undefined }));
   const rc = $("refCompare");
   if (rc) rc.onclick = () => dispatch("project.set-view", { mode: "compare" });
   const rd = $("refDirect");
   if (rd) rd.onclick = () => report(dispatch("generation.submit", { mode: "v2v", provider: "seedance-2.5", reference: "origin" }));
 }
 
-async function uploadRef(f, hint) {
+async function uploadRef(f, hint, mode) {
   const kind = f.type.startsWith("video") ? "video" : f.type.startsWith("image") ? "image" : null;
   if (!kind) return toast("只认图片和视频", true);
   if (!client.base) return toast("要连上后端才能读参照", true);
@@ -1292,7 +1307,7 @@ async function uploadRef(f, hint) {
     const r = await fetch(new URL(`upload?label=${kind}`, client.base), { method: "POST", headers: { "content-type": f.type }, body: f });
     const out = await r.json();
     if (!out.ok) throw new Error(out.error || "上传失败");
-    report(dispatch("reference.replicate", { ref: out.url, hint: hint || undefined }));
+    report(dispatch("reference.replicate", { ref: out.url, mode: mode || undefined, hint: hint || undefined }));
   } catch (err) {
     toast(String(err.message || err), true);
   }

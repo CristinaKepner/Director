@@ -43,6 +43,7 @@ import {
   ASSET_ROLES,} from "./schema.js";
 import { attachPrompts, compileShot } from "./prompts.js";
 import { MODEL_LIBRARY, ROOM_PATTERNS } from "./schema.js";
+import { compileReference, REPLICATE_MODES } from "./reference-plan.js";
 import { cameraStateAt, entityStateAt, sequenceLayout, subjectPoint, fovFor } from "./motion.js";
 
 export const RUNTIME_VERSION = "director-runtime/0.4";
@@ -1717,17 +1718,18 @@ function pushMessage(role, text, extra = {}) {
 
 register("reference.replicate", {
   doc: "复刻一条参照：链接（或已有素材）→ 下载 → 读出拍摄参数 → 在 3D 里把场景和分镜搭出来。之后录白模、生成由导演决定",
-  params: { url: "string（视频页地址，和 ref 二选一）", ref: "string（已有素材 /media/x.mp4，和 url 二选一）", from: "number（起始秒）", to: "number（结束秒）", hint: "string（导演补充，比如「只复刻运镜，人物换成我的产品」）", build: "boolean（默认 true；false 就只读不建场）" },
+  params: { url: "string（视频页地址，和 ref 二选一）", ref: "string（已有素材 /media/x.mp4，和 url 二选一）", from: "number（起始秒）", to: "number（结束秒）", mode: `复刻什么：${Object.keys(REPLICATE_MODES).join("/")}`, hint: "string（导演另外补充的自由文字，会写进镜头描述；有规划器时再按它调一遍）", build: "boolean（默认 true；false 就只读不建场）" },
   undoable: false,
   validate(p) {
     if (!p.url && !p.ref) return { error: "MISSING_PARAM", missing: ["url|ref"], hint: "给一个链接，或者一个已经在 media 里的素材" };
     return p.url ? badLink(p.url) : null;
   },
-  handler({ url, ref, from, to, hint, build }, meta) {
+  handler({ url, ref, from, to, mode, hint, build }, meta) {
     const wantBuild = build !== false;
     if (url && !hooks.fetcher?.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "贴链接要 yt-dlp（brew install yt-dlp）。也可以把视频直接拖进来。" };
     if (!hooks.reference?.ready) return { ok: false, error: "READER_NOT_READY", hint: "读参照要网关密钥和 ffmpeg" };
-    if (wantBuild && !hooks.planner?.ready) return { ok: false, error: "PLANNER_NOT_READY", hint: "建场要规划器；没有的话用 build:false 只读参数" };
+    // 建场不再要规划器：空间参数是编译出来的，不是猜出来的（见 core/reference-plan.js）。
+    // 规划器只在导演另外打了一句自由文字时才上场，而且是在场已经建好之后。
 
     const id = uid("rep");
     store.patch((d) => d.jobs.push({
@@ -1738,11 +1740,11 @@ register("reference.replicate", {
       provider: "director",
       model: hooks.reference.model,
       prompt: String(url || ref).slice(0, 300),
-      inputs: { url: url || null, ref: ref || null, from: from ?? null, to: to ?? null, hint: hint || null },
+      inputs: { url: url || null, ref: ref || null, from: from ?? null, to: to ?? null, mode: mode || null, hint: hint || null },
       phases: [
         ...(url ? [{ key: "fetch", label: "把链接下下来", state: "wait" }] : []),
         { key: "read", label: "读出景别 / 机位 / 光位 / 运镜", state: "wait" },
-        ...(wantBuild ? [{ key: "build", label: "在 3D 里把场景和分镜搭出来", state: "wait" }] : []),
+        ...(wantBuild ? [{ key: "build", label: "把拍摄参数编译成 Action 并执行", state: "wait" }] : []),
       ],
       status: "queued",
       progress: 0,
@@ -1799,7 +1801,7 @@ register("reference.replicate", {
       // 「你想要什么样的片子」是废话；「这条是 CU 24mm 手持推进，你要它的运镜还是它的光」
       // 才是一个人能回答的问题。这一步是整条链里唯一该停下来的地方：
       // 建场之后再改意图，前面那些 Action 就白跑了。
-      if (!hint) {
+      if (!mode && !hint) {
         const c2 = a.camera || {}, m2 = a.motion || {};
         const who = (a.subjects || []).map((x) => x.displayName).join("、") || "画面主体";
         phase("build", "wait", "等你说要复刻哪一部分");
@@ -1809,10 +1811,10 @@ register("reference.replicate", {
             question: `${c2.shotSize || "MS"} 景别、约 ${c2.focalMm ?? 40}mm、${m2.type || "static"} 运镜，主体是${who}。你想复刻它的哪一部分？`,
             why: "复刻什么决定了下一步怎么建场：只要运镜就把主体换成你的，整条复刻就连场景一起搭。选错了得推倒重来。",
             options: [
-              { label: "运镜和构图照搬，主体换成我的", detail: "机位、焦段、运动轨迹、景别都跟它走，场里放你的产品或角色。想复刻「那个感觉」基本都是这个。", recommended: true, next: { action: "reference.replicate", payload: { ref: media, hint: "照搬机位、焦段、运动轨迹和景别；主体换成导演自己的产品或角色，场景保持同类但不必一模一样" } } },
-              { label: "整条都复刻，包括主体和场景", detail: "连人带景一起搭成它那样。用来学它怎么拍的。", next: { action: "reference.replicate", payload: { ref: media, hint: "整条复刻：主体、场景、光位、运镜都按参照搭出来" } } },
-              { label: "只要打光和色调", detail: "光位、明暗比、色温照搬，机位和主体你自己定。", next: { action: "reference.replicate", payload: { ref: media, hint: "只复刻光位、明暗比和色温；机位、景别、主体由导演另定，先给一个中性机位" } } },
-              { label: "只要节奏，镜头我自己来", detail: "按它的拍子分镜，每拍多长、什么时候切跟它一样，画面内容全换。", next: { action: "reference.replicate", payload: { ref: media, hint: "只复刻节奏：按参照的拍子分镜，每一拍的时长和切点跟它一致，画面内容全部换成导演自己的" } } },
+              { label: "运镜和构图照搬，主体换成我的", detail: "机位、焦段、运动轨迹、景别都跟它走，场里放你的产品或角色。想复刻「那个感觉」基本都是这个。", recommended: true, next: { action: "reference.replicate", payload: { ref: media, mode: "motion" } } },
+              { label: "整条都复刻，包括主体和场景", detail: "连人带景一起搭成它那样。用来学它怎么拍的。", next: { action: "reference.replicate", payload: { ref: media, mode: "full" } } },
+              { label: "只要打光和色调", detail: "光位、明暗比、色温照搬，机位和主体你自己定。", next: { action: "reference.replicate", payload: { ref: media, mode: "light" } } },
+              { label: "只要节奏，镜头我自己来", detail: "按它的拍子分镜，每拍多长、什么时候切跟它一样，画面内容全换。", next: { action: "reference.replicate", payload: { ref: media, mode: "beats" } } },
             ],
           }],
           notes: [`参照已经下到本地：${media}`, "选完我直接建场，不用再贴一次链接。想补充细节（比如「主体是一罐冷萃咖啡」）就直接打字说。"],
@@ -1820,47 +1822,58 @@ register("reference.replicate", {
         return;
       }
 
+      // 建场：编译，不是让模型重猜。读取器给的 shotSize / focalMm / heightMeters /
+      // motion.type / beats[].seconds 本来就是数字，翻成 Action 是一组映射和一次乘法。
       phase("build", "run");
-      updateJob(id, { progress: 70, note: "建场" });
-      const brief = referenceBrief(a, hint);
-      const built = await hooks.planner.build(brief, { source: meta.source || "human", actorId: meta.actorId });
-      const shots = D().shots.length;
+      updateJob(id, { progress: 70, note: "编译成 Action" });
+      const plan = compileReference(a, { mode: mode || "motion", prefix: id.replace(/^rep_/, "r"), hint, seconds: an.span && an.span.to > an.span.from ? an.span.to - an.span.from : span.to != null && span.from != null ? span.to - span.from : undefined });
+      const before = D().shots.length;
+      const results = batch("复刻参照", (m) => plan.steps.map((st) => ({ step: st, r: dispatch(st.action, st.payload, m) })), { source: meta.source || "human", actorId: meta.actorId || "reference" });
+      const failed = results.filter((x) => !x.r.ok);
+      const shots = D().shots.length - before;
+
       if (!shots) {
-        const saidOnly = built?.ok && !(built.plan || []).length;
-        phase("build", "fail", saidOnly ? "规划器只回了文字，没有建场" : built?.error || "没能建出镜头");
+        // 编译出来的计划执行不动，是编译器或运行时的问题，不是"模型没听懂" —— 说得出是哪一步
+        const first = failed[0];
+        phase("build", "fail", first ? `${first.step.action} → ${first.r.error}` : "一个镜头都没建出来");
         return updateJob(id, {
           status: "failed",
-          error: saidOnly ? "BUILD_SAID_NOTHING_DONE" : "BUILD_EMPTY",
-          message: (built?.reply || "").slice(0, 300),
-          hint: saidOnly ? `规划器（${built.backend}）回了一句「${(built.reply || "").slice(0, 40)}…」但一步没执行。再说一次"照着参照把场建出来"通常就好了，或者在 Agent 面板换一个规划模型。` : "换个参照，或者补一句说明这条片子想拍什么",
+          error: "BUILD_EMPTY",
+          message: failed.map((x) => `${x.step.action}: ${x.r.error}`).join("；").slice(0, 300),
+          hint: first ? `第 ${results.indexOf(first) + 1} 步「${first.step.why}」被拒了。这是编译器翻错了或者参数越界，不是参照的问题 —— 把这条报出来能直接定位。` : "换个参照试试",
         });
       }
-      phase("build", "done", `${shots} 个镜头`);
-      updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "replicate", ref: media, analysis: a, shots, brief } });
+
+      // 导演另外打了一句自由文字：场已经建好了，规划器只负责按这句话调一遍。
+      // 有它更好，没有也不至于什么都拿不到 —— 这句话已经写进镜头描述，生成时会带上。
+      let refined = null;
+      if (hint && hooks.planner?.ready) {
+        phase("build", "run", "按你的补充调整");
+        updateJob(id, { progress: 88, note: "按补充调整" });
+        const r = await hooks.planner.build(
+          `工程里刚按参照建好了 ${shots} 个镜头（${plan.summary}）。现在只做一件事：按导演这句补充去调整已有的实体、机位或镜头 —— 「${hint}」。不要重建场，不要清空。改不动就说明白改不了什么。`,
+          { source: meta.source || "human", actorId: meta.actorId },
+        ).catch((err) => ({ ok: false, error: String(err?.message || err) }));
+        refined = { ok: !!r?.ok, steps: (r?.plan || []).length, reply: (r?.reply || "").slice(0, 200) };
+      }
+
+      const notes = [...plan.warnings, ...failed.map((x) => `${x.step.action} 被拒（${x.r.error}）：${x.step.why}`)];
+      phase("build", "done", `${shots} 个镜头 · ${plan.steps.length - failed.length}/${plan.steps.length} 步`);
+      updateJob(id, {
+        status: "done",
+        progress: 100,
+        note: null,
+        result: { kind: "replicate", ref: media, analysis: a, shots, mode: plan.mode, summary: plan.summary, steps: plan.steps.map((st) => ({ action: st.action, why: st.why })), warnings: notes, refined },
+      });
+      if (notes.length) pushMessage("agent", `复刻完成：${plan.summary}。有几处运行时做不到的，先说一声：`, { notes });
     })().catch((err) => updateJob(id, { status: "failed", error: "REPLICATE_FAILED", message: String(err?.message || err) }));
 
     return { ok: true, id, queued: true, hint: "复刻中：下载 → 读参照 → 建场。建完录白模就能看到一条能播的片子。" };
   },
 });
 
-// 结构化分析 → 一段规划器能吃的导演口述。规划器读的是镜头语言，不是 JSON。
-export function referenceBrief(a, hint) {
-  const c = a.camera || {}, l = a.lighting || {}, s = a.scene || {}, m = a.motion || {};
-  const subs = (a.subjects || []).map((x) => `${x.displayName}（${x.semanticType}${x.look ? "，" + x.look : ""}${x.screenPosition ? "，在" + x.screenPosition : ""}）`).join("；");
-  const beats = (a.beats || []).length ? `\n按拍拆分：${a.beats.map((b, i) => `${i + 1}) ${b.seconds}s ${b.text}`).join("；")}` : "";
-  return [
-    "现在把下面这条镜头建进工程：scene.create 定场、entity.create 建主体、camera.create 建机位、shot.create 建镜头。只回文字不建工程是错的。",
-    `要复刻的参照镜头：${a.brief || a.summary || ""}`,
-    s.name || s.setting ? `场景：${s.name || ""}${s.setting ? "，" + s.setting : ""}${s.timeOfDay ? "，" + s.timeOfDay : ""}${s.palette ? "，主色调" + s.palette : ""}。` : "",
-    subs ? `画面里的主体：${subs}。把它们建成语义代理体并按描述摆位。` : "",
-    `机位：${c.shotSize || "MS"} 景别，${c.angle || "eye"} 视角，机位高度约 ${c.heightMeters ?? 1.5} 米，焦段约 ${c.focalMm ?? 40}mm，光圈 f/${c.aperture ?? 2.8}。${c.framing ? "构图：" + c.framing + "。" : ""}`,
-    `灯光：主光${l.keyDirection || "正面"}，${l.ratio || "柔和"}，${l.colorTemp || "中性"}。${(l.practicals || []).length ? "画面内光源：" + l.practicals.join("、") + "。" : ""}`,
-    `运镜：${m.type || "static"}${m.description ? "，" + m.description : ""}${m.speed ? "，" + m.speed : ""}。`,
-    beats,
-    hint ? `导演另外要求：${hint}` : "",
-    "建成一个镜头就行，时长按上面的拍数合计；画幅 16:9。",
-  ].filter(Boolean).join("\n");
-}
+// referenceBrief() 曾经住在这里：把结构化分析压成一段中文散文，再交给规划器猜回 Action。
+// 它被 core/reference-plan.js 的编译器取代了 —— 留着一个没人调的导出只会让人再走一次那条路。
 
 register("reference.result", {
   doc: "读回最近一次（或指定任务）的参照分析",
