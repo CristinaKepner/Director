@@ -1,0 +1,267 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#121316; --surface:#15171d; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-ink:#140f2e; --accent-soft:rgba(118,87,255,.16); --accent-line:rgba(157,140,255,.42);
+      --accent-2:#5cebdf; --cyan-line:rgba(92,235,223,.34);
+      --ok:#5fd88a; --ok-line:rgba(95,216,138,.34); --danger:#ff7a7a; --danger-line:rgba(255,122,122,.34); --rec:#ff4d4d;
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;line-height:1.2;}
+    button:hover{border-color:var(--line-2);}
+  </style>
+</helmet>
+
+<div style="width:1440px; height:800px; display:flex; flex-direction:column; gap:0; background:var(--bg); padding:26px 28px; overflow:hidden">
+
+  <div style="display:flex; flex-direction:column; gap:5px; padding-bottom:20px">
+    <h2 style="margin:0; font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.16em; color:var(--muted)">能力按状态暴露，不按存在暴露</h2>
+    <p style="margin:0; font-size:12px; line-height:1.65; color:var(--dim); max-width:96ch">灰按钮不是界面的决定 —— 状态机在 dispatch 那一层已经拒了，界面只是把同一个事实说第二遍。今天它只说了一半：按钮灰着，但没说为什么灰、什么时候会亮。<b style="color:var(--muted); font-weight:400">补上那半句，人和 Agent 面对的才是同一套规则。</b></p>
+  </div>
+
+  <!-- 状态机：点一个看一眼 -->
+  <div style="display:flex; align-items:center; gap:0; padding-bottom:22px">
+    <sc-for list="{{machine}}" as="m" hint-placeholder-count="8">
+      <div style="display:flex; align-items:center; gap:0; flex-grow:1; min-width:0">
+        <button onClick="{{m.pick}}" style="flex-grow:1; min-width:0; padding:9px 6px; border:1px solid {{m.line}}; border-radius:9999px; background:{{m.bg}}; color:{{m.ink}}; font-family:var(--mono); font-size:11px; letter-spacing:.06em; font-weight:{{m.weight}}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{m.name}}</button>
+        <sc-if value="{{m.arrow}}" hint-placeholder-val="{{ true }}">
+          <span style="width:22px; flex-grow:0; display:grid; place-items:center; color:var(--dim)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h12"/><path d="M13 7l5 5-5 5"/></svg>
+          </span>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:20px; flex-grow:1; min-height:0">
+
+    <!-- 左：这一组控件此刻长什么样 -->
+    <section style="display:flex; flex-direction:column; gap:16px; min-width:0">
+
+      <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border:1px solid {{cur.line}}; border-radius:14px; background:{{cur.soft}}">
+        <span style="font-family:var(--mono); font-size:11px; letter-spacing:.08em; padding:3px 11px; border-radius:9999px; background:{{cur.chipBg}}; color:{{cur.chipInk}}">{{cur.name}}</span>
+        <span style="font-size:13px; color:var(--text)">{{cur.can}}</span>
+      </div>
+
+      <!-- HUD 原样：三档常驻，其余按状态明暗 -->
+      <div style="display:flex; justify-content:center; padding:26px 0 8px; border:1px dashed var(--line); border-radius:14px; background:#050508">
+        <div style="display:flex; gap:8px; align-items:center; background:rgba(13,14,19,.72); border:1px solid var(--line-2); border-radius:9999px; padding:7px 9px; box-shadow:0 18px 48px rgba(0,0,0,.55)">
+          <div style="display:inline-flex; border:1px solid var(--line); border-radius:9999px; padding:2px; gap:2px; background:var(--sunken)">
+            <sc-for list="{{views}}" as="v" hint-placeholder-count="3">
+              <span style="border-radius:9999px; padding:5px 13px; background:{{v.bg}}; color:{{v.ink}}; font-weight:{{v.weight}}; opacity:{{v.op}}">{{v.label}}</span>
+            </sc-for>
+          </div>
+          <span style="border-radius:9999px; width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--line); background:var(--surface); opacity:{{hud.playOp}}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+          <span style="font-family:var(--mono); font-size:13px; color:var(--accent-2); padding:0 8px">{{hud.tc}}</span>
+          <span style="border-radius:9999px; padding:6px 15px; display:flex; align-items:center; gap:7px; border:1px solid {{hud.recLine}}; background:{{hud.recBg}}; color:{{hud.recInk}}; opacity:{{hud.recOp}}">
+            <span style="width:9px; height:9px; border-radius:9999px; background:{{hud.recDot}}"></span>{{hud.recLabel}}
+          </span>
+        </div>
+      </div>
+
+      <!-- 每条能力：能不能用，以及为什么 -->
+      <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:9px">
+        <sc-for list="{{caps}}" as="c" hint-placeholder-count="6">
+          <div style="display:flex; align-items:flex-start; gap:10px; padding:11px 13px; border:1px solid {{c.line}}; border-radius:12px; background:{{c.bg}}">
+            <span style="width:16px; height:16px; flex-grow:0; display:grid; place-items:center; margin-top:1px">
+              <sc-if value="{{c.ok}}" hint-placeholder-val="{{ true }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5fd88a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+              </sc-if>
+              <sc-if value="{{c.no}}" hint-placeholder-val="{{ true }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(235,238,255,.32)" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+              </sc-if>
+            </span>
+            <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
+              <span style="font-size:13px; color:{{c.ink}}">{{c.label}}</span>
+              <span style="font-size:11px; line-height:1.55; color:var(--dim)">{{c.why}}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- 右：同一份事实，Agent 那边看到的样子 -->
+    <aside style="display:flex; flex-direction:column; gap:12px; min-height:0">
+      <div style="display:flex; flex-direction:column; gap:10px; padding:16px 18px; border:1px solid var(--line); border-radius:14px; background:var(--panel); flex-grow:1; min-height:0; overflow:hidden">
+        <div style="display:flex; align-items:center; gap:8px">
+          <h3 style="margin:0; font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.16em; color:var(--muted); flex-grow:1">Agent 看到的同一份事实</h3>
+          <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">/api/capabilities</span>
+        </div>
+        <p style="margin:0; font-size:12px; line-height:1.65; color:var(--dim)">Agent 不看界面，它只能撞到这堵墙。所以「现在能做什么」必须是一份事实，界面和 Agent 各读一遍，而不是各写一套。</p>
+        <div style="display:flex; flex-direction:column; gap:5px; font-family:var(--mono); font-size:11px; line-height:1.7; padding:11px 13px; border-radius:10px; background:var(--sunken); border:1px solid var(--line); overflow:hidden">
+          <sc-for list="{{api}}" as="a" hint-placeholder-count="6">
+            <div style="display:flex; gap:9px; align-items:baseline">
+              <span style="color:{{a.ink}}; width:14px; flex-grow:0">{{a.mark}}</span>
+              <span style="color:{{a.nameInk}}; flex-grow:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{a.name}}</span>
+              <span style="color:var(--dim)">{{a.note}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; gap:9px; align-items:flex-start; padding:11px 13px; border:1px solid var(--cyan-line); border-radius:10px; background:rgba(92,235,223,.05)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-2)" stroke-width="1.7" stroke-linecap="round" style="flex-grow:0; margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5v.01"/></svg>
+          <span style="font-size:12px; line-height:1.6; color:var(--muted)">{{cur.note}}</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"state":{"editor":"enum","options":["EDIT","BLOCKING","REHEARSAL","ARMED","RECORDING","REVIEW","GENERATING","APPROVED"],"default":"RECORDING","section":"状态"},"$preview":{"width":1440,"height":800}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { s: null }; }
+  get cur() { return this.state.s ?? this.props.state ?? "RECORDING"; }
+
+  renderVals() {
+    const A = "#9d8cff", INK = "#140f2e", SOFT = "rgba(118,87,255,.16)", LINE = "rgba(157,140,255,.42)";
+    const MUT = "rgba(235,238,255,.50)", DIM = "rgba(235,238,255,.32)";
+    const OK = "#5fd88a", OLINE = "rgba(95,216,138,.34)", DANGER = "#ff7a7a", DLINE = "rgba(255,122,122,.34)";
+    const CY = "#5cebdf", CYLINE = "rgba(92,235,223,.34)";
+    const now = this.cur;
+
+    const ORDER = ["EDIT", "BLOCKING", "REHEARSAL", "ARMED", "RECORDING", "REVIEW", "GENERATING", "APPROVED"];
+    const machine = ORDER.map((n, i) => ({
+      name: n, arrow: i < ORDER.length - 1, pick: () => this.setState({ s: n }),
+      bg: now === n ? A : "transparent",
+      line: now === n ? A : "rgba(197,184,255,.10)",
+      ink: now === n ? INK : (ORDER.indexOf(now) > i ? MUT : DIM),
+      weight: now === n ? "600" : "400",
+    }));
+
+    // 每个状态：说明、HUD 的样子、六条能力的通断与理由
+    const yes = (label, why) => ({ label, why, ok: true });
+    const no = (label, why) => ({ label, why, ok: false });
+    const S = {
+      EDIT: {
+        can: "改场、改机位、建镜头都行 —— 这是大部分时间待着的地方",
+        note: "状态机是权限闸，不是装饰。EDIT 下 118 个 Action 里能跑的最多，但「导出成片」依然是灰的：还没有可拼的东西。",
+        rec: "arm", tc: "00:00:00:00", play: 1,
+        caps: [yes("改机位 / 焦段", "camera.transform · camera.lens"), yes("建 / 删演员", "entity.create · entity.delete"),
+               yes("改镜头时长", "shot.update"), yes("录制 Take", "先 take.arm 做飞行前检查"),
+               yes("导出成片", "66 镜白模已录 · 缺的用白模顶上"), no("验收对比", "这一镜只有一版 · review.verify 要新旧两版")],
+      },
+      BLOCKING: {
+        can: "在走位：动的是演员的轨迹，不是机位",
+        note: "调度和布景是两种模式，不是两个面板。模式决定拖拽的是谁 —— 免得在调度的时候手滑挪了机位。",
+        rec: "arm", tc: "00:00:00:00", play: 1,
+        caps: [yes("拖演员 / 加路点", "entity.path · entity.walk"), yes("加关键帧", "motion.keyframe"),
+               yes("改镜头时长", "shot.update"), yes("切回布景", "project.set-build-mode"),
+               no("删演员", "轨迹正挂在它身上 · 先清轨迹"), no("录制 Take", "调度模式下先切回布景")],
+      },
+      REHEARSAL: {
+        can: "空跑一遍：看运动对不对，什么都不写进去",
+        note: "排练不留痕迹 —— 这一段不进事件日志、不进撤销栈，因为它本来就没改任何东西。",
+        rec: "arm", tc: "00:00:02:04", play: 1,
+        caps: [yes("播放 / 拖播放头", "timeline.play · timeline.seek"), yes("改机位", "看着不对随手调"),
+               yes("进入录制", "take.arm → ARMED"), yes("回到编辑", "project.set-state"),
+               no("提交生成", "排练不留痕迹 · 要出片先回 EDIT"), no("录制 Take", "排练不写任何东西进去")],
+      },
+      ARMED: {
+        can: "待录：飞行前检查过了，按下去就开始",
+        note: "take.arm 会先查这一镜有没有机位、有没有 look-at 目标、时长够不够 —— 查不过就不进 ARMED，而不是录完才发现。",
+        rec: "go", tc: "00:00:00:00", play: 0.35,
+        caps: [yes("开始录制", "take.record"), yes("取消待录", "回到 EDIT"),
+               yes("改机位", "还来得及"), no("删演员", "这一镜点名要拍它"),
+               no("提交生成", "白模还没录"), no("导出成片", "还没有可拼的片段")],
+      },
+      RECORDING: {
+        can: "录制中：删演员、改焦距会被 dispatch 直接拒",
+        note: "界面把按钮灰掉只是第二次表达。真正拦住的是 dispatch —— 所以 CLI 和 Agent 也一样撞到这堵墙，不会绕过去。",
+        rec: "stop", tc: "00:00:03:11", play: 0.35,
+        caps: [yes("停止录制", "take.stop · 或录满自动收"), yes("看画面", "录的是真在出帧的 Program"),
+               no("删演员", "录制中改场会让这条 Take 前后不一致"), no("改焦距", "同上 —— 想改就先停"),
+               no("切工程", "会丢掉正在写的这条 Take"), no("提交生成", "等这条录完")],
+      },
+      REVIEW: {
+        can: "白模在手：可以对照，也可以重录",
+        note: "这是「对照」最该被打开的时刻，所以三档里的对照在这个状态下自己亮起来 —— 不用导演想起来去点。",
+        rec: "arm", tc: "00:00:07:16", play: 1,
+        caps: [yes("对照白模", "左右分栏，同一时刻的同一构图"), yes("重录这一镜", "改完机位就重录"),
+               yes("提交生成", "白模视频当参考视频"), yes("圈选这条 Take", "take.select"),
+               no("重排调度", "REVIEW 是看结果的地方 · 要改回 EDIT"), no("验收对比", "这一镜只有一版，没得比")],
+      },
+      GENERATING: {
+        can: "生成中：这一镜锁住，别的镜头照常改",
+        note: "锁的粒度是镜头，不是工程。一镜在跑不该挡住另一镜的调整 —— 否则等四十分钟只能干坐着。",
+        rec: "arm", tc: "00:00:07:16", play: 1,
+        caps: [yes("改别的镜头", "锁的是这一镜"), yes("看进度 / 取消", "generation.cancel"),
+               yes("对照上一版", "新旧并排"), no("改这一镜的机位", "已经提交出去了 · 要改先取消"),
+               no("重录这一镜", "同上"), no("导出成片", "等这批出完再拼")],
+      },
+      APPROVED: {
+        can: "这一镜定了 —— 锁住的部分谁都别再动",
+        note: "锁是导演说过「这一块我满意了」。任何会动到它的 Action 在 dispatch 被拦下，带 force 才能越过，而越过会记进事件日志，事后查得到是谁。",
+        rec: "arm", tc: "00:00:07:16", play: 1,
+        caps: [yes("导出成片", "这一镜可以进片子了"), yes("解锁再改", "shot.unlock · 显式动作"),
+               yes("对照留档", "定版和上一版并排"), no("改机位", "已锁 · 带 force 会记进日志"),
+               no("改打光", "已锁 · 同上"), no("重新生成", "先解锁，免得手滑覆盖定版")],
+      },
+    };
+    const c = S[now] || S.RECORDING;
+
+    const REC = {
+      arm:  { label: "录制", bg: "#15171d", line: "rgba(197,184,255,.10)", ink: "rgba(255,255,255,.92)", dot: "#ff4d4d", op: 1 },
+      go:   { label: "开始", bg: "rgba(255,122,122,.18)", line: DLINE, ink: DANGER, dot: "#ff4d4d", op: 1 },
+      stop: { label: "停止", bg: "rgba(255,122,122,.18)", line: DLINE, ink: DANGER, dot: "#ff4d4d", op: 1 },
+    }[c.rec];
+
+    const CHIP = {
+      RECORDING: { chipBg: "rgba(255,122,122,.18)", chipInk: DANGER, line: DLINE, soft: "rgba(255,122,122,.05)" },
+      REVIEW: { chipBg: "rgba(92,235,223,.16)", chipInk: CY, line: CYLINE, soft: "rgba(92,235,223,.04)" },
+      APPROVED: { chipBg: "rgba(95,216,138,.18)", chipInk: OK, line: OLINE, soft: "rgba(95,216,138,.04)" },
+    }[now] || { chipBg: SOFT, chipInk: A, line: LINE, soft: "rgba(118,87,255,.05)" };
+
+    // 对照在 REVIEW 下自己亮起来：该看的时候摆到眼前，不指望导演想起来
+    // 白模刚录完正是该看对照的时刻，所以 REVIEW 下它自己亮；其余状态停在 Program
+    const hot = now === "REVIEW" ? "compare" : "program";
+    const views = [["free", "自由"], ["program", "Program"], ["compare", "对照"]].map(([k, label]) => ({
+      label,
+      bg: hot === k ? A : "transparent",
+      ink: hot === k ? INK : MUT,
+      weight: hot === k ? "600" : "400",
+      op: now === "RECORDING" && k !== "program" ? ".4" : "1",
+    }));
+
+    return {
+      machine,
+      cur: { name: now, can: c.can, note: c.note, ...CHIP },
+      hud: {
+        tc: c.tc, playOp: String(c.play),
+        recLabel: REC.label, recBg: REC.bg, recLine: REC.line, recInk: REC.ink, recDot: REC.dot, recOp: String(REC.op),
+      },
+      views,
+      caps: c.caps.map((x) => ({
+        label: x.label, why: x.why, ok: x.ok, no: !x.ok,
+        ink: x.ok ? "rgba(255,255,255,.92)" : MUT,
+        line: x.ok ? "rgba(197,184,255,.10)" : "rgba(197,184,255,.06)",
+        bg: x.ok ? "#15171d" : "rgba(13,14,19,.55)",
+      })),
+      api: c.caps.map((x) => ({
+        mark: x.ok ? "✓" : "✕",
+        ink: x.ok ? OK : DIM,
+        nameInk: x.ok ? MUT : DIM,
+        name: x.why.split(" · ")[0].replace(/[（(].*/, "").trim().slice(0, 28),
+        note: x.ok ? "allowed" : "forbidden",
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#121316; --surface:#15171d; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-ink:#140f2e; --accent-soft:rgba(118,87,255,.16); --accent-line:rgba(157,140,255,.42);
+      --accent-2:#5cebdf; --cyan-line:rgba(92,235,223,.34);
+      --ok:#5fd88a; --ok-line:rgba(95,216,138,.34); --danger:#ff7a7a; --danger-line:rgba(255,122,122,.34);
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;line-height:1.2;}
+    button:hover{border-color:var(--line-2);}
+  </style>
+</helmet>
+
+<div style="width:1440px; height:900px; display:flex; flex-direction:column; background:#050508; overflow:hidden">
+
+  <!-- 顶：这一镜是谁 -->
+  <header style="display:flex; align-items:center; gap:14px; padding:14px 22px; border-bottom:1px solid var(--line); background:var(--bg); flex-grow:0">
+    <span style="font-family:var(--mono); font-size:12px; color:var(--accent)">21</span>
+    <b style="font-family:var(--display); font-size:16px; font-weight:500">第一站灯下</b>
+    <span style="font-size:12px; color:var(--dim)">50mm · push-in · 7.7s · 2 拍</span>
+    <span style="flex-grow:1"></span>
+    <div style="display:flex; gap:6px">
+      <sc-for list="{{toggles}}" as="t" hint-placeholder-count="2">
+        <button onClick="{{t.pick}}" style="border-radius:9999px; padding:5px 13px; font-size:12px; background:{{t.bg}}; border-color:{{t.line}}; color:{{t.ink}}">{{t.label}}</button>
+      </sc-for>
+    </div>
+  </header>
+
+  <!-- 中：并排。对照是这个产品的论证本身，它该占最大的那块地方 -->
+  <div style="flex-grow:1; display:flex; flex-direction:column; justify-content:center; padding:22px 22px 0; min-height:0">
+    <div style="display:grid; grid-template-columns:{{grid}}; gap:14px">
+      <sc-for list="{{cols}}" as="c" hint-placeholder-count="3">
+        <div style="display:flex; flex-direction:column; gap:7px; min-width:0">
+          <div style="display:flex; align-items:center; gap:7px">
+            <span style="width:7px; height:7px; border-radius:9999px; background:{{c.dot}}; flex-grow:0"></span>
+            <span style="font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:{{c.ink}}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{c.tag}}</span>
+            <span style="flex-grow:1"></span>
+            <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">{{c.cost}}</span>
+          </div>
+          <div style="width:100%; aspect-ratio:16/9; border-radius:10px; background:{{c.fill}}; border:1px solid {{c.ring}}; position:relative; overflow:hidden">
+            <div style="position:absolute; left:0; right:0; top:59%; height:1px; background:rgba(197,184,255,.12)"></div>
+            <div style="position:absolute; left:{{c.x}}; top:30%; width:{{c.w}}; height:96px; border-radius:20px; background:{{c.body}}"></div>
+            <div style="position:absolute; right:10%; top:46%; width:70px; height:50px; border-radius:6px; background:{{c.prop}}"></div>
+            <sc-if value="{{playing}}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute; left:0; right:0; bottom:0; height:3px; background:rgba(255,255,255,.08)">
+                <div style="width:38%; height:100%; background:var(--accent-2)"></div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- 验收结论直接摆在下面，不用去别处找 -->
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:18px 4px 0">
+      <span style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ok)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+        机位高度改到了 1.15 m
+      </span>
+      <span style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ok)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+        锁住的打光没漂
+      </span>
+      <span style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--danger)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 8v5"/><path d="M12 16.5v.01"/><circle cx="12" cy="12" r="9"/></svg>
+        人物比上一版矮了一截 —— 参考图只批了正面
+      </span>
+      <span style="flex-grow:1"></span>
+      <button onClick="{{togglePlay}}" style="border-radius:9999px; padding:6px 16px; font-size:12px; background:{{play.bg}}; border-color:{{play.line}}; color:{{play.ink}}">{{play.label}}</button>
+    </div>
+  </div>
+
+  <!-- 底：重生成。顺序是有讲究的，所以把顺序画出来 -->
+  <footer style="border-top:1px solid var(--line); background:var(--bg); padding:16px 22px; display:flex; align-items:center; gap:22px; flex-grow:0">
+    <div style="display:flex; flex-direction:column; gap:5px; max-width:430px">
+      <b style="font-size:13px; font-weight:500">左边随便改，不花钱</b>
+      <span style="font-size:12px; line-height:1.6; color:var(--dim)">机位、走位、光、焦段。改完点右边 —— 只重做这一镜，构图跟着白模走，人物靠已批准的参考图锁住。</span>
+    </div>
+
+    <div style="flex-grow:1; display:flex; align-items:center; gap:0">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="3">
+        <div style="display:flex; align-items:center; gap:10px; flex-grow:1">
+          <div style="display:flex; align-items:center; gap:9px; padding:8px 14px; border:1px solid {{s.line}}; border-radius:9999px; background:{{s.bg}}">
+            <span style="width:20px; height:20px; border-radius:9999px; display:grid; place-items:center; font-family:var(--mono); font-size:10px; background:{{s.numBg}}; color:{{s.numInk}}">
+              <sc-if value="{{s.done}}" hint-placeholder-val="{{ true }}">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+              </sc-if>
+              <sc-if value="{{s.todo}}" hint-placeholder-val="{{ true }}">{{s.n}}</sc-if>
+            </span>
+            <div style="display:flex; flex-direction:column; gap:1px">
+              <span style="font-size:12px; color:{{s.ink}}">{{s.label}}</span>
+              <span style="font-size:10px; color:var(--dim); font-family:var(--mono)">{{s.note}}</span>
+            </div>
+          </div>
+          <sc-if value="{{s.arrow}}" hint-placeholder-val="{{ true }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(235,238,255,.32)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-grow:0"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+    <button onClick="{{advance}}" style="border-radius:9999px; padding:11px 22px; font-size:14px; background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; white-space:nowrap">{{cta}}</button>
+  </footer>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"showOrigin":{"editor":"boolean","default":true,"section":"栏位"},"showPrev":{"editor":"boolean","default":false,"section":"栏位"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { origin: null, prev: null, playing: false, step: 0 }; }
+  get origin() { return this.state.origin ?? this.props.showOrigin ?? true; }
+  get prev() { return this.state.prev ?? this.props.showPrev ?? false; }
+
+  renderVals() {
+    const A = "#9d8cff", INK = "#140f2e", SOFT = "rgba(118,87,255,.16)", LINE = "rgba(157,140,255,.42)";
+    const MUT = "rgba(235,238,255,.50)", DIM = "rgba(235,238,255,.32)";
+    const origin = this.origin, prev = this.prev, playing = this.state.playing, step = this.state.step;
+
+    const cols = [];
+    if (origin) cols.push({ tag: "原片 · 你要复刻的那条", cost: "参照", dot: DIM, ink: DIM, fill: "#0b0d14", ring: "rgba(197,184,255,.10)", body: "#34323d", prop: "#2b2a33", x: "30%", w: "44px" });
+    cols.push({ tag: "白模 · 免费 · 你改的是这边", cost: "0", dot: A, ink: MUT, fill: "#0e1016", ring: LINE, body: "#2a2d38", prop: "#22252e", x: "32%", w: "46px" });
+    if (prev) cols.push({ tag: "生成 · 上一版", cost: "已计费", dot: DIM, ink: DIM, fill: "#0c1013", ring: "rgba(197,184,255,.10)", body: "#2f3336", prop: "#262a2d", x: "33%", w: "42px" });
+    cols.push({ tag: "生成 · v2v · 新版", cost: "计费", dot: "#5cebdf", ink: "#5cebdf", fill: "#0c1114", ring: "rgba(92,235,223,.34)", body: "#2c3a3c", prop: "#243033", x: "32%", w: "46px" });
+
+    const toggles = [
+      { k: "origin", label: origin ? "收起原片" : "对上原片", on: origin, pick: () => this.setState({ origin: !origin }) },
+      { k: "prev", label: prev ? "只看两栏" : "加上一版", on: prev, pick: () => this.setState({ prev: !prev }) },
+    ].map((t) => ({
+      label: t.label, pick: t.pick,
+      bg: t.on ? SOFT : "transparent", line: t.on ? LINE : "rgba(197,184,255,.10)", ink: t.on ? A : MUT,
+    }));
+
+    const SEQ = [
+      { label: "重录白模", note: "构图已经改了" },
+      { label: "编译提示词", note: "跟着新构图走" },
+      { label: "生成这一镜", note: "只重做这一镜" },
+    ];
+    const steps = SEQ.map((s, i) => {
+      const done = i < step, now = i === step;
+      return {
+        label: s.label, note: s.note, arrow: i < SEQ.length - 1,
+        line: now ? LINE : done ? "rgba(95,216,138,.34)" : "rgba(197,184,255,.10)",
+        bg: now ? SOFT : "transparent",
+        ink: now || done ? "rgba(255,255,255,.92)" : MUT,
+        numBg: done ? "rgba(95,216,138,.20)" : now ? A : "rgba(197,184,255,.10)",
+        numInk: done ? "#5fd88a" : now ? INK : DIM,
+        n: String(i + 1), done, todo: !done,
+      };
+    });
+
+    return {
+      cols, toggles, steps, playing,
+      grid: `repeat(${cols.length}, minmax(0,1fr))`,
+      play: playing
+        ? { label: "暂停", bg: SOFT, line: LINE, ink: A }
+        : { label: "一起播", bg: "#15171d", line: "rgba(197,184,255,.10)", ink: MUT },
+      togglePlay: () => this.setState({ playing: !playing }),
+      cta: step >= 3 ? "再来一版" : SEQ[step].label,
+      advance: () => this.setState({ step: step >= 3 ? 0 : step + 1 }),
+    };
+  }
+}
+</script>
+</body>
+</html>

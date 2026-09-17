@@ -1,0 +1,234 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#121316; --surface:#15171d; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-ink:#140f2e; --accent-soft:rgba(118,87,255,.16); --accent-line:rgba(157,140,255,.42);
+      --accent-2:#5cebdf; --cyan-line:rgba(92,235,223,.34);
+      --ok:#5fd88a; --danger:#ff7a7a;
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;line-height:1.2;}
+    button:hover{border-color:var(--line-2);}
+  </style>
+</helmet>
+
+<div style="width:1440px; height:900px; display:flex; flex-direction:column; background:radial-gradient(1200px 620px at 50% -8%, rgba(118,87,255,.10), transparent 70%), var(--bg); overflow:hidden">
+
+  <header style="display:flex; align-items:center; gap:10px; padding:0 14px; height:44px; border-bottom:1px solid var(--line); flex-grow:0">
+    <span style="font-family:var(--display); font-weight:700; letter-spacing:.14em; font-size:12px; color:var(--accent)">DC</span>
+    <span style="font-size:13px; color:var(--muted)">未命名工程</span>
+    <span style="flex-grow:1"></span>
+    <span style="font-family:var(--mono); font-size:10px; letter-spacing:.06em; padding:3px 10px; border:1px solid var(--line); border-radius:9999px; color:var(--dim)">空工程</span>
+  </header>
+
+  <div style="flex-grow:1; display:grid; grid-template-columns:minmax(0,1fr) 520px; gap:0; min-height:0">
+
+    <!-- 左：入口。三个，按难度从低到高，最难的那个折起来 -->
+    <section style="padding:56px 56px 40px 72px; display:flex; flex-direction:column; gap:26px; min-width:0">
+      <div style="display:flex; flex-direction:column; gap:10px">
+        <h1 style="margin:0; font-family:var(--display); font-size:36px; font-weight:600; letter-spacing:-.01em; line-height:1.15">给我一个参照</h1>
+        <p style="margin:0; font-size:14px; line-height:1.75; color:var(--muted); max-width:52ch; text-wrap:pretty">空白输入框是创作者的敌人。但你手里有刷到的那条片子 —— 一张画面里恰好编码了最难用嘴说的东西：景别、机位高度、焦段、光位、构图关系。</p>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center">
+        <div style="flex-grow:1; display:flex; align-items:center; gap:10px; padding:13px 16px; border:1px solid var(--accent-line); border-radius:12px; background:var(--surface); box-shadow:0 0 0 4px rgba(118,87,255,.07)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+          <span style="font-size:14px; color:var(--dim); flex-grow:1">贴一条视频链接：抖音 / B站 / YouTube…</span>
+        </div>
+        <button style="border-radius:9999px; padding:12px 26px; font-size:14px; background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600">复刻</button>
+      </div>
+
+      <div style="display:flex; align-items:center; justify-content:center; gap:12px; padding:26px; border:1px dashed var(--line-2); border-radius:12px; color:var(--muted); background:rgba(13,14,19,.5)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        <span style="font-size:13px">或把本地图片 / 视频拖到这里</span>
+      </div>
+
+      <details style="border-top:1px solid var(--line); padding-top:18px; display:flex; flex-direction:column; gap:12px">
+        <summary style="cursor:pointer; font-size:13px; color:var(--dim); list-style:none">没有参照，我说一句话 —— 展开</summary>
+        <div style="display:flex; gap:10px; align-items:center; padding-top:12px">
+          <div style="flex-grow:1; padding:11px 14px; border:1px solid var(--line); border-radius:12px; background:var(--surface); color:var(--dim); font-size:13px">一句话说你要的片子：谁、在哪、做什么…</div>
+          <button style="border-radius:9999px; padding:10px 20px; font-size:13px; color:var(--muted)">交给规划器</button>
+        </div>
+        <span style="font-size:12px; line-height:1.6; color:var(--dim); display:block">这条走的是另一条路：没有参照可比，机位和光全靠模型定，出来什么样只能看了才知道。所以它排在第三。</span>
+      </details>
+
+      <!-- 已经读完，才问得出具体问题 -->
+      <div style="display:flex; flex-direction:column; gap:14px; padding:18px 20px; border:1px solid var(--cyan-line); border-radius:16px; background:rgba(12,17,20,.72)">
+        <div style="display:flex; align-items:center; gap:9px">
+          <span style="font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--accent-2)">读完了 · 6 帧 · gemini-3.1-pro</span>
+          <span style="flex-grow:1"></span>
+          <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">20.4s</span>
+        </div>
+        <p style="margin:0; font-size:14px; line-height:1.7">黄昏的天台，一个女孩背对城市天际线，手里夹着烟，逆光。</p>
+        <div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:9px">
+          <sc-for list="{{read}}" as="r" hint-placeholder-count="4">
+            <div style="display:flex; flex-direction:column; gap:3px; padding:9px 11px; border-radius:10px; background:var(--sunken); border:1px solid var(--line)">
+              <span style="font-size:10px; letter-spacing:.06em; color:var(--dim)">{{r.k}}</span>
+              <span style="font-family:var(--mono); font-size:13px; color:var(--accent-2)">{{r.v}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin:0; font-size:13px; line-height:1.7; color:var(--muted)">MCU 景别、50mm、机位离地 1.15 米、缓推。<b style="color:var(--text); font-weight:500">你想复刻它的哪一部分？</b></p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <sc-for list="{{modes}}" as="m" hint-placeholder-count="4">
+            <button onClick="{{m.pick}}" style="border-radius:9999px; padding:7px 15px; font-size:13px; background:{{m.bg}}; border-color:{{m.line}}; color:{{m.ink}}; font-weight:{{m.weight}}">{{m.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右：选了就看得见会建出什么。不是一段提示词，是一份能读的计划 -->
+    <aside style="border-left:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; min-height:0">
+      <div style="display:flex; align-items:center; gap:8px; padding:14px 18px; border-bottom:1px solid var(--line)">
+        <h2 style="margin:0; font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.16em; color:var(--muted); flex-grow:1">会建出什么</h2>
+        <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">{{plan.count}} 步 · {{plan.ms}}</span>
+      </div>
+
+      <div style="padding:14px 18px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:7px">
+        <span style="font-size:13px; color:var(--text)">{{plan.summary}}</span>
+        <span style="font-size:12px; line-height:1.6; color:var(--dim)">{{plan.why}}</span>
+      </div>
+
+      <div style="flex-grow:1; overflow:hidden; padding:12px 18px; display:flex; flex-direction:column; gap:6px">
+        <sc-for list="{{plan.steps}}" as="s" hint-placeholder-count="9">
+          <div style="display:flex; gap:10px; align-items:baseline; padding:5px 0">
+            <span style="font-family:var(--mono); font-size:10px; color:var(--dim); width:16px; flex-grow:0">{{s.n}}</span>
+            <span style="font-family:var(--mono); font-size:11px; color:var(--accent-2); width:104px; flex-grow:0">{{s.action}}</span>
+            <span style="font-size:12px; line-height:1.55; color:var(--muted); flex-grow:1">{{s.why}}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{plan.hasWarn}}" hint-placeholder-val="{{ true }}">
+        <div style="margin:0 18px 14px; padding:10px 12px; border:1px solid rgba(255,122,122,.34); border-radius:10px; background:rgba(255,122,122,.06); display:flex; gap:9px; align-items:flex-start">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.7" stroke-linecap="round" style="flex-grow:0; margin-top:1px"><path d="M12 8v5"/><path d="M12 16.5v.01"/><circle cx="12" cy="12" r="9"/></svg>
+          <span style="font-size:12px; line-height:1.6; color:var(--muted)">{{plan.warn}}</span>
+        </div>
+      </sc-if>
+
+      <div style="padding:14px 18px; border-top:1px solid var(--line); display:flex; gap:9px; align-items:center">
+        <button style="flex-grow:1; border-radius:9999px; padding:10px 18px; font-size:14px; background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600">照这份建场</button>
+        <button style="border-radius:9999px; padding:10px 16px; font-size:13px; color:var(--muted)">换一段</button>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"mode":{"editor":"enum","options":["motion","full","light","beats"],"default":"motion","section":"复刻模式"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { mode: null }; }
+  get mode() { return this.state.mode ?? this.props.mode ?? "motion"; }
+
+  renderVals() {
+    const A = "#9d8cff", INK = "#140f2e", SOFT = "rgba(118,87,255,.16)", LINE = "rgba(157,140,255,.42)";
+    const MUT = "rgba(235,238,255,.50)";
+    const mode = this.mode;
+
+    const MODES = [
+      { k: "motion", label: "运镜和构图照搬，主体换成我的" },
+      { k: "full",   label: "整条都复刻" },
+      { k: "light",  label: "只要打光和色调" },
+      { k: "beats",  label: "只要节奏" },
+    ];
+    const modes = MODES.map((m) => ({
+      label: m.label, pick: () => this.setState({ mode: m.k }),
+      bg: mode === m.k ? A : "transparent",
+      line: mode === m.k ? A : "rgba(197,184,255,.20)",
+      ink: mode === m.k ? INK : MUT,
+      weight: mode === m.k ? "600" : "400",
+    }));
+
+    const S = (action, why) => ({ action, why });
+    const PLANS = {
+      motion: {
+        summary: "运镜照搬 · 7 步 · MCU 50mm 缓推 · 7.5s · 2 拍",
+        why: "机位、焦段、运动轨迹、景别都跟它走；主体建成占位，等你换成自己的产品或角色。场景和光不动。",
+        steps: [
+          S("entity.create", "女孩 · 中央偏左（占位）"),
+          S("entity.create", "远处高楼 · 背景右侧（占位）"),
+          S("camera.create", "机位：中近景 MCU · 50mm · f/1.8"),
+          S("camera.frame", "按景别摆到正面，离地 1.15 m"),
+          S("camera.pilot", "设为 Program"),
+          S("shot.create", "镜头 7.5s · 缓推（按参照的 2 拍合计）"),
+          S("shot.beats", "拆成 2 拍：3s + 4.5s"),
+        ],
+        warn: "参照的构图是「主体在左三分线」：运行时的机位锁定看向主体，白模里会在正中。这句已写进镜头描述，生成时会带上。",
+      },
+      full: {
+        summary: "整条复刻 · 10 步 · MCU 50mm 缓推 · 7.5s · 2 拍",
+        why: "连人带景一起搭成它那样，用来学它是怎么拍的。光位也照搬。",
+        steps: [
+          S("scene.create", "场次「天台黄昏」，黄昏"),
+          S("entity.create", "女孩 · 中央偏左"),
+          S("entity.create", "远处高楼 · 背景右侧"),
+          S("scene.preset", "布光 剪影（参照主光：正后方逆光）"),
+          S("light.create", "画面内光源：霓虹招牌"),
+          S("camera.create", "机位：中近景 MCU · 50mm · f/1.8"),
+          S("camera.frame", "按景别摆到正面，离地 1.15 m"),
+          S("camera.pilot", "设为 Program"),
+          S("shot.create", "镜头 7.5s · 缓推（按参照的 2 拍合计）"),
+          S("shot.beats", "拆成 2 拍：3s + 4.5s"),
+        ],
+        warn: "参照的构图是「主体在左三分线」：白模里主体会在正中，构图偏移交给生成那一层。",
+      },
+      light: {
+        summary: "只要光 · 5 步 · 剪影 · 中性机位",
+        why: "光位、明暗比、色温照搬；机位、景别、主体你自己定，先给一个看得见主体的中景。",
+        steps: [
+          S("scene.create", "场次「天台黄昏」，黄昏"),
+          S("entity.create", "女孩 · 中央（占位）"),
+          S("scene.preset", "布光 剪影（参照主光：正后方逆光）"),
+          S("light.create", "画面内光源：霓虹招牌"),
+          S("camera.create", "中性机位：这个模式不复刻机位"),
+        ],
+        warn: "",
+      },
+      beats: {
+        summary: "只要节奏 · 5 步 · 固定机位 · 7.5s · 2 拍",
+        why: "按它的拍子分镜，每拍多长、什么时候切跟它一样；画面内容全换成你自己的。",
+        steps: [
+          S("entity.create", "主体 · 中央（占位）"),
+          S("camera.create", "中性机位：这个模式不复刻机位"),
+          S("camera.frame", "中景 · 前左 3/4"),
+          S("shot.create", "镜头 7.5s · 固定机位"),
+          S("shot.beats", "拆成 2 拍：3s + 4.5s"),
+        ],
+        warn: "",
+      },
+    };
+
+    const p = PLANS[mode] || PLANS.motion;
+    return {
+      modes,
+      read: [
+        { k: "景别 / 焦段", v: "MCU · 50mm" },
+        { k: "机位高度", v: "1.15 m" },
+        { k: "运镜", v: "push-in · slow" },
+        { k: "拍", v: "3s + 4.5s" },
+      ],
+      plan: {
+        summary: p.summary, why: p.why, warn: p.warn, hasWarn: !!p.warn,
+        count: p.steps.length, ms: "编译 3ms",
+        steps: p.steps.map((s, i) => ({ n: String(i + 1).padStart(2, "0"), action: s.action, why: s.why })),
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

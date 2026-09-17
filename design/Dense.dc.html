@@ -1,0 +1,367 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --top:rgba(16,17,22,.72); --panel:#121316; --panel-2:#1b1e24; --surface:#15171d;
+      --surface-2:#1d2028; --hover:#242832; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-ink:#140f2e; --accent-soft:rgba(118,87,255,.16); --accent-line:rgba(157,140,255,.42);
+      --accent-2:#5cebdf; --cyan-line:rgba(92,235,223,.34); --glow:rgba(103,87,231,.62);
+      --danger:#ff7a7a; --danger-line:rgba(255,122,122,.34); --ok:#5fd88a; --ok-line:rgba(95,216,138,.34); --rec:#ff4d4d;
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;line-height:1.2;}
+    button:hover{border-color:var(--line-2);background:var(--hover);}
+    .mono{font-family:var(--mono);}
+  </style>
+</helmet>
+
+<div style="width:1440px; height:900px; display:grid; grid-template-rows:44px 1fr auto; background:var(--bg); overflow:hidden">
+
+  <!-- ── 顶栏：项目 + 状态说明条 ───────────────────────────────── -->
+  <header style="display:flex; align-items:center; gap:10px; padding:0 14px; background:var(--top); border-bottom:1px solid var(--line)">
+    <span style="font-family:var(--display); font-weight:700; letter-spacing:.14em; font-size:12px; color:var(--accent)">DC</span>
+    <span style="font-size:13px; color:var(--text)">最后一班</span>
+    <span style="font-family:var(--mono); font-size:11px; color:var(--dim)">66 镜 · 9:46</span>
+
+    <!-- 状态机不再只是一个色块：它说清楚现在能做什么 -->
+    <div style="display:flex; align-items:center; gap:8px; padding:3px 10px 3px 4px; border:1px solid {{st.line}}; border-radius:9999px; background:{{st.soft}}">
+      <span style="font-family:var(--mono); font-size:10px; letter-spacing:.1em; padding:2px 8px; border-radius:9999px; background:{{st.chipBg}}; color:{{st.chipInk}}">{{st.name}}</span>
+      <span style="font-size:12px; color:var(--muted)">{{st.can}}</span>
+    </div>
+
+    <span style="flex-grow:1"></span>
+    <div style="display:flex; gap:4px; align-items:center">
+      <button style="width:28px;height:28px;padding:0;display:grid;place-items:center;background:transparent;border-color:transparent">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted)"><path d="M3 10h11a5 5 0 0 1 0 10h-3"/><path d="M7 6l-4 4 4 4"/></svg>
+      </button>
+      <button style="width:28px;height:28px;padding:0;display:grid;place-items:center;background:transparent;border-color:transparent">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--dim)"><path d="M21 10H10a5 5 0 0 0 0 10h3"/><path d="M17 6l4 4-4 4"/></svg>
+      </button>
+      <button style="width:28px;height:28px;padding:0;display:grid;place-items:center;background:transparent;border-color:transparent">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" style="color:var(--muted)"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8.5v.01"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── 主体：左 场景 / 中 舞台 / 右 Agent ─────────────────────── -->
+  <div style="display:grid; grid-template-columns:40px 264px 1fr 320px; min-height:0">
+
+    <!-- 竖排轨 -->
+    <nav style="display:flex; flex-direction:column; gap:6px; padding:12px 5px; border-right:1px solid var(--line); background:var(--panel)">
+      <button style="writing-mode:vertical-rl; padding:14px 0; width:30px; letter-spacing:.22em; font-size:12px; color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); font-weight:600">场景</button>
+      <button style="writing-mode:vertical-rl; padding:14px 0; width:30px; letter-spacing:.22em; font-size:12px; color:var(--muted); background:transparent; border-color:transparent">属性</button>
+    </nav>
+
+    <!-- 场景树 -->
+    <aside style="display:flex; flex-direction:column; min-height:0; background:var(--panel); border-right:1px solid var(--line)">
+      <div style="display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--line)">
+        <h2 style="margin:0; font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.16em; color:var(--muted); flex-grow:1">场景</h2>
+        <span style="font-family:var(--mono); font-size:11px; color:var(--dim)">37 · 26 · 7</span>
+      </div>
+      <div style="padding:8px 8px; display:flex; flex-direction:column; gap:2px; overflow:hidden">
+        <sc-for list="{{tree}}" as="row" hint-placeholder-count="7">
+          <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; background:{{row.bg}}">
+            <span style="width:14px; height:14px; border-radius:4px; background:{{row.dot}}; flex-grow:0"></span>
+            <span style="font-size:12px; color:{{row.ink}}; flex-grow:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{row.name}}</span>
+            <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">{{row.meta}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+
+    <!-- 舞台 -->
+    <main style="position:relative; background:#050508; min-height:0; overflow:hidden">
+
+      <!-- 自由 / Program：一块画面 -->
+      <sc-if value="{{notCompare}}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute; inset:0; display:grid; place-items:center">
+          <div style="width:{{shot.w}}; aspect-ratio:16/9; border-radius:4px; background:linear-gradient(160deg,#171922,#0e1016 60%,#14161d); border:1px solid {{shot.ring}}; position:relative; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.6)">
+            <!-- 白模示意：地平线 + 两个代理体 -->
+            <div style="position:absolute; left:0; right:0; top:58%; height:1px; background:rgba(197,184,255,.14)"></div>
+            <div style="position:absolute; left:34%; top:34%; width:46px; height:120px; border-radius:23px; background:#2a2d38; border:1px solid rgba(197,184,255,.18)"></div>
+            <div style="position:absolute; left:56%; top:44%; width:84px; height:64px; border-radius:6px; background:#22252e; border:1px solid rgba(197,184,255,.12)"></div>
+            <sc-if value="{{isProgram}}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute; inset:5%; border:1px dashed rgba(255,255,255,.16)"></div>
+            </sc-if>
+            <sc-if value="{{isRec}}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute; inset:0; border:2px solid var(--rec); border-radius:4px"></div>
+              <div style="position:absolute; top:12px; left:12px; display:flex; align-items:center; gap:7px; padding:4px 11px; border-radius:9999px; background:rgba(11,12,16,.78); border:1px solid var(--danger-line)">
+                <span style="width:8px; height:8px; border-radius:9999px; background:var(--rec)"></span>
+                <span style="font-family:var(--mono); font-size:11px; color:var(--danger)">REC 00:00:03:11</span>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- 对照：三栏。不是「第三种视图」，是流水线里白模↔生成那一段的原生形态 -->
+      <sc-if value="{{isCompare}}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:16px 18px 96px">
+          <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px">
+            <sc-for list="{{cols}}" as="col" hint-placeholder-count="3">
+              <div style="display:flex; flex-direction:column; gap:6px; min-width:0">
+                <div style="display:flex; align-items:center; gap:6px">
+                  <span style="font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:{{col.ink}}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{col.tag}}</span>
+                </div>
+                <div style="width:100%; aspect-ratio:16/9; border-radius:8px; background:{{col.fill}}; border:1px solid {{col.ring}}; position:relative; overflow:hidden">
+                  <div style="position:absolute; left:0; right:0; top:58%; height:1px; background:rgba(197,184,255,.12)"></div>
+                  <div style="position:absolute; left:34%; top:32%; width:30px; height:84px; border-radius:15px; background:{{col.body}}"></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:14px 2px 0">
+            <b style="font-size:13px; font-weight:500">21 第一站灯下</b>
+            <span style="font-size:11px; color:var(--dim)">50mm · push-in · 7.7s</span>
+            <span style="font-size:11px; color:var(--ok)">带了 3 张参考图</span>
+            <span style="font-size:11px; color:var(--danger)">验收：人物比上一版矮了一截</span>
+            <span style="flex-grow:1"></span>
+            <button style="border-radius:9999px; padding:5px 14px; font-size:12px">一起播</button>
+            <button style="border-radius:9999px; padding:5px 14px; font-size:12px; background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600">改完重生成这一镜</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- HUD：视图三档是常驻控件，对照模式下也在原地 -->
+      <div style="position:absolute; left:50%; bottom:16px; transform:translateX(-50%); display:flex; gap:8px; align-items:center; background:rgba(13,14,19,.72); border:1px solid var(--line-2); border-radius:9999px; padding:7px 9px; box-shadow:0 18px 48px rgba(0,0,0,.55); z-index:6">
+        <div style="display:inline-flex; border:1px solid var(--line); border-radius:9999px; padding:2px; gap:2px; background:var(--sunken)">
+          <sc-for list="{{views}}" as="v" hint-placeholder-count="3">
+            <button onClick="{{v.pick}}" style="border:0; border-radius:9999px; padding:5px 13px; background:{{v.bg}}; color:{{v.ink}}; font-weight:{{v.weight}}">{{v.label}}</button>
+          </sc-for>
+        </div>
+        <button style="border-radius:9999px; width:30px; height:30px; padding:0; display:grid; place-items:center">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <span style="font-family:var(--mono); font-size:13px; color:var(--accent-2); padding:0 8px; letter-spacing:.02em">{{tc}}</span>
+        <button onClick="{{toggleRec}}" style="border-radius:9999px; padding:5px 14px; display:flex; align-items:center; gap:7px; background:{{rec.bg}}; border-color:{{rec.line}}; color:{{rec.ink}}">
+          <span style="width:9px; height:9px; border-radius:9999px; background:{{rec.dot}}"></span>{{rec.label}}
+        </button>
+      </div>
+    </main>
+
+    <!-- Agent -->
+    <aside style="display:flex; flex-direction:column; min-height:0; background:var(--panel); border-left:1px solid var(--line)">
+      <div style="display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--line)">
+        <h2 style="margin:0; font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.16em; color:var(--muted); flex-grow:1">AGENT</h2>
+        <span style="width:7px; height:7px; border-radius:9999px; background:var(--ok)"></span>
+        <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">gpt-6-astra</span>
+      </div>
+      <div style="flex-grow:1; padding:14px; display:flex; flex-direction:column; gap:10px; overflow:hidden">
+        <div style="align-self:flex-end; max-width:86%; padding:8px 12px; border-radius:12px 12px 4px 12px; background:var(--accent-soft); border:1px solid var(--accent-line); font-size:12px; line-height:1.6">21 镜换成 50mm，机位低一点</div>
+        <div style="display:flex; flex-direction:column; gap:6px; padding:9px 11px; border-radius:12px 12px 12px 4px; background:var(--surface); border:1px solid var(--line); font-size:12px; line-height:1.6">
+          <div style="display:flex; align-items:center; gap:7px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+            <b style="font-weight:500">改了 21 镜的机位</b>
+            <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">2 步</span>
+          </div>
+          <div style="display:grid; grid-template-columns:auto 1fr auto; gap:3px 10px; font-family:var(--mono); font-size:11px; color:var(--dim)">
+            <span>焦距</span><span style="color:var(--danger)">35mm</span><span style="color:var(--ok)">50mm</span>
+            <span>高度</span><span style="color:var(--danger)">1.60m</span><span style="color:var(--ok)">1.15m</span>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px; padding:9px 11px; border-radius:12px; background:var(--sunken); border:1px solid var(--cyan-line); font-size:12px; line-height:1.6">
+          <span style="color:var(--accent-2); font-family:var(--mono); font-size:10px; letter-spacing:.08em">要你拿个主意</span>
+          <span>这一镜同时点到人、后视镜和车外的人。构图满足不了三个，先拍谁？</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; padding-top:2px">
+            <button style="border-radius:9999px; padding:4px 12px; font-size:12px; background:transparent; color:var(--muted)">抱花的姑娘</button>
+            <button style="border-radius:9999px; padding:4px 12px; font-size:12px; background:transparent; color:var(--muted)">后视镜</button>
+            <button style="border-radius:9999px; padding:4px 12px; font-size:12px; background:transparent; color:var(--muted)">拆成两镜</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 14px 14px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:flex-end">
+        <div style="flex-grow:1; border:1px solid var(--line); border-radius:12px; padding:9px 11px; background:var(--surface); color:var(--dim); font-size:12px">说一句你要的镜头、机位、动作或光…</div>
+        <button style="border-radius:9999px; padding:6px 16px; background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600">发送</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ── 底部：一条流水线，不是十一个平铺的 tab ───────────────── -->
+  <footer style="background:var(--panel); border-top:1px solid var(--line); display:flex; flex-direction:column">
+    <div style="display:flex; align-items:center; gap:10px; padding:7px 14px; min-height:46px">
+      <div style="display:flex; gap:6px; overflow:hidden">
+        <sc-for list="{{strip}}" as="s" hint-placeholder-count="6">
+          <button style="display:flex; align-items:baseline; gap:6px; white-space:nowrap; padding:5px 12px; font-size:12px; border-radius:9999px; background:{{s.bg}}; border-color:{{s.line}}">
+            <span style="font-family:var(--mono); color:var(--accent)">{{s.idx}}</span>
+            <span>{{s.title}}</span>
+            <span style="color:var(--dim); font-family:var(--mono); font-size:11px">{{s.len}}</span>
+          </button>
+        </sc-for>
+      </div>
+      <span style="flex-grow:1"></span>
+
+      <!-- 四段流水线：先后关系摆在明面上，自检是建场那一段的闸 -->
+      <div style="display:flex; align-items:center; gap:0; background:var(--sunken); border:1px solid var(--line); border-radius:9999px; padding:3px">
+        <sc-for list="{{pipe}}" as="p" hint-placeholder-count="4">
+          <button onClick="{{p.pick}}" style="display:flex; align-items:center; gap:7px; border:0; border-radius:9999px; padding:5px 13px; background:{{p.bg}}; color:{{p.ink}}">
+            <span style="width:7px; height:7px; border-radius:9999px; background:{{p.dot}}"></span>
+            <span style="font-weight:{{p.weight}}">{{p.label}}</span>
+            <span style="font-family:var(--mono); font-size:10px; color:{{p.numInk}}">{{p.num}}</span>
+          </button>
+        </sc-for>
+      </div>
+      <button style="border-radius:9999px; padding:5px 12px; font-size:12px; color:var(--muted); background:transparent">更多</button>
+    </div>
+
+    <!-- 抽屉：当前这一段的样子 -->
+    <div style="height:196px; border-top:1px solid var(--line); padding:12px 16px; overflow:hidden">
+      <div style="display:flex; align-items:center; gap:10px; padding-bottom:10px">
+        <b style="font-family:var(--display); font-size:12px; letter-spacing:.1em; color:var(--muted)">{{drawer.title}}</b>
+        <span style="font-size:12px; color:var(--dim)">{{drawer.sub}}</span>
+        <span style="flex-grow:1"></span>
+        <button style="border-radius:9999px; padding:5px 14px; font-size:12px; background:{{drawer.ctaBg}}; border-color:{{drawer.ctaLine}}; color:{{drawer.ctaInk}}; font-weight:600">{{drawer.cta}}</button>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px">
+        <sc-for list="{{drawer.cards}}" as="c" hint-placeholder-count="4">
+          <div style="border:1px solid {{c.line}}; border-radius:12px; padding:10px 12px; background:var(--surface); display:flex; flex-direction:column; gap:5px">
+            <span style="font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:{{c.tagInk}}">{{c.tag}}</span>
+            <span style="font-size:12px; line-height:1.5; color:var(--text)">{{c.text}}</span>
+            <span style="font-size:11px; color:var(--dim); line-height:1.5">{{c.note}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"view":{"editor":"enum","options":["free","program","compare"],"default":"program","section":"状态"},"stage":{"editor":"enum","options":["EDIT","RECORDING","REVIEW","GENERATING"],"default":"EDIT","section":"状态"},"seg":{"editor":"enum","options":["build","blockout","gen","film"],"default":"build","section":"状态"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { view: null, stage: null, seg: null };
+  }
+  get view() { return this.state.view ?? this.props.view ?? "program"; }
+  get stage() { return this.state.stage ?? this.props.stage ?? "EDIT"; }
+  get seg() { return this.state.seg ?? this.props.seg ?? "build"; }
+
+  renderVals() {
+    const A = "#9d8cff", INK = "#140f2e", SOFT = "rgba(118,87,255,.16)", LINE = "rgba(157,140,255,.42)";
+    const MUT = "rgba(235,238,255,.50)", DIM = "rgba(235,238,255,.32)";
+    const view = this.view, stage = this.stage, seg = this.seg;
+
+    const STATES = {
+      EDIT:       { name: "EDIT",       can: "改场、改机位、建镜头都行",           chipBg: SOFT, chipInk: A,        line: "rgba(197,184,255,.20)", soft: "rgba(118,87,255,.06)" },
+      RECORDING:  { name: "RECORDING",  can: "录制中：删演员、改焦距会被拒",       chipBg: "rgba(255,122,122,.18)", chipInk: "#ff7a7a", line: "rgba(255,122,122,.34)", soft: "rgba(255,122,122,.06)" },
+      REVIEW:     { name: "REVIEW",     can: "白模在手：可以对照，也可以重录",     chipBg: "rgba(92,235,223,.16)", chipInk: "#5cebdf", line: "rgba(92,235,223,.34)", soft: "rgba(92,235,223,.05)" },
+      GENERATING: { name: "GENERATING", can: "生成中：这一镜锁住，别的镜头照常改", chipBg: SOFT, chipInk: A,        line: LINE, soft: "rgba(118,87,255,.08)" },
+    };
+
+    const views = [["free", "自由"], ["program", "Program"], ["compare", "对照"]].map(([k, label]) => ({
+      label, pick: () => this.setState({ view: k }),
+      bg: view === k ? A : "transparent", ink: view === k ? INK : MUT, weight: view === k ? "600" : "400",
+    }));
+
+    const recOn = stage === "RECORDING";
+    const rec = recOn
+      ? { label: "停止", bg: "rgba(255,122,122,.18)", line: "rgba(255,122,122,.34)", ink: "#ff7a7a", dot: "#ff4d4d" }
+      : { label: "录制", bg: "#15171d", line: "rgba(197,184,255,.10)", ink: "rgba(255,255,255,.92)", dot: "#ff4d4d" };
+
+    const cols = [
+      { tag: "原片 · 你要复刻的那条", ink: DIM, fill: "#0b0d14", ring: "rgba(197,184,255,.10)", body: "#33323c" },
+      { tag: "白模 · 免费 · 你改的是这边", ink: MUT, fill: "#0e1016", ring: LINE, body: "#2a2d38" },
+      { tag: "生成 · v2v · 计费", ink: "#5cebdf", fill: "#0c1114", ring: "rgba(92,235,223,.34)", body: "#2c3a3c" },
+    ];
+
+    const strip = [
+      { idx: "19", title: "车厢里", len: "6s" }, { idx: "20", title: "站台", len: "4s" },
+      { idx: "21", title: "第一站灯下", len: "7.7s", on: true }, { idx: "22", title: "回望", len: "5s" },
+      { idx: "23", title: "空座", len: "8s" }, { idx: "24", title: "远处的灯", len: "12s" },
+    ].map((s) => ({ ...s, bg: s.on ? SOFT : "#15171d", line: s.on ? LINE : "rgba(197,184,255,.10)" }));
+
+    const PIPE = [
+      { k: "build",    label: "建场",  num: "66 镜 · 自检 17✗", dot: "#ff7a7a" },
+      { k: "blockout", label: "白模",  num: "66/66",           dot: "#5fd88a" },
+      { k: "gen",      label: "生成",  num: "12/66",           dot: A },
+      { k: "film",     label: "成片",  num: "9:46 待导出",               dot: "rgba(235,238,255,.32)" },
+    ];
+    const pipe = PIPE.map((p) => ({
+      ...p, pick: () => this.setState({ seg: p.k }),
+      bg: seg === p.k ? SOFT : "transparent",
+      ink: seg === p.k ? "rgba(255,255,255,.92)" : MUT,
+      numInk: seg === p.k ? p.dot : DIM,
+      weight: seg === p.k ? "600" : "400",
+    }));
+
+    const DRAWERS = {
+      build: {
+        title: "建场 · 自检", sub: "录之前先算一遍，这一镜画面里到底有没有东西", cta: "自动修 5 处",
+        ctaBg: "rgba(255,122,122,.18)", ctaLine: "rgba(255,122,122,.34)", ctaInk: "#ff7a7a",
+        cards: [
+          { tag: "ERROR · 12 镜", text: "机位埋在实心代理体里", note: "车内戏拍到的是盒子内壁。代理体没有内部 —— 这个修不了", line: "rgba(255,122,122,.34)", tagInk: "#ff7a7a" },
+          { tag: "ERROR · 5 镜", text: "标题点名的东西不在画面里", note: "「21 第一站灯下」点名了抱花姑娘，她在画外 · 可自动修", line: "rgba(255,122,122,.34)", tagInk: "#ff7a7a" },
+          { tag: "WARN · 6 镜", text: "多镜共用同一机位且运镜相同", note: "剪起来会像同一个镜头 · 要你拿主意", line: "rgba(197,184,255,.10)", tagInk: MUT },
+          { tag: "INFO · 1 镜", text: "45s 超过单条 30s 上限", note: "先 shot.beats 拆拍，再 shot.chain 逐段续拍", line: "rgba(197,184,255,.10)", tagInk: DIM },
+        ],
+      },
+      blockout: {
+        title: "白模", sub: "不花钱，改多少次都行 —— 生成对不对，拿它当基准比", cta: "录这一镜",
+        ctaBg: A, ctaLine: A, ctaInk: INK,
+        cards: [
+          { tag: "已录", text: "66 / 66 镜", note: "9 分 46 秒 · 1280×720 · 24fps", line: "rgba(95,216,138,.34)", tagInk: "#5fd88a" },
+          { tag: "最近一条", text: "21 第一站灯下", note: "7.7s · 185 帧 · 0 帧丢失", line: "rgba(197,184,255,.10)", tagInk: MUT },
+          { tag: "重录", text: "改过机位的 3 镜", note: "机位一改，左边那栏就过期了 —— 不重录的对照是骗人的", line: LINE, tagInk: A },
+          { tag: "导出", text: "白模成片", note: "拼成一条能播的片子，先看整体节奏", line: "rgba(197,184,255,.10)", tagInk: DIM },
+        ],
+      },
+      gen: {
+        title: "生成", sub: "构图跟白模走，身份靠已批准的参考图锁住", cta: "按分镜生成",
+        ctaBg: A, ctaLine: A, ctaInk: INK,
+        cards: [
+          { tag: "进行中 · 3", text: "Seedance 2.5 · v2v", note: "白模视频当参考，运镜是你在 3D 里摆的那一版", line: LINE, tagInk: A },
+          { tag: "已完成 · 12", text: "平均 2 分 10 秒 / 镜", note: "12 条并发提交被接受", line: "rgba(92,235,223,.34)", tagInk: "#5cebdf" },
+          { tag: "待办 · 51", text: "还没提交的镜头", note: "自检有 error 的 17 镜会被拦住，先修再交", line: "rgba(255,122,122,.34)", tagInk: "#ff7a7a" },
+          { tag: "参考图", text: "7 个角色已批准", note: "该角色出现的每一镜自动带上，不用记得", line: "rgba(95,216,138,.34)", tagInk: "#5fd88a" },
+        ],
+      },
+      film: {
+        title: "成片", sub: "白模和生成混着拼，缺的用白模顶上", cta: "导出成片",
+        ctaBg: "#15171d", ctaLine: "rgba(197,184,255,.10)", ctaInk: MUT,
+        cards: [
+          { tag: "清单", text: "12 / 66 镜是生成的", note: "其余 54 镜先用白模占位，看得出整条节奏", line: "rgba(197,184,255,.10)", tagInk: MUT },
+          { tag: "时长", text: "9 分 46 秒", note: "计划 595s · 实际 586.6s · 逐镜核对过，0 个镜头录短", line: "rgba(197,184,255,.10)", tagInk: MUT },
+          { tag: "拼接器", text: "ffmpeg 就绪", note: "/opt/homebrew/bin/ffmpeg", line: "rgba(95,216,138,.34)", tagInk: "#5fd88a" },
+          { tag: "画幅", text: "1920×1080 · 24fps", note: "每一镜按真实时长裁回，不靠静默截断对齐", line: "rgba(197,184,255,.10)", tagInk: DIM },
+        ],
+      },
+    };
+
+    return {
+      st: STATES[stage] || STATES.EDIT,
+      views, rec, cols, strip, pipe,
+      drawer: DRAWERS[seg] || DRAWERS.build,
+      isCompare: view === "compare",
+      notCompare: view !== "compare",
+      isProgram: view === "program",
+      isRec: recOn,
+      shot: { w: view === "free" ? "72%" : "80%", ring: recOn ? "rgba(255,122,122,.34)" : "rgba(197,184,255,.20)" },
+      tc: recOn ? "00:00:03:11" : "00:00:00:00",
+      toggleRec: () => this.setState({ stage: this.stage === "RECORDING" ? "REVIEW" : "RECORDING" }),
+      tree: [
+        { name: "天台黄昏", meta: "场次", dot: "#2a2d38", ink: "rgba(255,255,255,.92)", bg: "transparent" },
+        { name: "抱花的姑娘", meta: "character", dot: "#c9b79b", ink: "rgba(255,255,255,.92)", bg: SOFT },
+        { name: "末班公交", meta: "vehicle", dot: "#3d6d93", ink: "rgba(255,255,255,.92)", bg: "transparent" },
+        { name: "站台灯", meta: "lamp", dot: "#c9b27a", ink: "rgba(255,255,255,.92)", bg: "transparent" },
+        { name: "21 机位 · 50mm", meta: "program", dot: A, ink: "rgba(255,255,255,.92)", bg: "transparent" },
+        { name: "主光 · 逆光", meta: "key", dot: "#5cebdf", ink: "rgba(255,255,255,.92)", bg: "transparent" },
+        { name: "霓虹招牌", meta: "practical", dot: "#8a4d6d", ink: "rgba(255,255,255,.92)", bg: "transparent" },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

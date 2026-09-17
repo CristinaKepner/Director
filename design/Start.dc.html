@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#121316; --panel-2:#1b1e24; --surface:#15171d; --hover:#242832; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-ink:#140f2e; --accent-soft:rgba(118,87,255,.16); --accent-line:rgba(157,140,255,.42);
+      --accent-2:#5cebdf; --ok:#5fd88a;
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    button{font:inherit;color:inherit;background:transparent;border:1px solid transparent;border-radius:10px;cursor:pointer;line-height:1;padding:0;}
+    svg{display:block;}
+    .t{position:relative;display:inline-flex;}
+    .tip{position:absolute;left:50%;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line-2);
+      border-radius:10px;padding:8px 12px;box-shadow:0 14px 36px rgba(0,0,0,.6);opacity:0;pointer-events:none;
+      transition:opacity .12s ease;z-index:30;width:max-content;max-width:260px;text-align:left;}
+    .t:hover>.tip,.t:focus-within>.tip{opacity:1;}
+    .tip b{display:block;font-size:12px;font-weight:500;color:var(--text);}
+    .tip span{display:block;font-size:11px;line-height:1.6;color:var(--dim);margin-top:3px;}
+    .tip-up{bottom:calc(100% + 10px);} .tip-down{top:calc(100% + 10px);}
+    .tip.on{opacity:1;}
+    .card:hover{border-color:var(--accent-line);background:var(--hover);}
+  </style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></symbol>
+  <symbol id="i-columns" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></symbol>
+  <symbol id="i-clapper" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+</svg>
+
+<div style="width:1440px; height:900px; display:flex; flex-direction:column; background:radial-gradient(1100px 560px at 50% -6%, rgba(118,87,255,.12), transparent 70%), var(--bg); overflow:hidden">
+
+  <header style="display:flex; align-items:center; gap:12px; padding:0 16px; height:48px; flex-grow:0">
+    <span style="font-family:var(--display); font-weight:700; letter-spacing:.14em; font-size:12px; color:var(--accent)">DC</span>
+    <span style="flex-grow:1"></span>
+    <div class="t" tabindex="0">
+      <button style="width:34px; height:34px; display:grid; place-items:center; border-radius:10px; color:var(--muted)">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-help"/></svg>
+      </button>
+      <span class="tip tip-down" style="left:auto; right:0; transform:none"><b>这是什么</b><span>你给一条参照，它在 3D 里把机位和走位搭出来，先出一版不花钱的草片；对上了再交给模型出真画面。</span></span>
+    </div>
+  </header>
+
+  <!-- 一屏只问一件事 -->
+  <div style="flex-grow:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:40px; padding-bottom:40px; min-height:0">
+
+    <h1 style="margin:0; font-family:var(--display); font-size:40px; font-weight:600; letter-spacing:-.015em">想复刻哪条片子？</h1>
+
+    <div style="display:grid; grid-template-columns:repeat(3, 264px); gap:18px">
+      <sc-for list="{{entries}}" as="e" hint-placeholder-count="3">
+        <div class="t" tabindex="0" style="display:block">
+          <button onClick="{{e.pick}}" class="card" style="width:100%; display:flex; flex-direction:column; align-items:center; gap:16px; padding:36px 20px 28px; border:1px solid {{e.ring}}; border-radius:18px; background:{{e.bg}}">
+            <span style="width:64px; height:64px; border-radius:20px; display:grid; place-items:center; background:{{e.iconBg}}">
+              <svg width="28" height="28" fill="none" stroke="{{e.iconInk}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="{{e.icon}}"/></svg>
+            </span>
+            <span style="font-size:16px; font-weight:500; color:{{e.labelInk}}">{{e.label}}</span>
+          </button>
+          <span class="tip tip-down {{e.pin}}"><b>{{e.tipTitle}}</b><span>{{e.tipBody}}</span></span>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- 接下来会发生什么：四个图标，不写一段话。留出上方那个钉住的气泡的高度 -->
+    <div style="margin-top:104px; display:flex; align-items:center; gap:4px; padding:14px 22px; border:1px solid var(--line); border-radius:9999px; background:rgba(13,14,19,.6)">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+        <div style="display:flex; align-items:center; gap:4px">
+          <div class="t" tabindex="0">
+            <span style="display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:9999px">
+              <svg width="17" height="17" fill="none" stroke="{{s.ink}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="{{s.icon}}"/></svg>
+              <span style="font-size:12px; color:{{s.ink}}">{{s.label}}</span>
+            </span>
+            <span class="tip tip-up"><b>{{s.label}}</b><span>{{s.hint}}</span></span>
+          </div>
+          <sc-if value="{{s.arrow}}" hint-placeholder-val="{{ true }}">
+            <svg width="15" height="15" fill="none" stroke="rgba(235,238,255,.32)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow"/></svg>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"pinTip":{"editor":"boolean","default":true,"section":"演示"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { pick: 0 }; }
+  renderVals() {
+    const A = "#9d8cff", MUT = "rgba(235,238,255,.50)", DIM = "rgba(235,238,255,.32)";
+    const pin = (this.props.pinTip ?? true) ? "on" : "";
+    const sel = this.state.pick;
+    const ENTRIES = [
+        { icon: "#i-link", label: "贴个链接",
+          tipTitle: "抖音 / B站 / YouTube 都行",
+          tipBody: "它会把那一段下下来，看一遍画面，读出机位站在哪、镜头多长、光从哪边打——这些用嘴说要专业词，用图给只要贴一下。" },
+        { icon: "#i-upload", label: "拖个文件",
+          tipTitle: "手里有图或视频",
+          tipBody: "一张截图也够。画面里本来就藏着最难说清的东西：主体多大、站在画面哪一侧、镜头是仰是俯。" },
+        { icon: "#i-msg", label: "说一句话",
+          tipTitle: "什么都没有也能开始",
+          tipBody: "排在第三是有原因的：没有参照可比，机位和光全靠猜，出来什么样只能看了才知道。有参照就先用参照。" },
+    ];
+    return {
+      entries: ENTRIES.map((e, i) => ({
+        ...e,
+        pick: () => this.setState({ pick: i }),
+        ring: i === sel ? "rgba(157,140,255,.42)" : "rgba(197,184,255,.20)",
+        bg: i === sel ? "rgba(118,87,255,.10)" : "var(--surface)",
+        iconBg: i === sel ? "rgba(118,87,255,.18)" : "rgba(197,184,255,.08)",
+        iconInk: i === sel ? A : MUT,
+        labelInk: i === sel ? "rgba(255,255,255,.92)" : MUT,
+        pin: i === sel ? pin : "",
+      })),
+      steps: [
+        { icon: "#i-camera", label: "草片", ink: MUT, arrow: true, hint: "在 3D 里把机位和走位搭出来，录成一条能播的草片。不花钱，改多少次都行。" },
+        { icon: "#i-columns", label: "对一对", ink: MUT, arrow: true, hint: "草片和原片并排看：机位高度、主体大小、运动方向对上了没有。这一步决定后面花的钱值不值。" },
+        { icon: "#i-sparkles", label: "生成", ink: MUT, arrow: true, hint: "对上了再交给模型。构图跟着草片走，人物靠参考图锁住，不会每一镜换张脸。这一步开始计费。" },
+        { icon: "#i-clapper", label: "成片", ink: MUT, arrow: false, hint: "拼成一条完整的片子。没生成的镜头先用草片顶上，整体节奏随时看得见。" },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

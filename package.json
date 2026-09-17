@@ -4,7 +4,9 @@
   "version": "0.5.0",
   "type": "module",
   "description": "Director Console · 导演台 — decoupled 3D director console: core runtime (core/), HTTP/SSE backend (server/), static Three.js frontend (web/)",
-  "bin": { "director": "server/bin/director.mjs" },
+  "bin": {
+    "director": "server/bin/director.mjs"
+  },
   "scripts": {
     "dev": "node server/bin/director-server.mjs --port 5175",
     "start": "node server/bin/director-server.mjs --port 5175",
@@ -15,7 +17,15 @@
     "test:api": "node --test server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs",
     "test:all": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs",
     "smoke": "node tools/smoke.mjs",
-    "cli": "node server/bin/director.mjs"
+    "cli": "node server/bin/director.mjs",
+    "test:research": "node --test research/research.test.mjs",
+    "test:everything": "node --test tests/runtime.test.mjs server/tests/api.test.mjs research/research.test.mjs",
+    "research:probe": "node research/branch-probe.mjs",
+    "research:attribute": "node research/attribute-demo.mjs",
+    "research:coverage": "node research/repair-coverage.mjs",
+    "research:evolve": "node research/evolve-demo.mjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#121316; --surface:#15171d; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-ink:#140f2e; --accent-soft:rgba(118,87,255,.16); --accent-line:rgba(157,140,255,.42);
+      --accent-2:#5cebdf; --cyan-line:rgba(92,235,223,.34);
+      --ok:#5fd88a; --ok-line:rgba(95,216,138,.34); --danger:#ff7a7a; --danger-line:rgba(255,122,122,.34);
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;line-height:1.2;}
+    button:hover{border-color:var(--line-2);}
+  </style>
+</helmet>
+
+<div style="width:1440px; height:680px; display:flex; flex-direction:column; background:var(--panel); border-top:1px solid var(--line); overflow:hidden">
+
+  <div style="padding:18px 24px 0; display:flex; flex-direction:column; gap:4px">
+    <h2 style="margin:0; font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.16em; color:var(--muted)">底部抽屉 · 一条流水线</h2>
+    <p style="margin:0; font-size:12px; line-height:1.6; color:var(--dim); max-width:86ch">今天这里是十一个平铺的 tab（镜头 / 时间线 / Take / 故事版 / 参照 / 自检 / 生成 / 成片 / 资产 / 事件 / 状态），看不出先后，也看不出谁挡着谁。其实它们是一条有闸的路：<b style="color:var(--muted); font-weight:400">自检不过就录不了白模，白模没录就没有 v2v 的参考，超长镜头进不了生成。</b></p>
+  </div>
+
+  <!-- 四站 + 站与站之间的闸 -->
+  <div style="padding:22px 24px 0; display:flex; align-items:stretch; gap:0">
+    <sc-for list="{{stations}}" as="s" hint-placeholder-count="4">
+      <div style="display:flex; align-items:stretch; gap:0; flex-grow:1; min-width:0">
+        <button onClick="{{s.pick}}" style="flex-grow:1; min-width:0; display:flex; flex-direction:column; gap:9px; align-items:flex-start; padding:14px 16px; border:1px solid {{s.line}}; border-radius:14px; background:{{s.bg}}; text-align:left">
+          <div style="display:flex; align-items:center; gap:9px; width:100%">
+            <span style="width:9px; height:9px; border-radius:9999px; background:{{s.dot}}; flex-grow:0"></span>
+            <b style="font-family:var(--display); font-size:15px; font-weight:{{s.weight}}; color:{{s.ink}}">{{s.label}}</b>
+            <span style="flex-grow:1"></span>
+            <span style="font-family:var(--mono); font-size:11px; color:{{s.numInk}}">{{s.num}}</span>
+          </div>
+          <span style="font-size:12px; line-height:1.55; color:var(--dim)">{{s.sub}}</span>
+          <div style="width:100%; height:4px; border-radius:9999px; background:rgba(255,255,255,.06); overflow:hidden">
+            <div style="width:{{s.pct}}; height:100%; background:{{s.dot}}"></div>
+          </div>
+        </button>
+
+        <!-- 闸：拦得住的画锁，拦不住的画箭头。放行的那道要是也画成锁，「有闸的路」这句就自己拆了自己 -->
+        <sc-if value="{{s.locked}}" hint-placeholder-val="{{ true }}">
+          <div style="width:118px; flex-grow:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:0 6px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{s.gateInk}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <span style="font-size:11px; line-height:1.45; text-align:center; color:{{s.gateInk}}">{{s.gateText}}</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{s.open}}" hint-placeholder-val="{{ true }}">
+          <div style="width:118px; flex-grow:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:0 6px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{s.gateInk}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+            <span style="font-size:11px; line-height:1.45; text-align:center; color:{{s.gateInk}}">{{s.gateText}}</span>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 展开：选中那一段的样子 -->
+  <div style="flex-grow:1; margin:22px 24px 24px; border:1px solid var(--line); border-radius:16px; background:var(--sunken); display:flex; flex-direction:column; min-height:0; overflow:hidden">
+    <div style="display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--line)">
+      <b style="font-family:var(--display); font-size:14px; font-weight:600">{{open.title}}</b>
+      <span style="font-size:12px; color:var(--dim)">{{open.sub}}</span>
+      <span style="flex-grow:1"></span>
+      <button style="border-radius:9999px; padding:6px 16px; font-size:12px; color:var(--muted)">{{open.second}}</button>
+      <button style="border-radius:9999px; padding:6px 18px; font-size:12px; background:{{open.ctaBg}}; border-color:{{open.ctaLine}}; color:{{open.ctaInk}}; font-weight:600">{{open.cta}}</button>
+    </div>
+
+    <div style="flex-grow:1; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; padding:16px 18px; min-height:0; overflow:hidden">
+      <sc-for list="{{open.rows}}" as="r" hint-placeholder-count="3">
+        <div style="display:flex; flex-direction:column; gap:8px; padding:13px 15px; border:1px solid {{r.line}}; border-radius:12px; background:var(--surface)">
+          <div style="display:flex; align-items:center; gap:8px">
+            <span style="font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:{{r.tagInk}}">{{r.tag}}</span>
+            <span style="flex-grow:1"></span>
+            <span style="font-family:var(--mono); font-size:10px; color:var(--dim)">{{r.count}}</span>
+          </div>
+          <span style="font-size:13px; line-height:1.5">{{r.text}}</span>
+          <span style="font-size:12px; line-height:1.6; color:var(--dim)">{{r.note}}</span>
+          <span style="flex-grow:1"></span>
+          <div style="display:flex; gap:7px">
+            <button style="border-radius:9999px; padding:5px 13px; font-size:12px; background:{{r.actBg}}; border-color:{{r.actLine}}; color:{{r.actInk}}">{{r.act}}</button>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"open":{"editor":"enum","options":["build","blockout","gen","film"],"default":"build","section":"展开哪一段"},"$preview":{"width":1440,"height":680}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { seg: null }; }
+  get seg() { return this.state.seg ?? this.props.open ?? "build"; }
+
+  renderVals() {
+    const A = "#9d8cff", INK = "#140f2e", SOFT = "rgba(118,87,255,.16)", LINE = "rgba(157,140,255,.42)";
+    const MUT = "rgba(235,238,255,.50)", DIM = "rgba(235,238,255,.32)";
+    const DANGER = "#ff7a7a", DLINE = "rgba(255,122,122,.34)", OK = "#5fd88a", OLINE = "rgba(95,216,138,.34)";
+    const seg = this.seg;
+
+    // locked = 真的拦住；open = 能过去，但路上有句话要说；末站两者皆无
+    const ST = [
+      { k: "build",    label: "建场",  num: "66 镜", sub: "语义实体 · 机位 · 灯 · 分镜", dot: DANGER, pct: "100%",
+        locked: true, open: false, gateInk: DANGER, gateText: "自检 17 个 error 拦着，录了也是拍墙" },
+      { k: "blockout", label: "白模",  num: "66/66", sub: "不花钱，改多少次都行", dot: OK, pct: "100%",
+        locked: false, open: true, gateInk: DIM, gateText: "白模视频就是 v2v 的参考" },
+      { k: "gen",      label: "生成",  num: "12/66", sub: "构图跟白模走，身份靠参考图", dot: A, pct: "18%",
+        locked: false, open: true, gateInk: DIM, gateText: "缺的镜头用白模顶上，不挡导出" },
+      { k: "film",     label: "成片",  num: "9:46", sub: "ffmpeg 拼成一条", dot: DIM, pct: "18%",
+        locked: false, open: false, gateInk: DIM, gateText: "" },
+    ];
+    const stations = ST.map((s) => ({
+      ...s,
+      pick: () => this.setState({ seg: s.k }),
+      bg: seg === s.k ? SOFT : "transparent",
+      line: seg === s.k ? LINE : "rgba(197,184,255,.10)",
+      ink: seg === s.k ? "rgba(255,255,255,.92)" : MUT,
+      numInk: seg === s.k ? s.dot : DIM,
+      weight: seg === s.k ? "600" : "400",
+      locked: !!s.locked,
+      open: !!s.open,
+    }));
+
+    const OPEN = {
+      build: {
+        title: "建场 · 自检", sub: "纯本地几何，不用模型、不花钱、几毫秒", cta: "自动修 5 处", second: "只看这一镜",
+        ctaBg: "rgba(255,122,122,.18)", ctaLine: DLINE, ctaInk: DANGER,
+        rows: [
+          { tag: "ERROR", count: "12 镜", text: "机位埋在实心代理体里", note: "车内戏、室内戏拍到的是盒子内壁 —— 一整面纯色。代理体还没有内部，这条自检查得出、修不了。", line: DLINE, tagInk: DANGER, act: "看哪几镜", actBg: "transparent", actLine: DLINE, actInk: DANGER },
+          { tag: "ERROR", count: "5 镜", text: "标题点名的东西不在画面里", note: "「21 第一站灯下」点名了抱花姑娘，而她在画外。不需要事先标注，光凭标题就查得出。", line: DLINE, tagInk: DANGER, act: "自动修", actBg: A, actLine: A, actInk: INK },
+          { tag: "WARN", count: "6 镜", text: "多镜共用同一机位且运镜相同", note: "剪起来会像同一个镜头。这是调度决定，不是 bug —— 要你拿主意，不自动动。", line: "rgba(197,184,255,.10)", tagInk: MUT, act: "逐镜看", actBg: "transparent", actLine: "rgba(197,184,255,.10)", actInk: MUT },
+        ],
+      },
+      blockout: {
+        title: "白模", sub: "生成结果对不对，拿它当基准比", cta: "录没录过的 0 镜", second: "重录改过的 3 镜",
+        ctaBg: "#15171d", ctaLine: "rgba(197,184,255,.10)", ctaInk: MUT,
+        rows: [
+          { tag: "已录", count: "66/66", text: "9 分 46 秒", note: "1280×720 · 24fps · 逐镜核对过，0 个镜头录短。录的是真在出帧的 Program 画面，不是带黑边的窗口截图。", line: OLINE, tagInk: OK, act: "导出白模成片", actBg: "transparent", actLine: OLINE, actInk: OK },
+          { tag: "过期", count: "3 镜", text: "机位改过，白模还是旧的", note: "不重录的话，对照左边是旧构图、右边按新构图出 —— 那种对照是骗人的。", line: LINE, tagInk: A, act: "重录这 3 镜", actBg: A, actLine: A, actInk: INK },
+          { tag: "分段", count: "1 镜", text: "第 52 镜 45 秒", note: "超过单条 30 秒上限，astra 自己拆成 5 拍：6+9+14+11+5。段边界是渲染细节，不是剪辑点。", line: "rgba(197,184,255,.10)", tagInk: DIM, act: "看拆法", actBg: "transparent", actLine: "rgba(197,184,255,.10)", actInk: MUT },
+        ],
+      },
+      gen: {
+        title: "生成", sub: "逐镜提交可以并行，实测 12 条并发被接受", cta: "提交待办 51 镜", second: "只重做当前镜",
+        ctaBg: A, ctaLine: A, ctaInk: INK,
+        rows: [
+          { tag: "进行中", count: "3", text: "Seedance 2.5 · v2v", note: "白模视频当参考视频，运镜是你在 3D 里摆的那一版。参考视频要公网可达，隧道已就位。", line: LINE, tagInk: A, act: "看进度", actBg: "transparent", actLine: LINE, actInk: A },
+          { tag: "被拦下", count: "17", text: "自检有 error 的镜头", note: "提交前就拒绝，不排队等四十秒再失败。先回建场那一段修，或者显式越过。", line: DLINE, tagInk: DANGER, act: "回建场修", actBg: "transparent", actLine: DLINE, actInk: DANGER },
+          { tag: "参考图", count: "7 个角色", text: "批准一次，之后自动带上", note: "参考绑在实体上，不绑在镜头上 —— 该角色出现的每一镜自动随提示词提交，导演不用记得。", line: OLINE, tagInk: OK, act: "资产库", actBg: "transparent", actLine: OLINE, actInk: OK },
+        ],
+      },
+      film: {
+        title: "成片", sub: "白模和生成混着拼，缺的用白模顶上", cta: "导出 9 分 46 秒", second: "只导出生成的",
+        ctaBg: A, ctaLine: A, ctaInk: INK,
+        rows: [
+          { tag: "清单", count: "66 镜", text: "12 镜生成 · 54 镜白模", note: "先看得出整条节奏，再决定钱花在哪几镜上。不必等全生成完才知道片子长什么样。", line: "rgba(197,184,255,.10)", tagInk: MUT, act: "逐镜清单", actBg: "transparent", actLine: "rgba(197,184,255,.10)", actInk: MUT },
+          { tag: "对齐", count: "±0 帧", text: "595s 计划 / 586.6s 实际", note: "差的 8.4 秒摊在 66 段上是每段 0.13 秒，concat 的整帧对齐，不是静默截断。", line: OLINE, tagInk: OK, act: "核对", actBg: "transparent", actLine: OLINE, actInk: OK },
+          { tag: "拼接器", count: "就绪", text: "ffmpeg", note: "每一镜先归一到工程画幅、定帧率、无音轨，再 concat —— 所以 webm 白模和 720p 生成能坐在同一条时间线上。", line: OLINE, tagInk: OK, act: "诊断", actBg: "transparent", actLine: "rgba(197,184,255,.10)", actInk: MUT },
+        ],
+      },
+    };
+
+    return { stations, open: OPEN[seg] || OPEN.build };
+  }
+}
+</script>
+</body>
+</html>

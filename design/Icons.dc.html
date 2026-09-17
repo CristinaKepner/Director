@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#121316; --panel-2:#1b1e24; --surface:#15171d; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-2:#5cebdf; --ok:#5fd88a; --danger:#ff7a7a;
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    svg{display:block;}
+  </style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="d-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="d-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/></symbol>
+  <symbol id="d-columns" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></symbol>
+  <symbol id="d-play" viewBox="0 0 24 24"><path d="M6 3v18l14-9Z" fill="currentColor"/></symbol>
+  <symbol id="d-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></symbol>
+  <symbol id="d-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="d-camera" viewBox="0 0 24 24"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></symbol>
+  <symbol id="d-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></symbol>
+  <symbol id="d-clapper" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="d-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="d-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+  <symbol id="d-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+  <symbol id="d-sliders" viewBox="0 0 24 24"><path d="M21 4H14"/><path d="M10 4H3"/><path d="M21 12H12"/><path d="M8 12H3"/><path d="M21 20H16"/><path d="M12 20H3"/><circle cx="12" cy="4" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="20" r="2"/></symbol>
+  <symbol id="d-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+  <symbol id="d-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  <symbol id="d-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="d-alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="d-lock" viewBox="0 0 24 24"><rect width="16" height="10" x="4" y="11" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="d-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="d-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="d-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+  <symbol id="d-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
+  <symbol id="d-dots" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/></symbol>
+</svg>
+
+<div style="width:1440px; height:900px; display:flex; flex-direction:column; gap:0; background:var(--bg); padding:26px 30px; overflow:hidden">
+
+  <div style="display:flex; align-items:baseline; gap:14px; padding-bottom:6px">
+    <h2 style="margin:0; font-family:var(--display); font-size:18px; font-weight:600">图标与它们的说明</h2>
+    <span style="font-size:12px; color:var(--dim)">界面上只出现左边两列；右边这一列是鼠标停上去才出现的那句话</span>
+  </div>
+  <p style="margin:0 0 18px; font-size:12px; line-height:1.6; color:var(--dim); max-width:98ch">图标取自 Lucide（ISC 许可），24×24 网格、1.7 描边，按原始路径内联——不联网、能换色、放大不糊。术语（Take、v2v、景别、焦段）一个都不出现在界面上，全部退到这句话里。</p>
+
+  <div style="flex-grow:1; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:0 34px; min-height:0; overflow:hidden">
+    <sc-for list="{{cols}}" as="col" hint-placeholder-count="2">
+      <div style="display:flex; flex-direction:column; gap:14px; min-width:0">
+        <sc-for list="{{col.groups}}" as="g" hint-placeholder-count="3">
+          <div style="display:flex; flex-direction:column; gap:7px">
+            <span style="font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.16em; color:{{g.ink}}">{{g.name}}</span>
+            <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:34px 78px minmax(0,1fr); gap:11px; align-items:center; padding:6px 9px; border-radius:9px; background:var(--surface); border:1px solid var(--line)">
+                <span style="width:34px; height:28px; display:grid; place-items:center; border-radius:7px; background:{{r.bg}}">
+                  <svg width="17" height="17" fill="none" stroke="{{r.ink}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="{{r.icon}}"/></svg>
+                </span>
+                <span style="font-size:12px; color:var(--text); white-space:nowrap">{{r.label}}</span>
+                <span style="font-size:11px; line-height:1.55; color:var(--dim)">{{r.tip}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const A = "#9d8cff", CY = "#5cebdf", OK = "#5fd88a", DANGER = "#ff7a7a";
+    const MUT = "rgba(235,238,255,.50)", DIM = "rgba(235,238,255,.32)";
+    const soft = "rgba(118,87,255,.14)", plain = "rgba(197,184,255,.06)";
+    const R = (icon, label, tip, ink = MUT, bg = plain) => ({ icon, label, tip, ink, bg });
+
+    const left = [
+      { name: "看什么", ink: A, rows: [
+        R("#d-eye", "随便看", "自己转着看整个场，不影响拍出来的画面"),
+        R("#d-crosshair", "拍到的", "摄影机真正拍到的那一框，录的就是它", A, soft),
+        R("#d-columns", "对照", "原片、草片、生成并排，同一秒的同一构图", CY, "rgba(92,235,223,.12)"),
+      ] },
+      { name: "在舞台上", ink: A, rows: [
+        R("#d-play", "播放", "空格键。对照那一屏是三栏一起播"),
+        R("#d-rec", "录", "把这一镜在 3D 里录成一段视频，不花钱", DANGER, "rgba(255,122,122,.12)"),
+        R("#d-lock", "锁住", "这一镜满意了：谁都别再动它，包括 Agent"),
+      ] },
+      { name: "场里有什么", ink: A, rows: [
+        R("#d-box", "东西", "人、车、道具。先用白盒子占位，形状对了就行"),
+        R("#d-camera", "机位", "站在哪、用多长的镜头、离地多高"),
+        R("#d-bulb", "灯", "主光从哪边打。选一档现成的布光最省事"),
+        R("#d-sliders", "调参数", "选中谁就调谁：位置、朝向、大小"),
+        R("#d-image", "参考图", "给人物定妆。批准一次，之后每一镜自动带上"),
+      ] },
+    ];
+
+    const right = [
+      { name: "底下那条", ink: CY, rows: [
+        R("#d-shield", "检查", "录之前先算一遍：这一镜画面里到底有没有东西", DANGER, "rgba(255,122,122,.12)"),
+        R("#d-camera", "草片", "3D 里逐镜录。不花钱，改到满意再往下", OK, "rgba(95,216,138,.12)"),
+        R("#d-sparkles", "生成", "交给模型出真画面。这一步开始计费", A, soft),
+        R("#d-clapper", "成片", "拼成一条。没生成的用草片顶上", DIM),
+      ] },
+      { name: "从哪儿开始", ink: CY, rows: [
+        R("#d-link", "贴链接", "抖音 / B站 / YouTube 的地址，直接贴", A, soft),
+        R("#d-upload", "拖文件", "手里的图或视频，一张截图也够"),
+        R("#d-msg", "说一句", "什么都没有也能开始，但没有参照可比"),
+      ] },
+      { name: "出问题时", ink: CY, rows: [
+        R("#d-alert", "要看一下", "机位对着空气、拍到的是墙、主体跑到画外", DANGER, "rgba(255,122,122,.12)"),
+        R("#d-dots", "更多", "故事版、关键帧、资产、事件日志、画幅设置"),
+      ] },
+      { name: "到处都有", ink: CY, rows: [
+        R("#d-undo", "撤销", "Cmd + Z。一次复刻、一次自动修，都算一步"),
+        R("#d-plus", "加一个", "加一镜、加一栏、加一个东西"),
+        R("#d-send", "发送", "Enter。跟它说想改什么"),
+        R("#d-help", "这是什么", "整套流程走一遍，四步"),
+      ] },
+    ];
+
+    return { cols: [{ groups: left }, { groups: right }] };
+  }
+}
+</script>
+</body>
+</html>

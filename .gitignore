@@ -48,3 +48,6 @@ desktop/dist/
 # 本机跑出来的媒体与工程
 server/data/media/
 *.director.json
+
+# 设计画布的成品文件（2.5 MB，由 design/*.dc.html 重新生成即可）
+design/director-console-ux.html

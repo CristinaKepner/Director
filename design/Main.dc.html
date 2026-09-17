@@ -1,0 +1,372 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&display=swap">
+  <style>
+    :root{
+      --bg:#0b0c10; --top:rgba(16,17,22,.72); --panel:#121316; --panel-2:#1b1e24; --surface:#15171d;
+      --hover:#242832; --sunken:#0d0e13;
+      --line:rgba(197,184,255,.10); --line-2:rgba(197,184,255,.20);
+      --text:rgba(255,255,255,.92); --muted:rgba(235,238,255,.50); --dim:rgba(235,238,255,.32);
+      --accent:#9d8cff; --accent-ink:#140f2e; --accent-soft:rgba(118,87,255,.16); --accent-line:rgba(157,140,255,.42);
+      --accent-2:#5cebdf; --ok:#5fd88a; --danger:#ff7a7a; --rec:#ff4d4d;
+      --display:"Outfit","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+      --mono:"SFMono-Regular","IBM Plex Mono",Menlo,Consolas,monospace;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+    a{color:#9d8cff;} a:hover{color:#b9afff;}
+    button{font:inherit;color:inherit;background:transparent;border:1px solid transparent;border-radius:10px;cursor:pointer;line-height:1;padding:0;}
+    svg{display:block;}
+    /* 图标按钮：默认只有图标，说明藏在 hover 里 */
+    .ico{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;color:var(--muted);}
+    .ico:hover{background:var(--hover);color:var(--text);}
+    /* 气泡：CSS-only，聚焦也出，键盘用户一样看得到 */
+    .t{position:relative;display:inline-flex;}
+    .tip{position:absolute;left:50%;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line-2);
+      border-radius:10px;padding:7px 11px;box-shadow:0 14px 36px rgba(0,0,0,.6);opacity:0;pointer-events:none;
+      transition:opacity .12s ease;z-index:30;width:max-content;max-width:230px;text-align:left;}
+    .t:hover>.tip,.t:focus-within>.tip{opacity:1;}
+    .tip b{display:block;font-size:12px;font-weight:500;color:var(--text);}
+    .tip span{display:block;font-size:11px;line-height:1.55;color:var(--dim);margin-top:2px;}
+    .tip-up{bottom:calc(100% + 9px);} .tip-down{top:calc(100% + 9px);}
+    .tip.on{opacity:1;}
+  </style>
+</helmet>
+
+<!-- 图标取自 Lucide（ISC），按原始 24×24 路径内联，不走网络 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/></symbol>
+  <symbol id="i-columns" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3v18l14-9Z" fill="currentColor"/></symbol>
+  <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect width="12" height="12" x="6" y="6" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4H14"/><path d="M10 4H3"/><path d="M21 12H12"/><path d="M8 12H3"/><path d="M21 20H16"/><path d="M12 20H3"/><circle cx="12" cy="4" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="20" r="2"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></symbol>
+  <symbol id="i-clapper" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
+</svg>
+
+<div style="width:1440px; height:900px; display:grid; grid-template-rows:48px 1fr auto; background:var(--bg); overflow:hidden">
+
+  <!-- 顶栏：一个 logo、一个名字、一个状态灯，右边三个图标。没有句子 -->
+  <header style="display:flex; align-items:center; gap:12px; padding:0 14px; background:var(--top); border-bottom:1px solid var(--line)">
+    <span style="font-family:var(--display); font-weight:700; letter-spacing:.14em; font-size:12px; color:var(--accent)">DC</span>
+    <span style="font-size:13px">最后一班</span>
+
+    <div class="t" tabindex="0" style="margin-left:2px">
+      <span style="display:flex; align-items:center; gap:7px; padding:5px 11px; border:1px solid {{st.line}}; border-radius:9999px; background:{{st.soft}}">
+        <span style="width:8px; height:8px; border-radius:9999px; background:{{st.dot}}"></span>
+        <span style="font-size:12px; color:{{st.ink}}">{{st.short}}</span>
+      </span>
+      <span class="tip tip-down"><b>{{st.name}}</b><span>{{st.can}}</span></span>
+    </div>
+
+    <span style="flex-grow:1"></span>
+    <div style="display:flex; gap:2px">
+      <div class="t" tabindex="0"><button class="ico"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-undo"/></svg></button><span class="tip tip-down"><b>撤销</b><span>Cmd + Z</span></span></div>
+      <div class="t" tabindex="0"><button class="ico"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-redo"/></svg></button><span class="tip tip-down"><b>重做</b><span>Shift + Cmd + Z</span></span></div>
+      <div class="t" tabindex="0"><button class="ico"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-help"/></svg></button><span class="tip tip-down"><b>怎么用</b><span>四步走一遍：草片 → 对一对 → 生成 → 成片</span></span></div>
+    </div>
+  </header>
+
+  <div style="display:grid; grid-template-columns:56px 1fr 300px; min-height:0">
+
+    <!-- 左：只剩一条图标轨。新手一上来不需要看见一棵树 -->
+    <nav style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 0; border-right:1px solid var(--line); background:var(--panel)">
+      <sc-for list="{{rail}}" as="r" hint-placeholder-count="6">
+        <div class="t" tabindex="0">
+          <button class="ico" style="width:40px; height:40px; color:{{r.ink}}; background:{{r.bg}}">
+            <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="{{r.icon}}"/></svg>
+          </button>
+          <span class="tip tip-down" style="left:calc(100% + 4px); transform:none"><b>{{r.label}}</b><span>{{r.hint}}</span></span>
+        </div>
+      </sc-for>
+    </nav>
+
+    <!-- 中：画面。除了时间码，一个字都没有 -->
+    <main style="position:relative; background:#050508; min-height:0; overflow:hidden">
+      <sc-if value="{{notCompare}}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute; inset:0; display:grid; place-items:center">
+          <div style="width:78%; aspect-ratio:16/9; border-radius:4px; background:linear-gradient(160deg,#171922,#0e1016 60%,#14161d); border:1px solid {{frame.ring}}; position:relative; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.6)">
+            <div style="position:absolute; left:0; right:0; top:58%; height:1px; background:rgba(197,184,255,.14)"></div>
+            <div style="position:absolute; left:34%; top:34%; width:46px; height:120px; border-radius:23px; background:#2a2d38; border:1px solid rgba(197,184,255,.18)"></div>
+            <div style="position:absolute; left:56%; top:44%; width:84px; height:64px; border-radius:6px; background:#22252e; border:1px solid rgba(197,184,255,.12)"></div>
+            <sc-if value="{{isRec}}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute; inset:0; border:2px solid var(--rec); border-radius:4px"></div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isCompare}}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute; inset:0; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; align-content:center; padding:0 18px 92px">
+          <sc-for list="{{cols}}" as="c" hint-placeholder-count="3">
+            <div style="display:flex; flex-direction:column; gap:7px">
+              <div class="t" tabindex="0" style="align-self:flex-start">
+                <span style="display:flex; align-items:center; gap:6px; padding:3px 9px; border-radius:9999px; background:var(--sunken); border:1px solid {{c.ring}}">
+                  <svg width="13" height="13" fill="none" stroke="{{c.dot}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="{{c.icon}}"/></svg>
+                  <span style="font-size:11px; color:{{c.ink}}">{{c.label}}</span>
+                </span>
+                <span class="tip tip-down"><b>{{c.label}}</b><span>{{c.hint}}</span></span>
+              </div>
+              <div style="width:100%; aspect-ratio:16/9; border-radius:8px; background:{{c.fill}}; border:1px solid {{c.ring}}; position:relative; overflow:hidden">
+                <div style="position:absolute; left:0; right:0; top:58%; height:1px; background:rgba(197,184,255,.12)"></div>
+                <div style="position:absolute; left:34%; top:32%; width:30px; height:84px; border-radius:15px; background:{{c.body}}"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- HUD：五个图标。标签只给当前那一个 -->
+      <div style="position:absolute; left:50%; bottom:18px; transform:translateX(-50%); display:flex; gap:6px; align-items:center; background:rgba(13,14,19,.74); border:1px solid var(--line-2); border-radius:9999px; padding:6px 8px; box-shadow:0 18px 48px rgba(0,0,0,.55); z-index:6">
+        <sc-for list="{{views}}" as="v" hint-placeholder-count="3">
+          <div class="t" tabindex="0">
+            <button onClick="{{v.pick}}" style="display:flex; align-items:center; gap:7px; height:34px; padding:0 {{v.pad}}; border-radius:9999px; background:{{v.bg}}; color:{{v.ink}}">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="{{v.icon}}"/></svg>
+              <sc-if value="{{v.on}}" hint-placeholder-val="{{ true }}"><span style="font-size:12px; font-weight:600">{{v.label}}</span></sc-if>
+            </button>
+            <span class="tip tip-up"><b>{{v.label}}</b><span>{{v.hint}}</span></span>
+          </div>
+        </sc-for>
+
+        <span style="width:1px; height:20px; background:var(--line); margin:0 3px"></span>
+
+        <div class="t" tabindex="0">
+          <button class="ico"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-play"/></svg></button>
+          <span class="tip tip-up"><b>播放</b><span>空格</span></span>
+        </div>
+        <span style="font-family:var(--mono); font-size:13px; color:var(--accent-2); padding:0 4px">{{tc}}</span>
+        <div class="t" tabindex="0">
+          <button onClick="{{toggleRec}}" style="display:flex; align-items:center; gap:7px; height:34px; padding:0 13px; border-radius:9999px; background:{{rec.bg}}; color:{{rec.ink}}">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="{{rec.icon}}"/></svg>
+            <span style="font-size:12px; font-weight:600">{{rec.label}}</span>
+          </button>
+          <span class="tip tip-up"><b>{{rec.tipTitle}}</b><span>{{rec.tipBody}}</span></span>
+        </div>
+      </div>
+    </main>
+
+    <!-- 右：Agent。新手主要靠这里，所以输入框留着，历史收成一句 -->
+    <aside style="display:flex; flex-direction:column; min-height:0; background:var(--panel); border-left:1px solid var(--line)">
+      <div style="display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--line)">
+        <svg width="16" height="16" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sparkles"/></svg>
+        <span style="font-size:12px; color:var(--muted); flex-grow:1">跟它说</span>
+        <div class="t" tabindex="0"><span style="width:7px; height:7px; border-radius:9999px; background:var(--ok); display:block"></span><span class="tip tip-down" style="left:auto; right:0; transform:none"><b>已连上</b><span>gpt-6-astra</span></span></div>
+      </div>
+
+      <div style="flex-grow:1; padding:14px; display:flex; flex-direction:column; gap:10px; overflow:hidden">
+        <div style="align-self:flex-end; max-width:84%; padding:8px 12px; border-radius:12px 12px 4px 12px; background:var(--accent-soft); border:1px solid var(--accent-line); font-size:12px; line-height:1.6">机位低一点</div>
+
+        <div class="t" tabindex="0" style="align-self:flex-start; max-width:92%">
+          <span style="display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:12px 12px 12px 4px; background:var(--surface); border:1px solid var(--line)">
+            <svg width="15" height="15" fill="none" stroke="var(--ok)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+            <span style="font-size:12px">改好了</span>
+            <span style="font-family:var(--mono); font-size:11px; color:var(--dim)">1.6 → 1.15 m</span>
+          </span>
+          <span class="tip tip-down" style="left:0; transform:none"><b>改了什么</b><span>21 镜的机位高度 1.60 m → 1.15 m，焦距没动。点开看每一步。</span></span>
+        </div>
+
+        <!-- 要人拿主意的时候：三个图标选项，不是三段话 -->
+        <div style="display:flex; flex-direction:column; gap:9px; padding:11px 12px; border-radius:12px; background:var(--sunken); border:1px solid rgba(92,235,223,.34)">
+          <span style="font-size:12px; line-height:1.6">这一镜拍谁？</span>
+          <div style="display:flex; gap:7px">
+            <sc-for list="{{picks}}" as="p" hint-placeholder-count="3">
+              <div class="t" tabindex="0" style="flex-grow:1">
+                <button style="width:100%; display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 6px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--muted)">
+                  <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="{{p.icon}}"/></svg>
+                  <span style="font-size:11px">{{p.label}}</span>
+                </button>
+                <span class="tip tip-up" style="left:{{p.tipL}}; right:{{p.tipR}}; transform:{{p.tipT}}"><b>{{p.label}}</b><span>{{p.hint}}</span></span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:12px 14px 14px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center">
+        <div style="flex-grow:1; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--surface); color:var(--dim); font-size:12px">想改什么就说…</div>
+        <div class="t" tabindex="0">
+          <button class="ico" style="background:var(--accent); color:var(--accent-ink)"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"/></svg></button>
+          <span class="tip tip-up" style="left:auto; right:0; transform:none"><b>发送</b><span>Enter</span></span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 底部：四站流水线，图标 + 数字。文字只给当前那一站 -->
+  <footer style="background:var(--panel); border-top:1px solid var(--line); display:flex; align-items:center; gap:14px; padding:10px 14px">
+    <div style="display:flex; gap:6px">
+      <sc-for list="{{strip}}" as="s" hint-placeholder-count="7">
+        <div class="t" tabindex="0">
+          <button style="width:64px; height:38px; border-radius:7px; background:{{s.fill}}; border:1px solid {{s.ring}}; position:relative; overflow:hidden">
+            <span style="position:absolute; left:0; right:0; top:60%; height:1px; background:rgba(197,184,255,.14)"></span>
+            <span style="position:absolute; left:26%; top:22%; width:9px; height:22px; border-radius:5px; background:#3a3e4c; display:block"></span>
+            <span style="position:absolute; left:4px; top:3px; font-family:var(--mono); font-size:9px; color:{{s.idxInk}}">{{s.idx}}</span>
+            <sc-if value="{{s.bad}}" hint-placeholder-val="{{ true }}">
+              <svg width="12" height="12" fill="none" stroke="var(--danger)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; right:4px; bottom:4px"><use href="#i-alert"/></svg>
+            </sc-if>
+          </button>
+          <span class="tip tip-up {{s.pin}}" style="left:0; transform:none"><b>{{s.idx}} {{s.title}}</b><span>{{s.hint}}</span></span>
+        </div>
+      </sc-for>
+      <div class="t" tabindex="0">
+        <button class="ico" style="width:38px; height:38px; border:1px dashed var(--line-2)"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"/></svg></button>
+        <span class="tip tip-up" style="left:0; transform:none"><b>加一镜</b><span>从现在这个机位新建</span></span>
+      </div>
+    </div>
+
+    <span style="flex-grow:1"></span>
+
+    <div style="display:flex; align-items:center; gap:2px; background:var(--sunken); border:1px solid var(--line); border-radius:9999px; padding:3px">
+      <sc-for list="{{pipe}}" as="p" hint-placeholder-count="4">
+        <div class="t" tabindex="{{p.tab}}">
+          <button onClick="{{p.pick}}" style="display:flex; align-items:center; gap:8px; height:36px; padding:0 {{p.pad}}; border-radius:9999px; background:{{p.bg}}">
+            <span style="position:relative; display:flex">
+              <svg width="18" height="18" fill="none" stroke="{{p.ink}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="{{p.icon}}"/></svg>
+              <sc-if value="{{p.badge}}" hint-placeholder-val="{{ true }}">
+                <span style="position:absolute; top:-5px; right:-7px; min-width:15px; height:15px; padding:0 3px; border-radius:9999px; background:{{p.badgeBg}}; color:#140f2e; font-family:var(--mono); font-size:9px; display:grid; place-items:center">{{p.badge}}</span>
+              </sc-if>
+            </span>
+            <sc-if value="{{p.on}}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:12px; font-weight:600; color:var(--text)">{{p.label}}</span>
+              <span style="font-family:var(--mono); font-size:11px; color:{{p.numInk}}">{{p.num}}</span>
+            </sc-if>
+          </button>
+          <span class="tip tip-up"><b>{{p.label}} · {{p.num}}</b><span>{{p.hint}}</span></span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div class="t" tabindex="0">
+      <button class="ico"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-dots"/></svg></button>
+      <span class="tip tip-up" style="left:auto; right:0; transform:none"><b>更多</b><span>故事版、关键帧、资产、事件日志、画幅设置</span></span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"view":{"editor":"enum","options":["free","program","compare"],"default":"program","section":"状态"},"stage":{"editor":"enum","options":["EDIT","RECORDING","REVIEW"],"default":"EDIT","section":"状态"},"seg":{"editor":"enum","options":["build","blockout","gen","film"],"default":"build","section":"状态"},"pinTip":{"editor":"boolean","default":true,"section":"演示"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { view: null, stage: null, seg: null }; }
+  get view() { return this.state.view ?? this.props.view ?? "program"; }
+  get stage() { return this.state.stage ?? this.props.stage ?? "EDIT"; }
+  get seg() { return this.state.seg ?? this.props.seg ?? "build"; }
+
+  renderVals() {
+    const A = "#9d8cff", INK = "#140f2e", SOFT = "rgba(118,87,255,.16)", LINE = "rgba(157,140,255,.42)";
+    const MUT = "rgba(235,238,255,.50)", DIM = "rgba(235,238,255,.32)";
+    const OK = "#5fd88a", DANGER = "#ff7a7a", CY = "#5cebdf";
+    const view = this.view, stage = this.stage, seg = this.seg;
+    const pin = (this.props.pinTip ?? true) ? "on" : "";
+
+    const ST = {
+      EDIT: { short: "可以改", name: "编辑中", can: "机位、演员、灯光、镜头长度，现在都能改。", dot: A, ink: A, line: LINE, soft: "rgba(118,87,255,.08)" },
+      RECORDING: { short: "录制中", name: "录制中", can: "正在录这一镜的草片。这会儿删演员、改焦距会被拒——想改先停。", dot: "#ff4d4d", ink: DANGER, line: "rgba(255,122,122,.34)", soft: "rgba(255,122,122,.06)" },
+      REVIEW: { short: "可以比", name: "草片在手", can: "这一镜录好了。现在最该做的是点「对照」，看机位走位跟原片对上没有。", dot: CY, ink: CY, line: "rgba(92,235,223,.34)", soft: "rgba(92,235,223,.05)" },
+    }[stage];
+
+    const rail = [
+      { k: "box", icon: "#i-box", label: "场景", hint: "人、车、道具。拖一下就能挪位置。" },
+      { k: "cam", icon: "#i-camera", label: "机位", hint: "拍这一镜的那台摄影机：站在哪、用多长的镜头。" },
+      { k: "light", icon: "#i-bulb", label: "灯", hint: "主光从哪边打、亮多少。选一档现成的布光最省事。" },
+      { k: "prop", icon: "#i-sliders", label: "调参数", hint: "选中谁就调谁：位置、朝向、大小。" },
+      { k: "asset", icon: "#i-image", label: "参考图", hint: "给人物、产品定妆。批准一次，之后每一镜自动带上，人不会变样。" },
+      { k: "more", icon: "#i-dots", label: "更多", hint: "故事版、关键帧、资产、事件日志、画幅设置。" },
+    ].map((r, i) => ({ ...r, ink: i === 0 ? A : MUT, bg: i === 0 ? SOFT : "transparent" }));
+
+    const VIEWS = [
+      { k: "free", icon: "#i-eye", label: "随便看", hint: "自己转着看整个场，不影响拍出来的画面。" },
+      { k: "program", icon: "#i-crosshair", label: "拍到的", hint: "摄影机真正拍到的那一框。录草片录的就是这一框。" },
+      { k: "compare", icon: "#i-columns", label: "对照", hint: "原片、草片、生成并排放，同一秒同一构图，一眼看出差在哪。" },
+    ];
+    const views = VIEWS.map((v) => ({
+      ...v, on: view === v.k, pick: () => this.setState({ view: v.k }),
+      bg: view === v.k ? A : "transparent", ink: view === v.k ? INK : MUT, pad: view === v.k ? "13px" : "8px",
+    }));
+
+    const recOn = stage === "RECORDING";
+    const rec = recOn
+      ? { icon: "#i-stop", label: "停", bg: "rgba(255,122,122,.18)", ink: DANGER, tipTitle: "停止录制", tipBody: "录到这儿为止，这条就存下来了。" }
+      : { icon: "#i-rec", label: "录", bg: "transparent", ink: DANGER, tipTitle: "录草片", tipBody: "把这一镜在 3D 里录成一段视频。不花钱，录多少次都行。" };
+
+    const PIPE = [
+      { k: "build", icon: "#i-shield", label: "检查", num: "17 处要看", badge: "17", badgeBg: DANGER, numInk: DANGER,
+        hint: "录之前先算一遍：这一镜的画面里到底有没有东西。有问题的会拦住，不让你白录。" },
+      { k: "blockout", icon: "#i-camera", label: "草片", num: "64/66", badge: "", badgeBg: OK, numInk: OK,
+        hint: "在 3D 里把每一镜录成一段视频。不花钱——机位、走位改到满意了再往下走。" },
+      { k: "gen", icon: "#i-sparkles", label: "生成", num: "12/66", badge: "3", badgeBg: A, numInk: A,
+        hint: "交给模型出真画面。构图跟着草片走，人物靠参考图锁住。这一步计费。" },
+      { k: "film", icon: "#i-clapper", label: "成片", num: "9:46", badge: "", badgeBg: DIM, numInk: DIM,
+        hint: "把所有镜头拼成一条。还没生成的用草片顶上，先看整体节奏。" },
+    ];
+    const pipe = PIPE.map((p) => ({
+      ...p, on: seg === p.k, pick: () => this.setState({ seg: p.k }),
+      bg: seg === p.k ? SOFT : "transparent",
+      ink: seg === p.k ? "rgba(255,255,255,.92)" : MUT,
+      pad: seg === p.k ? "12px" : "9px",
+      tab: "0",
+    }));
+
+    const SHOTS = [
+      { idx: "19", title: "车厢里", hint: "6 秒 · 草片和画面都有了" },
+      { idx: "20", title: "站台", hint: "4 秒 · 草片录好了" },
+      { idx: "21", title: "第一站灯下", hint: "7.7 秒 · 正在看这一镜", on: true },
+      { idx: "22", title: "回望", hint: "5 秒 · 机位埋在车里了，检查没过" , bad: true },
+      { idx: "23", title: "空座", hint: "8 秒 · 草片录好了" },
+      { idx: "24", title: "远处的灯", hint: "12 秒 · 草片还没录" },
+      { idx: "25", title: "末班车开走", hint: "9 秒 · 草片还没录" },
+    ];
+    const strip = SHOTS.map((s, i) => ({
+      ...s,
+      bad: !!s.bad,
+      // 静态图里得让人看见气泡长什么样。钉在第一张上，往上开是空舞台，不压任何东西
+      pin: i === 0 ? pin : "",
+      fill: s.on ? "#1a1c26" : "#131519",
+      ring: s.on ? LINE : s.bad ? "rgba(255,122,122,.34)" : "rgba(197,184,255,.10)",
+      idxInk: s.on ? A : s.bad ? DANGER : DIM,
+    }));
+
+    const cols = [
+      { icon: "#i-image", label: "原片", hint: "你要复刻的那条。", ink: DIM, dot: DIM, fill: "#0b0d14", ring: "rgba(197,184,255,.10)", body: "#33323c" },
+      { icon: "#i-camera", label: "草片", hint: "3D 里录的，免费。你改的是这一边。", ink: MUT, dot: A, fill: "#0e1016", ring: LINE, body: "#2a2d38" },
+      { icon: "#i-sparkles", label: "生成", hint: "模型出的真画面，这一栏计费。", ink: CY, dot: CY, fill: "#0c1114", ring: "rgba(92,235,223,.34)", body: "#2c3a3c" },
+    ];
+
+    return {
+      st: ST, rail, views, rec, pipe, strip, cols,
+      isCompare: view === "compare", notCompare: view !== "compare", isRec: recOn,
+      frame: { ring: recOn ? "rgba(255,122,122,.34)" : "rgba(197,184,255,.20)" },
+      tc: recOn ? "00:03:11" : "00:00:00",
+      toggleRec: () => this.setState({ stage: recOn ? "REVIEW" : "RECORDING" }),
+      // 气泡按自己在行里的位置贴边：中间那个居中，两边那两个贴住各自的边，
+      // 否则 300px 的面板和 1440 的画板都兜不住它
+      picks: [
+        { icon: "#i-box", label: "抱花姑娘", hint: "镜头标题点名的就是她，多半是这个。", tipL: "0", tipR: "auto", tipT: "none" },
+        { icon: "#i-camera", label: "后视镜", hint: "车内那面镜子，特写用。", tipL: "50%", tipR: "auto", tipT: "translateX(-50%)" },
+        { icon: "#i-plus", label: "拆两镜", hint: "两个都想要就拆开拍，一镜一个主体。", tipL: "auto", tipR: "0", tipT: "none" },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

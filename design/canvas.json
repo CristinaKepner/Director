@@ -1,0 +1,115 @@
+{
+  "artboards": [
+    {
+      "file": "Dense.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "主舞台（文字版）",
+      "page": "page-2",
+      "is_interactive": true
+    },
+    {
+      "file": "Reference.dc.html",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "参照入口（文字版）",
+      "page": "page-2",
+      "is_interactive": true
+    },
+    {
+      "file": "Compare.dc.html",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "对照那一屏（文字版）",
+      "page": "page-2",
+      "is_interactive": true
+    },
+    {
+      "file": "Pipeline.dc.html",
+      "x": 0,
+      "y": 1120,
+      "w": 1440,
+      "h": 680,
+      "title": "流水线（文字版）",
+      "page": "page-2",
+      "is_interactive": true
+    },
+    {
+      "file": "States.dc.html",
+      "x": 1560,
+      "y": 1120,
+      "w": 1440,
+      "h": 800,
+      "title": "八个状态（文字版）",
+      "page": "page-2",
+      "is_interactive": true
+    },
+    {
+      "file": "Start.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "第一屏 · 只问一件事",
+      "page": "page-1",
+      "is_interactive": true
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "主舞台 · 图标优先",
+      "page": "page-1",
+      "is_interactive": true
+    },
+    {
+      "file": "Icons.dc.html",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "图标与它们的说明",
+      "page": "page-1"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "thesis",
+      "x": 0,
+      "y": -250,
+      "w": 1340,
+      "text": "上一稿留在这里做对照：结构主张（十一个 tab 收成一条有闸的流水线、对照升格、状态机说人话）没变，变的是密度——那一版把理由都写在了界面上，这一版把它们收进了图标的气泡里。",
+      "page": "page-2"
+    },
+    {
+      "id": "icon-thesis",
+      "x": -25,
+      "y": -342,
+      "w": 1340,
+      "text": "这一稿的规矩\n\n1. 界面上没有句子。标签最多四个字，术语（Take、v2v、景别、焦段、机位高度）一个都不出现——全部退到鼠标停上去才出现的那句话里。主舞台可见文字 430 → 233 字。\n\n2. 图标取自 Lucide（ISC），按原始 24×24 路径内联：不联网、能换色、放大不糊。第三块是完整的图标表，左两列是界面上看得见的，右边一列是 hover 出来的文案。\n\n3. 文字只给当前那一个。四段流水线、视图三档，只有选中的那一项带标签和数字。\n\n4. 名字全换人话：Take → 草片，v2v → 生成，自检 → 检查，Program → 拍到的。\n\n画板是活的：三张入口卡、视图三档、四段流水线、录制按钮都能点。每块钉了一个气泡当示意，其余停上去才出现。",
+      "page": "page-1"
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  },
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "图标版"
+    },
+    {
+      "id": "page-2",
+      "name": "上一稿 · 文字版"
+    }
+  ]
+}
