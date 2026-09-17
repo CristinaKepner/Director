@@ -5,6 +5,7 @@ import { store, persistable, historyInfo } from "../../core/store.js";
 import { timecode, getHooks } from "../../core/actions.js";
 import { DEMOS } from "../../core/demo.js";
 import { REPLICATE_MODES } from "../../core/reference-plan.js";
+import { threadItems } from "./thread.js";
 import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
 import { dispatch, client, isOnline } from "./client.js";
 import { focusSelected, resetView } from "./viewport.js";
@@ -1092,70 +1093,125 @@ export function setThinking(t) {
   renderThread(store.get());
 }
 
+// ---- Agent 线程：一轮对话 = 一张卡 ----
+//
+// 以前这里每执行一步就占一行：一个 30 步的计划 = 30 行 ✓，外加一条思考、一条计划、一条回复。
+// 反问卡片摆着五段文字（问题、为什么问、选项、推荐项的说明、备注），规划时还滚一整屏思考流。
+// 信息一条没少，但人要找的只有三样：做完了没有、改了什么、要不要我拿主意。
+//
+// 所以和 0.6.0 的界面是同一套做法 —— 信息不删，只是不一次全摆出来：
+//   · 连着执行的步骤收成一张卡，标题是「改了 N 处」+ 最要紧的两条变化；点开才是逐步清单
+//   · 失败的那一步永远露在外面，不跟着折叠（折叠不能把坏消息藏起来）
+//   · 反问只剩问题和选项；为什么问、每个选项意味着什么，停上去才出现
+//   · 思考是一个小标签；规划中是一行，不再滚一屏
+//   · 连着出片的消息收成一排缩略图
+const ICO = (id, cls = "") => `<svg class="gi ${cls}"><use href="#${id}"/></svg>`;
+const changesOf = (d, m) => { const evt = m.eventId ? d.events.find((e) => e.id === m.eventId) : null; return evt ? diffOf(evt.before, evt.after) : []; };
+
+function toolStepHtml(m, d) {
+  const open = expanded.has(m.id);
+  const [head, ...rest] = m.text.split("\n");
+  const changes = changesOf(d, m);
+  const sh = shotOf(d, m);
+  const hint = !open && changes.length ? `<em>${esc(changes.slice(0, 1).map((c) => `${c.from}→${c.to}`).join(""))}</em>` : "";
+  const body = open
+    ? `${changes.length ? `<table class="diff">${changes.map((c) => `<tr><td>${esc(c.label)}</td><td class="from">${esc(c.from)}</td><td class="to">${esc(c.to)}</td></tr>`).join("")}</table>` : `<pre>${esc(rest.join("\n"))}</pre>`}
+       ${sh ? shotCard(sh, d) : ""}
+       <div class="actions">${m.targetIds?.length ? m.targetIds.slice(0, 2).map((t) => `<button data-locate="${esc(t)}">定位</button>`).join("") : ""}${m.eventId && m.ok !== false ? `<button data-undo-to="${m.eventId}">撤销到这之前</button>` : ""}${changes.length ? `<button data-raw="${m.id}">原始参数</button>` : ""}</div>
+       ${raw.has(m.id) ? `<pre>${esc(rest.join("\n"))}</pre>` : ""}`
+    : "";
+  return `<div class="tstep ${m.ok === false ? "fail" : ""}" data-mid="${m.id}" data-toggle="1" data-tip="${esc(m.action || "")}" data-tip-sub="点开看改了什么"><div class="line">${ICO(m.ok === false ? "i-alert" : "i-check")}<b>${esc(head)}</b>${hint}</div>${body}</div>`;
+}
+
+function toolGroupHtml(g, d) {
+  const items = g.items;
+  const failed = items.filter((m) => m.ok === false);
+  // 只有一步：不值得再套一层
+  if (items.length === 1) return `<div class="msg tool ${failed.length ? "fail" : ""}">${toolStepHtml(items[0], d)}</div>`;
+  const open = expanded.has(g.id);
+  const tops = items.flatMap((m) => changesOf(d, m).slice(0, 1).map((c) => `${c.label} ${c.from}→${c.to}`)).slice(0, 2);
+  const title = failed.length ? `${items.length} 步里 ${failed.length} 步没成` : `改了 ${items.length} 处`;
+  return `<div class="msg tool group ${failed.length ? "fail" : ""}">
+    <div class="line" data-mid="${g.id}" data-toggle="1">${ICO(failed.length ? "i-alert" : "i-check")}<b>${esc(title)}</b>${tops.length && !open ? `<em>${esc(tops.join(" · "))}</em>` : ""}${ICO(open ? "i-chev-d" : "i-chev-r", "chev")}</div>
+    ${open ? items.map((m) => toolStepHtml(m, d)).join("") : failed.map((m) => toolStepHtml(m, d)).join("")}
+  </div>`;
+}
+
+function mediaGroupHtml(g) {
+  const cell = (m) => {
+    const label = String(m.text || "").split(" · ")[0].replace(/生成完成.*$/, "").trim();
+    const node = m.media.kind === "image"
+      ? `<img data-preview="${esc(m.media.url)}" data-kind="image" src="${esc(mediaHref(m.media.url))}" />`
+      : `<video data-preview="${esc(m.media.url)}" data-kind="video" src="${esc(mediaHref(m.media.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`;
+    return `<div class="mcell" data-tip="${esc(label || "出来了")}" data-tip-sub="点开看大图。看完直接说要改什么：人物、站位、灯光、运镜">${node}${m.shotId ? `<button class="mgo" data-goshot="${esc(m.shotId)}">${ICO("i-crosshair")}</button>` : ""}</div>`;
+  };
+  return `<div class="msg agent media-strip"><div class="line">${ICO("i-sparkles")}<b>${g.items.length === 1 ? "出来了" : `${g.items.length} 镜出来了`}</b></div><div class="mgrid">${g.items.map(cell).join("")}</div></div>`;
+}
+
 function liveThinking(d) {
-  if (live?.phase === "failed") return `<div class="msg agent fail">规划失败：${esc(live.error || "")}</div>`;
+  if (live?.phase === "failed") return `<div class="msg agent fail">没规划成：${esc(live.error || "")}</div>`;
   if (!d.agent.busy) { live = null; return ""; } // 换工程/取消时不留下悬空的"正在规划"
   const t = live || {};
-  const tail = t.reasoning ? esc(t.reasoning).slice(-1200) : "";
-  const steps = (t.steps || []).slice(-6).map((x) => `<div>· ${esc(x)}</div>`).join("");
-  const head = t.phase === "executing" ? "在执行计划…" : `${t.model || "模型"} 正在规划…`;
-  return `<div class="msg thinking live"><div class="line"><span class="spin">◠</span><b>${esc(head)}</b>${t.chars ? `<code>${t.chars} 字</code>` : ""}</div>${tail ? `<pre>${tail}</pre>` : ""}${steps ? `<div class="notes">${steps}</div>` : ""}${!tail && !steps ? `<div class="hint">这个模型不外传思考文本，等它把计划写出来。</div>` : ""}</div>`;
+  const open = expanded.has("__live");
+  const head = t.phase === "executing" ? "在做…" : "在想…";
+  const tail = open && t.reasoning ? `<pre>${esc(t.reasoning).slice(-1200)}</pre>` : "";
+  const steps = open ? (t.steps || []).slice(-6).map((x) => `<div>· ${esc(x)}</div>`).join("") : "";
+  return `<div class="msg thinking live" data-mid="__live" data-toggle="1" data-tip="${esc(t.model || "模型")}${t.phase === "executing" ? " 在执行计划" : " 正在规划"}" data-tip-sub="点开看它在想什么"><div class="line"><span class="spin">◠</span><b>${head}</b>${t.chars ? `<code>${t.chars} 字</code>` : ""}</div>${tail}${steps ? `<div class="notes">${steps}</div>` : ""}</div>`;
 }
+
+const PLAN_FOLD = 5; // 计划超过这么多步就先折起来：一屏三十行的计划没人会逐行读
+
 function renderThread(d) {
   const el = $("agentThread");
   const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   el.innerHTML =
-    d.agent.messages
-      .map((m) => {
-        if (m.role === "tool") {
-          const open = expanded.has(m.id);
-          const [head, ...rest] = m.text.split("\n");
-          const evt = m.eventId ? d.events.find((e) => e.id === m.eventId) : null;
-          const changes = evt ? diffOf(evt.before, evt.after) : [];
-          const sh = shotOf(d, m);
-          const body = open
-            ? `${changes.length ? `<table class="diff">${changes.map((c) => `<tr><td>${esc(c.label)}</td><td class="from">${esc(c.from)}</td><td class="to">${esc(c.to)}</td></tr>`).join("")}</table>` : `<pre>${esc(rest.join("\n"))}</pre>`}
-               ${sh ? shotCard(sh, d) : ""}
-               <div class="actions">${m.targetIds?.length ? m.targetIds.slice(0, 3).map((t) => `<button data-locate="${esc(t)}">定位 ${esc(t)}</button>`).join("") : ""}${m.eventId && m.ok !== false ? `<button data-undo-to="${m.eventId}">撤销到此前</button>` : ""}${changes.length ? `<button data-raw="${m.id}">原始参数</button>` : ""}</div>
-               ${raw.has(m.id) ? `<pre>${esc(rest.join("\n"))}</pre>` : ""}`
-            : "";
-          const hint = !open && changes.length ? `<em>${esc(changes.slice(0, 2).map((c) => `${c.label} ${c.from}→${c.to}`).join("，"))}</em>` : "";
-          return `<div class="msg tool ${m.ok === false ? "fail" : ""}" data-mid="${m.id}" data-toggle="1"><div class="line"><span>${m.ok === false ? "✗" : "✓"}</span><b>${esc(head)}</b>${hint}<code>${esc(m.action)}</code></div>${body}</div>`;
-        }
+    threadItems(d.agent.messages)
+      .map((it) => {
+        if (it.kind === "tools") return toolGroupHtml(it, d);
+        if (it.kind === "media") return mediaGroupHtml(it);
+        const m = it.m;
         if (m.role === "thinking") {
           const t = m.thinking || {};
           const open = expanded.has(m.id);
-          const head = `${t.model || "模型"} 想了 ${t.ms ? (t.ms / 1000).toFixed(1) + "s" : "一会儿"}${t.steps?.length ? ` · ${t.steps.length} 步` : ""}${t.usage?.reasoning ? ` · ${t.usage.reasoning} 思考 token` : ""}`;
-          const body = t.reasoning
-            ? `<pre>${esc(t.reasoning)}</pre>`
-            : `<div class="hint">这个模型不外传思考文本，下面是它写出来的计划顺序。</div>`;
-          const steps = (t.steps || []).map((x, i) => `<div class="step"><div>${esc(x.label || x.action)}<small>${esc(x.action)}</small></div></div>`).join("");
+          const secs = t.ms ? `${(t.ms / 1000).toFixed(0)}s` : "";
+          const tip = [t.model, t.steps?.length ? `${t.steps.length} 步` : "", t.usage?.reasoning ? `${t.usage.reasoning} 思考 token` : ""].filter(Boolean).join(" · ");
+          const body = t.reasoning ? `<pre>${esc(t.reasoning)}</pre>` : `<div class="hint">这个模型不外传思考文本，下面是它写出来的计划顺序。</div>`;
+          const steps = (t.steps || []).map((x) => `<div class="step"><div>${esc(x.label || x.action)}</div></div>`).join("");
           const notes = (t.notes || []).length ? `<div class="notes">${t.notes.map((n) => `<div>· ${esc(n)}</div>`).join("")}</div>` : "";
-          return `<div class="msg thinking" data-mid="${m.id}" data-toggle="1"><div class="line"><span>${open ? "▾" : "▸"}</span><b>思考过程</b><code>${esc(head)}</code></div>${open ? body + steps + notes : ""}</div>`;
+          return `<div class="msg thinking chip" data-mid="${m.id}" data-toggle="1" data-tip="想了 ${esc(secs || "一会儿")}" data-tip-sub="${esc(tip || "点开看思考过程")}"><div class="line">${ICO("i-sparkles")}<b>想了 ${esc(secs || "一会儿")}</b>${ICO(open ? "i-chev-d" : "i-chev-r", "chev")}</div>${open ? body + steps + notes : ""}</div>`;
         }
         if (m.role === "ask") {
           const asked = m.answered || {};
-          return `<div class="msg ask" data-mid="${m.id}">${m.text ? esc(m.text) : ""}
-            ${(m.ask || []).map((a, qi) => `<div class="q"><div class="qt">${esc(a.question)}</div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}
-              <div class="opts">${a.options.map((o) => `<button class="${asked[qi] === o.label ? "on" : ""}${o.recommended ? " rec" : ""}" data-answer="${m.id}:${qi}:${esc(o.label)}" title="${esc(o.detail || "")}">${esc(o.label)}${o.recommended ? " · 推荐" : ""}</button>`).join("")}</div>
-              ${a.options.some((o) => o.detail) ? `<div class="why">${esc(a.options.find((o) => o.recommended)?.detail || a.options[0].detail || "")}</div>` : ""}</div>`).join("")}
-            ${(m.notes || []).length ? `<div class="why">${m.notes.map((n) => `· ${esc(n)}`).join("<br>")}</div>` : ""}</div>`;
+          const notes = (m.notes || []).join("　");
+          return `<div class="msg ask" data-mid="${m.id}">${m.text ? `<div class="at">${esc(m.text)}</div>` : ""}
+            ${(m.ask || []).map((a, qi) => `<div class="q"><div class="qt"${a.why ? ` data-tip="为什么问这个" data-tip-sub="${esc(a.why)}"` : ""}>${esc(a.question)}${a.why ? ICO("i-help", "qi") : ""}</div>
+              <div class="opts">${a.options.map((o) => `<button class="${asked[qi] === o.label ? "on" : ""}${o.recommended ? " rec" : ""}" data-answer="${m.id}:${qi}:${esc(o.label)}" data-tip="${esc(o.label)}${o.recommended ? " · 多半是这个" : ""}" data-tip-sub="${esc(o.detail || "")}">${esc(o.label)}</button>`).join("")}</div></div>`).join("")}
+            ${notes ? `<div class="anote" data-tip="顺带一提" data-tip-sub="${esc(notes)}">${ICO("i-help", "qi")}</div>` : ""}</div>`;
         }
         if (m.role === "plan") {
           // quiet 步骤不显示，但 agent.confirm 的 skip 下标是对着未过滤的 plan.steps 的 ——
           // 所以复选框必须带真实下标，否则会跳掉另一步。
           const steps = (m.plan?.steps || []).map((s, i) => ({ s, i })).filter((x) => !x.s.quiet);
-          return `<div class="msg plan" data-mid="${m.id}">${esc(m.text)}
-          ${steps.map(({ s, i }, vi) => `<div class="step${m.pending && skipped.has(`${m.id}:${i}`) ? " off" : ""}">${m.pending ? `<input type="checkbox" data-skip="${m.id}:${i}"${skipped.has(`${m.id}:${i}`) ? "" : " checked"}>` : ""}<div>${esc(s.label)}<small>${esc(s.action)}</small></div>${m.manual ? `<button data-run-step="${m.id}:${vi}">执行</button>` : ""}</div>`).join("")}
-          ${m.pending ? `<div class="actions"><button class="primary" data-confirm="${m.id}">${skipCount(m.id) ? `执行选中的 ${steps.length - skipCount(m.id)} 步` : "确认执行"}</button><button data-cancel="1">取消</button></div>` : ""}</div>`;
+          const open = expanded.has(m.id) || steps.length <= PLAN_FOLD;
+          const shown = open ? steps : steps.slice(0, PLAN_FOLD - 1);
+          return `<div class="msg plan" data-mid="${m.id}"><div class="pt">${esc(m.text)}</div>
+          ${shown.map(({ s, i }, vi) => `<div class="step${m.pending && skipped.has(`${m.id}:${i}`) ? " off" : ""}" data-tip="${esc(s.action)}" data-tip-sub="${esc(s.why || "")}">${m.pending ? `<input type="checkbox" data-skip="${m.id}:${i}"${skipped.has(`${m.id}:${i}`) ? "" : " checked"}>` : ""}<div>${esc(s.label)}</div>${m.manual ? `<button data-run-step="${m.id}:${vi}">执行</button>` : ""}</div>`).join("")}
+          ${!open ? `<button class="pmore" data-mid="${m.id}" data-toggle="1">还有 ${steps.length - shown.length} 步</button>` : ""}
+          ${m.pending ? `<div class="actions"><button class="primary" data-confirm="${m.id}">${skipCount(m.id) ? `做选中的 ${steps.length - skipCount(m.id)} 步` : "就这么做"}</button><button data-cancel="1">算了</button></div>` : ""}</div>`;
         }
         const media = m.media?.url ? (m.media.kind === "image" ? `<img class="media" data-preview="${esc(m.media.url)}" data-kind="image" src="${esc(mediaHref(m.media.url))}" />` : `<video class="media" data-preview="${esc(m.media.url)}" data-kind="video" src="${esc(mediaHref(m.media.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : "";
         const dl = m.download ? `<div class="actions"><button data-dl="${m.id}">下载 ${esc(m.download.name)}</button></div>` : "";
-        return `<div class="msg ${m.role}" data-mid="${m.id}">${esc(m.text)}${media}${dl}</div>`;
+        // Agent 的长回复先收三行。用户自己说的话不收 —— 那是他刚打的，得看得全
+        const long = m.role === "agent" && String(m.text || "").length > 56;
+        const open = expanded.has(m.id);
+        return `<div class="msg ${m.role}${long && !open ? " clamp" : ""}" data-mid="${m.id}"${long ? ` data-toggle="1" data-tip="${open ? "收起" : "展开全文"}"` : ""}>${esc(m.text)}${media}${dl}</div>`;
       })
       .join("") + liveThinking(d);
   el.querySelectorAll("[data-toggle]").forEach((n) => (n.onclick = (ev) => {
-    if (ev.target.closest("button")) return;
+    // 卡片里的按钮、复选框、可预览的媒体各有各的事，不该顺带把卡片折起来；
+    // 但「还有 N 步」本身就是个带 data-toggle 的按钮，它得放行
+    if (ev.target.closest("button:not([data-toggle]), input, a, [data-preview]")) return;
+    ev.stopPropagation();
     expanded.has(n.dataset.mid) ? expanded.delete(n.dataset.mid) : expanded.add(n.dataset.mid);
     renderThread(store.get());
   }));
@@ -1215,23 +1271,23 @@ function renderThread(d) {
 
 // suggestions follow what the project needs next — three at most
 function renderChips(d) {
+  // 按钮上写的和发给 Agent 的不是同一句话。发过去的得是规划器听得懂的整句
+  // （带镜头 id、带供应商名）；按钮上只要四五个字，整句退到气泡里 ——
+  // 「录制 shot_01」「提交 shot_01 视频生视频 seedance-2.5」这种东西不该出现在新手眼前。
+  const chip = (label, say, tip) => ({ label, say, tip: tip || say });
+  let list = [];
   // planner 给的下一步建议优先：它看得到刚做完什么、工程现在缺什么。
   // 没有（规则规划器、离线、或者模型没给）才回落到内置的进度推断。
   const fromPlanner = (d.agent?.suggest || []).filter((x) => typeof x === "string" && x.trim());
-  if (fromPlanner.length) {
-    $("chips").innerHTML = fromPlanner.slice(0, 3).map((c) => `<button data-chip="${esc(c)}" title="来自规划器的建议">${esc(c)}</button>`).join("");
-    $("chips").querySelectorAll("[data-chip]").forEach((b) => (b.onclick = () => { $("agentInput").value = b.dataset.chip; sendAgent(); }));
-    return;
-  }
-  const list = [];
   const cur = d.project.currentShotId || d.shots[0]?.id;
-  if (!d.shots.length) list.push("载入示例「城市边缘」", "新建镜头「对峙」6秒 手持");
-  else if (d.entities.some((e) => e.semanticType === "character") && !(d.assets || []).some((a) => a.approved)) list.push("给主角和产品各生成一张参考图", `录制 ${cur}`, "换成日落逆光");
-  else if (!d.takes.length) list.push(`录制 ${cur}`, "把 Program 机位降到 0.4m 并 look-at 主角", "换成日落逆光");
-  else if (!d.storyboard.length) list.push("全部进故事版", "让对手举枪", "03 镜改成环绕 120 度");
-  else if (!d.jobs.length) list.push(`提交 ${cur} 视频生视频 seedance-2.5`, `给 ${cur} 生成提示词`);
-  else list.push("主角外套换成红色再生成一次", "把两个人拉开 1.5m 重新生成", "换成日落逆光");
-  $("chips").innerHTML = list.slice(0, 3).map((c) => `<button data-chip="${esc(c)}">${esc(c)}</button>`).join("");
+  if (fromPlanner.length) list = fromPlanner.map((c) => chip(c.length > 9 ? `${c.slice(0, 8)}…` : c, c));
+  else if (!d.shots.length) list = [chip("看个示例", "载入示例「城市边缘」", "载一个现成的场景进来，先看看它长什么样"), chip("加一镜", "新建镜头「对峙」6秒 手持")];
+  else if (d.entities.some((e) => e.semanticType === "character") && !(d.assets || []).some((a) => a.approved)) list = [chip("给主角定妆", "给主角和产品各生成一张参考图", "出一张定妆照。批准一次，之后每一镜自动带上，人不会变样"), chip("录这一镜", `录制 ${cur}`, "把当前这一镜录成草片，不花钱"), chip("日落逆光", "换成日落逆光")];
+  else if (!d.takes.length) list = [chip("录这一镜", `录制 ${cur}`, "把当前这一镜录成草片，不花钱"), chip("机位放低", "把 Program 机位降到 0.4m 并 look-at 主角"), chip("日落逆光", "换成日落逆光")];
+  else if (!d.storyboard.length) list = [chip("进故事版", "全部进故事版"), chip("让对手举枪", "让对手举枪"), chip("03 镜环绕", "03 镜改成环绕 120 度")];
+  else if (!d.jobs.length) list = [chip("出这一镜", `提交 ${cur} 视频生视频 seedance-2.5`, "交给模型出真画面，构图跟着草片走。这一步计费"), chip("看提示词", `给 ${cur} 生成提示词`)];
+  else list = [chip("换件红外套", "主角外套换成红色再生成一次"), chip("两人拉开点", "把两个人拉开 1.5m 重新生成"), chip("日落逆光", "换成日落逆光")];
+  $("chips").innerHTML = list.slice(0, 3).map((c) => `<button data-chip="${esc(c.say)}" data-tip="${esc(c.label)}" data-tip-sub="${esc(c.tip)}">${esc(c.label)}</button>`).join("");
   $("chips").querySelectorAll("[data-chip]").forEach((b) => (b.onclick = () => {
     $("agentInput").value = b.dataset.chip;
     sendAgent();

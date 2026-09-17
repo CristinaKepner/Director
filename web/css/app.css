@@ -637,3 +637,71 @@ body.desktop.blur .topbar input.ghost { color: var(--muted); }
 .fr-step-ico:hover { background: var(--hover); color: var(--text); }
 .fr-step-ico i { font-style: normal; font-size: 12px; }
 .fr-arrow { width: 14px; height: 14px; color: var(--dim); }
+
+/* ---------- Agent 线程：一轮对话一张卡 ----------
+   信息不删，只是不一次全摆出来。逐步清单、为什么问、每个选项意味着什么，都退到点开 / 停上去。 */
+.thread { gap: 7px; }
+/* 线程是个会滚动的 flex 列。带 overflow:hidden 的卡片 min-height 会变成 0，
+   内容一多就被挤成一条线（实测「改了 3 处」那张卡就这么没了）。卡片一律不许缩。 */
+.thread > * { flex-shrink: 0; }
+.msg .gi { width: 14px; height: 14px; flex: none; }
+.msg.tool { padding: 0; cursor: default; overflow: hidden; }
+.msg.tool > .line, .tstep > .line { display: flex; gap: 8px; align-items: center; padding: 8px 11px; cursor: pointer; }
+.msg.tool > .line:hover, .tstep > .line:hover { background: var(--hover); }
+.msg.tool .line .gi { color: var(--ok); stroke-width: 2.2; }
+.msg.tool.fail > .line .gi, .tstep.fail .line .gi { color: var(--danger); }
+.msg.tool .line .chev { color: var(--dim); stroke-width: 1.8; margin-left: auto; }
+.msg.tool .line em + .chev { margin-left: 0; }
+.msg.tool .line b { flex: 0 1 auto; }
+.msg.tool .line em { flex: 1 1 auto; max-width: none; text-align: right; font-family: var(--mono); }
+.tstep { border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.msg.tool > .tstep:first-child { border-top: 0; }
+.tstep.fail { color: var(--danger); }
+.tstep table.diff, .tstep pre, .tstep .actions, .tstep .shotcard { margin-left: 11px; margin-right: 11px; }
+.tstep .actions { padding-bottom: 9px; }
+
+/* 思考：一个小标签 */
+.msg.thinking.chip { align-self: flex-start; padding: 0; border-radius: var(--r-pill); background: transparent; }
+.msg.thinking.chip > .line { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; }
+.msg.thinking.chip .gi { color: var(--accent); }
+.msg.thinking.chip b { font-weight: 400; font-size: 11px; color: var(--dim); }
+.msg.thinking.chip .chev { color: var(--dim); width: 12px; height: 12px; }
+.msg.thinking.chip pre, .msg.thinking.chip .step, .msg.thinking.chip .notes, .msg.thinking.chip .hint { margin: 0 10px 8px; }
+.msg.thinking.live { padding: 0; }
+.msg.thinking.live > .line { padding: 7px 11px; }
+.msg.thinking.live pre, .msg.thinking.live .notes { margin: 0 11px 9px; }
+
+.msg.plan, .msg.ask, .msg.media-strip { white-space: normal; }
+.msg.plan .pt, .msg.ask .at { white-space: pre-wrap; }
+
+/* 反问：只剩问题和选项 */
+.msg.ask .at { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.msg.ask .qt { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; line-height: 1.5; }
+.msg.ask .qi { color: var(--dim); margin-top: 3px; cursor: help; }
+.msg.ask .opts button { white-space: nowrap; }
+.msg.ask .anote { display: inline-flex; margin-top: 8px; color: var(--dim); cursor: help; }
+.msg.ask { position: relative; }
+
+/* 计划：只有步骤名；超过五步先折起来 */
+.msg.plan .pt { font-size: 12px; color: var(--muted); margin-bottom: 7px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.msg.plan .step { font-size: 12px; padding: 2px 0; }
+.msg.plan .pmore { margin-top: 5px; padding: 3px 10px; font-size: 11px; color: var(--muted); background: transparent; border-radius: var(--r-pill); }
+
+/* 长回复先收三行 */
+.msg.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+
+/* 出片：一排缩略图 */
+.msg.media-strip { padding: 9px 11px 11px; }
+.msg.media-strip > .line { display: flex; gap: 7px; align-items: center; margin-bottom: 8px; }
+.msg.media-strip > .line .gi { color: var(--accent-2); }
+.msg.media-strip > .line b { font-weight: 500; font-size: 12px; }
+.mgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.mcell { position: relative; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: #000; border: 1px solid var(--line); }
+.mcell img, .mcell video { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+.mcell .mgo { position: absolute; right: 4px; bottom: 4px; width: 22px; height: 22px; padding: 0; display: grid; place-items: center; border-radius: 6px; background: rgba(11, 12, 16, .78); opacity: 0; }
+.mcell:hover .mgo { opacity: 1; }
+
+/* 面板头与发送 */
+.right .panel-head h2 { letter-spacing: .08em; }
+.composer .send { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; flex: none; }
+.composer .send .gi { width: 17px; height: 17px; }
