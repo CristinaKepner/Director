@@ -39,8 +39,10 @@ test("菜单和 HUD 是同一组三档，少一档就会出现「菜单能去、
 test("四段流水线之外的七个面板，必须还能打开", () => {
   const html = read("web/index.html");
   const tabs = [...html.matchAll(/data-bottom="([a-z]+)"/g)].map((m) => m[1]);
-  const want = ["shots", "timeline", "takes", "board", "ref", "check", "gen", "film", "assets", "log", "health"];
+  const want = ["shots", "timeline", "takes", "board", "ref", "check", "gen", "film", "log", "health"];
   for (const k of want) assert.ok(tabs.includes(k), `面板 ${k} 没有入口了`);
+  // 资产不在底部了：0.6.2 搬到左边和场景并排，叫角色库。搬家可以，入口不能丢
+  assert.ok(html.includes('data-left="library"') && html.includes('id="library"'), "角色库得有入口和容器");
   const pipe = html.match(/<div class="pipe" id="pipe">([\s\S]*?)<\/div>/)?.[1] || "";
   assert.deepEqual([...pipe.matchAll(/data-bottom="([a-z]+)"/g)].map((m) => m[1]), ["check", "takes", "gen", "film"], "主路径就是这四段");
 });
@@ -59,4 +61,12 @@ test("每个图标引用都要有对应的 symbol", () => {
   const missing = [...new Set(used)].filter((id) => !defined.has(id));
   assert.deepEqual(missing, [], "这些图标引用没有对应的 symbol");
   assert.ok(html.includes('id="tip"'), "气泡元素得在页面里");
+});
+
+// 面板可拖：三个手柄各管一个 CSS 变量。少一个手柄就是一块拖不动的面板
+test("三个面板都拖得动，尺寸走 CSS 变量", () => {
+  const html = read("web/index.html"), css = read("web/css/app.css");
+  for (const k of ["left", "right", "drawer"]) assert.ok(html.includes(`data-rz="${k}"`), `缺 ${k} 的拖拽手柄`);
+  for (const v of ["--left-w", "--right-w", "--drawer-h"]) assert.ok(css.includes(`var(${v})`), `${v} 没被用上`);
+  assert.ok(html.includes('id="phys"') && html.includes('id="models"'), "物理信息和模型标签的容器得在");
 });

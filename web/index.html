@@ -43,6 +43,14 @@
       <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
       <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
       <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></symbol>
+      <symbol id="i-aperture" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m14.31 8 5.74 9.94"/><path d="M9.69 8h11.48"/><path d="m7.38 12 5.74-9.94"/><path d="M9.69 16 3.95 6.06"/><path d="M14.31 16H2.83"/><path d="m16.62 12-5.74 9.94"/></symbol>
+      <symbol id="i-updown" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+      <symbol id="i-angle" viewBox="0 0 24 24"><path d="M21 19H3L14 5"/><path d="M8.5 12.5A6 6 0 0 1 11 19"/></symbol>
+      <symbol id="i-focus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></symbol>
+      <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+      <symbol id="i-timer" viewBox="0 0 24 24"><path d="M10 2h4"/><path d="M12 14v-4"/><circle cx="12" cy="14" r="8"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
       <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
       <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
@@ -57,6 +65,7 @@
         <input id="projectName" class="ghost" title="工程名" />
         <select id="statePill" class="state edit" title="导演状态机"></select>
         <span class="spacer"></span>
+        <div class="models" id="models"></div>
         <button id="undoBtn" class="icon" data-tip="撤销" data-tip-sub="Cmd + Z"><svg class="gi"><use href="#i-undo"/></svg></button>
         <button id="redoBtn" class="icon" data-tip="重做" data-tip-sub="Shift + Cmd + Z"><svg class="gi"><use href="#i-redo"/></svg></button>
         <button id="guideBtn" class="icon" data-tip="怎么用" data-tip-sub="四步走一遍：草片 → 对一对 → 生成 → 成片"><svg class="gi"><use href="#i-help"/></svg></button>
@@ -79,11 +88,17 @@
         <div class="rail">
           <button data-left="scene" data-tip="场景" data-tip-sub="场里有什么：人、车、道具、机位、灯"><svg class="gi"><use href="#i-box"/></svg></button>
           <button data-left="props" data-tip="调参数" data-tip-sub="选中谁就调谁：位置、朝向、大小、焦段"><svg class="gi"><use href="#i-sliders"/></svg></button>
+          <button data-left="library" data-tip="角色库" data-tip-sub="给人物和产品定妆。批准一次，之后每一镜自动带上，人不会变样"><svg class="gi"><use href="#i-users"/></svg><em id="libBadge"></em></button>
         </div>
         <div class="left-body">
+          <div class="rz rz-left" data-rz="left" data-tip="拖动调整宽度" data-tip-sub="双击恢复默认"></div>
           <section id="leftScene">
             <div class="panel-head"><h2>场景</h2><div class="row-actions"><button id="addEntity">+ 物体</button><button id="addCamera">+ 机位</button><button id="addLight">+ 灯</button></div></div>
             <div id="outliner" class="outliner"></div>
+          </section>
+          <section id="leftLibrary">
+            <div class="panel-head"><h2>角色库</h2><span id="libCount" class="pill"></span></div>
+            <div id="library" class="library"></div>
           </section>
           <section id="leftProps">
             <div class="panel-head"><h2 id="inspectorTitle">属性</h2><button id="deleteSel" class="danger" title="删除 (Del)">删除</button></div>
@@ -96,6 +111,8 @@
       <main class="stage">
         <div id="viewport"></div>
         <div id="compare" class="stage-compare" hidden></div>
+        <!-- 物理信息：这一镜此刻的真实参数。白模的意义就在于这些数是确定的、可测量的 -->
+        <div id="phys" class="phys" hidden></div>
         <div class="hud">
           <div class="seg seg-ico"><button id="viewFree" class="on" data-tip="随便看" data-tip-sub="自己转着看整个场，不影响拍出来的画面 (P)"><svg class="gi"><use href="#i-eye"/></svg><b>随便看</b></button><button id="viewProgram" data-tip="拍到的" data-tip-sub="摄影机真正拍到的那一框，录草片录的就是它 (P)"><svg class="gi"><use href="#i-crosshair"/></svg><b>拍到的</b></button><button id="viewCompare" data-tip="对照" data-tip-sub="原片、草片、生成并排放，同一秒的同一构图"><svg class="gi"><use href="#i-columns"/></svg><b>对照</b></button></div>
           <div class="seg" id="gizmoSeg" hidden><button data-gizmo="translate" class="on" title="移动 (W)">移</button><button data-gizmo="rotate" title="旋转 (E)">转</button><button data-gizmo="scale" title="缩放 (R)">缩</button></div>
@@ -108,10 +125,11 @@
 
       <!-- right: one input, one thread -->
       <aside class="right">
+        <div class="rz rz-right" data-rz="right" data-tip="拖动调整宽度" data-tip-sub="双击恢复默认"></div>
         <div class="panel-head"><svg class="gi" style="color:var(--accent)"><use href="#i-sparkles"/></svg><h2>跟它说</h2><span id="agentStatus" class="dot" title=""></span><button id="agentSettingsBtn" class="icon" data-tip="怎么配合" data-tip-sub="用哪个模型规划；先问我再做，还是直接做"><svg class="gi"><use href="#i-sliders"/></svg></button></div>
         <div id="agentSettings" class="agent-settings" hidden>
-          <label>后端<select id="agentBackend"><option value="rules">rules</option></select></label>
-          <label>模式<select id="agentMode"><option value="collaborative">先确认</option><option value="lead">直接执行</option><option value="manual">只出方案</option></select></label>
+          <label>谁来规划<select id="agentBackend"><option value="rules">rules</option></select></label>
+          <label>怎么配合<select id="agentMode"><option value="collaborative">先问我再做</option><option value="lead">直接做</option><option value="manual">只出方案</option></select></label>
         </div>
         <div id="agentThread" class="thread"></div>
         <div class="composer">
@@ -136,18 +154,18 @@
             <button data-bottom="gen"><svg class="gi"><use href="#i-sparkles"/></svg><b>生成</b><i></i><em></em></button>
             <button data-bottom="film"><svg class="gi"><use href="#i-clapper"/></svg><b>成片</b><i></i><em></em></button>
           </div>
-          <button id="moreBtn" class="icon" data-tip="更多" data-tip-sub="镜头、时间线、故事版、参照、资产、事件、状态"><svg class="gi"><use href="#i-list"/></svg></button>
+          <button id="moreBtn" class="icon" data-tip="更多" data-tip-sub="镜头、时间线、故事版、参照、事件、状态"><svg class="gi"><use href="#i-list"/></svg></button>
           <div id="moreTabs" class="menu" hidden>
             <button data-bottom="shots">镜头清单</button>
             <button data-bottom="timeline">时间线</button>
             <button data-bottom="board">故事版</button>
             <button data-bottom="ref">参照</button>
-            <button data-bottom="assets">资产</button>
             <button data-bottom="log">事件</button>
             <button data-bottom="health">状态</button>
           </div>
           <button id="drawerBtn" class="icon" title="展开 / 收起">▴</button>
         </div>
+        <div class="rz rz-drawer" data-rz="drawer" data-tip="拖动调整高度" data-tip-sub="双击恢复默认"></div>
         <div id="bottomBody" class="bottom-body"></div>
       </footer>
     </div>

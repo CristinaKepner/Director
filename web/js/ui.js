@@ -6,6 +6,7 @@ import { timecode, getHooks } from "../../core/actions.js";
 import { DEMOS } from "../../core/demo.js";
 import { REPLICATE_MODES } from "../../core/reference-plan.js";
 import { threadItems } from "./thread.js";
+import { physicalInfo, fmt as pf } from "./phys.js";
 import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
 import { dispatch, client, isOnline } from "./client.js";
 import { focusSelected, resetView } from "./viewport.js";
@@ -23,7 +24,14 @@ const UI_KEY = "director-console:ui:v5";
 const GUIDE_KEY = "director-console:guide:v5";
 
 // local UI state (what is open) — persisted per browser, never part of the project
-const ui = Object.assign({ left: null, drawer: false, tab: "shots", settings: false, moreTabs: false }, load(UI_KEY));
+const ui = Object.assign({ left: null, drawer: false, tab: "shots", settings: false, moreTabs: false, leftW: 300, rightW: 340, drawerH: 250, phys: true }, load(UI_KEY));
+// 面板尺寸的上下限。上限不写死像素：屏幕小的时候 560 的右栏会把舞台挤没
+const RZ = {
+  left: { key: "leftW", css: "--left-w", def: 300, min: 220, max: () => Math.min(520, window.innerWidth * 0.34), axis: "x", sign: 1 },
+  right: { key: "rightW", css: "--right-w", def: 340, min: 280, max: () => Math.min(620, window.innerWidth * 0.42), axis: "x", sign: -1 },
+  drawer: { key: "drawerH", css: "--drawer-h", def: 250, min: 140, max: () => window.innerHeight * 0.68, axis: "y", sign: -1 },
+};
+const clampRz = (k, v) => Math.round(Math.max(RZ[k].min, Math.min(RZ[k].max(), v)));
 function load(k) {
   try {
     return JSON.parse(localStorage.getItem(k) || "{}");
@@ -43,10 +51,45 @@ function applyUi() {
   document.querySelectorAll("[data-left]").forEach((b) => b.classList.toggle("on", b.dataset.left === ui.left));
   $("leftScene").classList.toggle("on", ui.left === "scene");
   $("leftProps").classList.toggle("on", ui.left === "props");
+  $("leftLibrary").classList.toggle("on", ui.left === "library");
+  for (const k of Object.keys(RZ)) app.style.setProperty(RZ[k].css, `${clampRz(k, ui[RZ[k].key] || RZ[k].def)}px`);
   $("drawerBtn").textContent = ui.drawer ? "▾" : "▴";
   $("agentSettings").hidden = !ui.settings;
   saveUi();
 }
+// 面板可拖。三处：左面板宽、右面板宽、底部抽屉高。双击恢复默认。
+// 舞台那块 canvas 自己带 ResizeObserver，所以这里只管改变量，不用通知它。
+function bindResize() {
+  document.querySelectorAll("[data-rz]").forEach((h) => {
+    const k = h.dataset.rz, R = RZ[k];
+    h.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      h.setPointerCapture(ev.pointerId);
+      const start = R.axis === "x" ? ev.clientX : ev.clientY;
+      const from = clampRz(k, ui[R.key] || R.def);
+      h.classList.add("drag");
+      document.body.classList.add("resizing");
+      const move = (e) => {
+        const now = R.axis === "x" ? e.clientX : e.clientY;
+        ui[R.key] = clampRz(k, from + (now - start) * R.sign);
+        $("app").style.setProperty(R.css, `${ui[R.key]}px`);
+      };
+      const up = () => {
+        h.classList.remove("drag");
+        document.body.classList.remove("resizing");
+        h.removeEventListener("pointermove", move);
+        saveUi();
+      };
+      h.addEventListener("pointermove", move);
+      h.addEventListener("pointerup", up, { once: true });
+      h.addEventListener("pointercancel", up, { once: true });
+    });
+    h.addEventListener("dblclick", () => { ui[R.key] = R.def; applyUi(); });
+  });
+  // 窗口缩小之后，之前拖出来的尺寸可能已经超限了
+  window.addEventListener("resize", () => applyUi());
+}
+
 function openLeft(which) {
   ui.left = ui.left === which ? null : which;
   applyUi();
@@ -189,6 +232,7 @@ export function bindUI() {
   document.querySelectorAll("[data-bottom]").forEach((btn) => (btn.onclick = () => { $("moreTabs").hidden = true; openDrawer(btn.dataset.bottom); }));
   $("drawerBtn").onclick = () => openDrawer();
   bindTips();
+  bindResize();
   // 「更多」：主路径之外的七个面板收在这里，一个都没少
   $("moreBtn").onclick = (e) => {
     e.stopPropagation();
@@ -352,6 +396,7 @@ function onKey(e) {
 // ---------- render ----------
 function renderLight(d) {
   $("hudTc").textContent = timecode(d.project.playhead, d.project.fps);
+  renderPhys(d);
   const head = document.querySelector(".tl-ruler .head");
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
   if (head && shot) head.style.left = `${((d.project.playhead - shot.range.inFrame) / Math.max(1, shot.range.outFrame - shot.range.inFrame)) * 100}%`;
@@ -385,6 +430,8 @@ function renderLight(d) {
 
 function render(d) {
   lastFullRender = performance.now();
+  renderModels(d);
+  renderLibrary(d);
   if (document.activeElement !== $("projectName")) $("projectName").value = d.project.name;
   $("fidelity").value = d.project.fidelity;
   $("shading").value = d.project.shading || "shaded";
@@ -478,7 +525,7 @@ function renderTabs(d) {
   const generated = d.shots.filter((s) => d.jobs.some((j) => j.shotId === s.id && j.status === "done" && j.result?.url)).length;
   const errors = checkData?.errors || 0;
 
-  const num = { check: d.shots.length ? (errors ? `${errors} 处要看` : "都过了") : "—", takes: d.shots.length ? `${recorded}/${d.shots.length}` : "—", gen: d.shots.length ? `${generated}/${d.shots.length}` : "—", film: films.at(-1)?.result?.seconds ? timecode(Math.round(films.at(-1).result.seconds * d.project.fps), d.project.fps).slice(3, 8) : "—" };
+  const num = { check: !d.shots.length ? "—" : !checkData ? "还没查" : errors ? `${errors} 处要看` : "都过了", takes: d.shots.length ? `${recorded}/${d.shots.length}` : "—", gen: d.shots.length ? `${generated}/${d.shots.length}` : "—", film: films.at(-1)?.result?.seconds ? timecode(Math.round(films.at(-1).result.seconds * d.project.fps), d.project.fps).slice(3, 8) : "—" };
   const badge = { check: errors || 0, takes: 0, gen: busy.filter((j) => j.kind !== "replicate").length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length };
   const kind = { check: "bad", takes: "ok", gen: "busy", film: "busy" };
 
@@ -657,7 +704,7 @@ function inspectEntity(el, e, d) {
     const r = await report(dispatch("generation.reference", { entityId: e.id, view: e.semanticType === "character" ? "front" : "three-quarter" }));
     if (r?.ok) toast("参考图生成中 → 「资产」里批准");
   });
-  el.querySelector('[data-act="assets"]')?.addEventListener("click", () => openDrawer("assets"));
+  el.querySelector('[data-act="assets"]')?.addEventListener("click", () => { if (ui.left !== "library") openLeft("library"); });
   el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, e.displayName)));
   el.querySelector('[data-k="model"]').onchange = (ev) => (ev.target.value === "__custom" ? null : report(dispatch("entity.replace-proxy", ev.target.value ? { id: e.id, model: ev.target.value } : { id: e.id, asset: null })));
   el.querySelector('[data-act="walk"]').onclick = () => {
@@ -1070,7 +1117,7 @@ export function renderCompare(d) {
 function pairFor(d, s) {
   const take = d.takes.find((t) => t.id === s.selectedTake && t.videoUrl) || d.takes.filter((t) => t.shotId === s.id && t.videoUrl).at(-1);
   const gens = d.jobs.filter((j) => j.shotId === s.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url));
-  return { shot: s, blockout: take?.videoUrl || null, generated: gens.at(-1)?.result?.url || null, previous: gens.length > 1 ? gens.at(-2).result.url : null, mode: gens.at(-1)?.mode, refs: (gens.at(-1)?.inputs?.references || []).length, verdict: s.lastVerdict || null };
+  return { shot: s, blockout: take?.videoUrl || null, generated: gens.at(-1)?.result?.url || null, previous: gens.length > 1 ? gens.at(-2).result.url : null, mode: [String(gens.at(-1)?.model || "").replace(/\s*\(.*\)$/, ""), gens.at(-1)?.mode].filter(Boolean).join(" · "), refs: (gens.at(-1)?.inputs?.references || []).length, verdict: s.lastVerdict || null };
 }
 
 // ---------- agent thread ----------
@@ -1139,11 +1186,13 @@ function toolGroupHtml(g, d) {
 
 function mediaGroupHtml(g) {
   const cell = (m) => {
-    const label = String(m.text || "").split(" · ")[0].replace(/生成完成.*$/, "").trim();
+    const parts = String(m.text || "").split(" · ");
+    const label = parts[0].replace(/生成完成.*$/, "").trim();
+    const by = [parts[1], (parts[2] || "").replace(/\s*生成完成.*$/, "")].filter(Boolean).join(" · ");
     const node = m.media.kind === "image"
       ? `<img data-preview="${esc(m.media.url)}" data-kind="image" src="${esc(mediaHref(m.media.url))}" />`
       : `<video data-preview="${esc(m.media.url)}" data-kind="video" src="${esc(mediaHref(m.media.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`;
-    return `<div class="mcell" data-tip="${esc(label || "出来了")}" data-tip-sub="点开看大图。看完直接说要改什么：人物、站位、灯光、运镜">${node}${m.shotId ? `<button class="mgo" data-goshot="${esc(m.shotId)}">${ICO("i-crosshair")}</button>` : ""}</div>`;
+    return `<div class="mcell" data-tip="${esc(label || "出来了")}" data-tip-sub="${esc(by ? by + "。" : "")}点开看大图；看完直接说要改什么">${node}${m.shotId ? `<button class="mgo" data-goshot="${esc(m.shotId)}">${ICO("i-crosshair")}</button>` : ""}</div>`;
   };
   return `<div class="msg agent media-strip"><div class="line">${ICO("i-sparkles")}<b>${g.items.length === 1 ? "出来了" : `${g.items.length} 镜出来了`}</b></div><div class="mgrid">${g.items.map(cell).join("")}</div></div>`;
 }
@@ -1570,7 +1619,6 @@ function renderBottom(d) {
   if (tab === "check") return renderCheck(el, d);
   if (tab === "gen") return renderGen(el, d);
   if (tab === "film") return renderFilm(el, d);
-  if (tab === "assets") return renderAssets(el, d);
   if (tab === "log") return renderEvents(el, d);
   return renderHealth(el, d);
 }
@@ -1850,24 +1898,118 @@ function renderGen(el, d) {
 }
 
 // assets: one approved reference per entity is what keeps faces / products the same across generations
-function renderAssets(el, d) {
+// ---- 顶栏：谁在规划、谁在出片 ----
+// 这两件事决定了结果长什么样，以前一个藏在状态点的气泡里、一个藏在生成面板的下拉里。
+// 尤其是「没配密钥、只是模拟」这一条：以前是面板里一行小灰字，人提交了半天才发现没真出片。
+function renderModels(d) {
+  const el = $("models");
+  if (!el) return;
+  const planner = d.agent?.backend && d.agent.backend !== "rules" ? d.agent.backend : null;
+  const real = isOnline() && client.generation?.name && client.generation.name !== "simulated";
+  const genModels = real ? Object.keys(client.generation.models || {}) : [];
+  const video = genModels.find((k) => PROVIDERS[k]?.modes?.some((m) => m.endsWith("2v"))) || null;
+  const busy = !!d.agent?.busy;
+  const running = d.jobs.filter((j) => ["queued", "running"].includes(j.status) && j.kind !== "replicate").length;
+  el.innerHTML = `
+    <button class="model-pill${planner ? "" : " off"}${busy ? " busy" : ""}" id="plannerPill" data-tip="${planner ? "谁在规划" : "没接大模型"}" data-tip-sub="${planner ? `你说的话由 ${esc(planner)} 翻成一步步操作。点一下换模型` : "现在是内置规则在听，只认固定句式（「03 镜改成环绕」这种）。点一下去接一个"}">
+      <svg class="gi"><use href="#i-sparkles"/></svg><b>${esc(planner || "规则")}</b>
+    </button>
+    <span class="model-pill gen${video ? "" : " off"}${running ? " busy" : ""}" data-tip="${video ? "谁在出片" : "只是模拟，不会真出片"}" data-tip-sub="${video ? `真画面由 ${esc(PROVIDERS[video].name)} 生成${running ? `，现在有 ${running} 个任务在跑` : ""}。单条 ${PROVIDERS[video].minSeconds || 1}–${PROVIDERS[video].maxSeconds} 秒` : "没配生成密钥：提交的任务只走一遍流程，不出画面。去偏好设置里填火山引擎 Ark 的密钥"}">
+      <svg class="gi"><use href="#i-clapper"/></svg><b>${esc(video ? PROVIDERS[video].name.replace(/\s*\(.*\)$/, "") : "模拟")}</b>
+    </span>`;
+  $("plannerPill").onclick = () => { ui.settings = true; applyUi(); $("agentBackend")?.focus(); };
+}
+
+// ---- 左抽屉：角色库 ----
+// 以前「资产」是底部第九个 tab，而且只列已经生成过的图 —— 想给谁定妆得先去属性面板里找按钮。
+// 定妆是「人物跨镜不变样」的前提，不该是个要翻三层才找得到的功能。
+// 搬到左边和场景并排：场景回答「场里有什么」，角色库回答「它们长什么样」。
+const LIB_GROUPS = [["角色", ["character"]], ["物品", ["prop", "vehicle", "weapon"]]];
+
+function renderLibrary(d) {
+  const el = $("library");
   const assets = d.assets || [];
-  if (!assets.length) {
-    el.innerHTML = emptyState("还没有参考资产。在角色 / 产品的属性里点「生成参考图」，批准后它出现的每个镜头都会带上。");
-    return;
+  const pending = assets.filter((a) => !a.approved).length;
+  const badge = $("libBadge");
+  if (badge) { badge.textContent = pending || ""; badge.classList.toggle("on", pending > 0); }
+  if (!el || ui.left !== "library") return;
+
+  const groups = LIB_GROUPS.map(([name, types]) => [name, d.entities.filter((e) => types.includes(e.semanticType))]).filter(([, list]) => list.length);
+  const done = d.entities.filter((e) => assets.some((a) => a.entityId === e.id && a.approved)).length;
+  const total = groups.reduce((n, [, list]) => n + list.length, 0);
+  $("libCount").textContent = total ? `${done}/${total}` : "";
+  if (!total) { el.innerHTML = emptyState("场里还没有人物或物品。"); return; }
+
+  el.innerHTML = groups.map(([name, list]) => `<div class="lib-group"><h3><span>${name}</span><span>${list.length}</span></h3>${list.map((e) => {
+    const mine = assets.filter((a) => a.entityId === e.id);
+    const ok = mine.some((a) => a.approved);
+    const job = d.jobs.find((j) => j.kind === "reference" && j.entityId === e.id && ["queued", "running"].includes(j.status));
+    const shots = d.shots.filter((sh) => (sh.targetIds || []).includes(e.id));
+    return `<div class="lib-card${d.project.selectedId === e.id ? " sel" : ""}">
+      <div class="lib-head" data-locate="${esc(e.id)}" data-tip="${esc(e.displayName)}" data-tip-sub="点一下在场里找到它">
+        <span class="sw" style="background:${esc(e.proxy?.color || "#8a7a5a")}"></span><b>${esc(e.displayName)}</b>
+        <span class="st${ok ? " ok" : ""}">${ok ? `<svg class="gi"><use href="#i-check"/></svg>定了` : mine.length ? "待批" : "没定妆"}</span>
+      </div>
+      <div class="lib-thumbs">
+        ${mine.map((a) => `<div class="lib-thumb${a.approved ? " ok" : ""}">${a.mediaKind === "video" ? `<video data-preview="${esc(a.url)}" data-kind="video" src="${esc(mediaHref(a.url))}" muted loop playsinline></video>` : `<img data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" alt="" />`}
+          <button class="tk" data-approve="${a.id}" data-on="${a.approved ? 1 : 0}" data-tip="${a.approved ? "已批准" : "批准这张"}" data-tip-sub="${a.approved ? "它出现的每一镜都会自动带上这张。再点一下取消" : `批准后，${esc(e.displayName)}出现的每一镜生成时都会带上它 · ${esc(a.model || a.kind || "")}`}"><svg class="gi"><use href="#i-check"/></svg></button>
+          <button class="rm" data-del="${a.id}" data-tip="删掉这张">×</button></div>`).join("")}
+        <button class="lib-add${job ? " busy" : ""}" data-more="${esc(e.id)}" ${job ? "disabled" : ""} data-tip="${job ? "正在出" : mine.length ? "再来一张" : "定妆"}" data-tip-sub="${job ? "定妆照生成中" : "出一张定妆照。这一步计费"}">${job ? `${job.progress || 0}%` : `<svg class="gi"><use href="#i-plus"/></svg>`}</button>
+      </div>
+      ${shots.length ? `<div class="lib-shots">${shots.slice(0, 12).map((sh) => `<button data-goshot="${esc(sh.id)}" data-tip="${esc(sh.index + " " + sh.title)}" data-tip-sub="这一镜拍到了${esc(e.displayName)}">${esc(sh.index)}</button>`).join("")}${shots.length > 12 ? `<button disabled>+${shots.length - 12}</button>` : ""}</div>` : ""}
+    </div>`;
+  }).join("")}</div>`).join("");
+
+  el.querySelectorAll("[data-approve]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); report(dispatch("asset.approve", { id: b.dataset.approve, approved: b.dataset.on !== "1" })); }));
+  el.querySelectorAll("[data-del]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); confirm("删掉这张定妆照？") && dispatch("asset.delete", { id: b.dataset.del }); }));
+  el.querySelectorAll("[data-more]").forEach((b) => (b.onclick = () => { const e = store.get().entities.find((x) => x.id === b.dataset.more); report(dispatch("generation.reference", { entityId: b.dataset.more, view: e?.semanticType === "character" ? "front" : "three-quarter" })); }));
+  el.querySelectorAll("[data-locate]").forEach((n) => (n.onclick = () => locate(n.dataset.locate)));
+  el.querySelectorAll("[data-goshot]").forEach((b) => (b.onclick = () => report(dispatch("shot.select", { id: b.dataset.goshot }))));
+  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "定妆照")));
+}
+
+// ---- 舞台右上角：这一镜此刻的物理参数 ----
+// 骨架只搭一次，之后每帧只改数字。整块重画的话，鼠标停在上面时气泡会跟着闪。
+const PHYS_ROWS = [
+  ["focal", "i-focus", "焦段 · 视角", "镜头多长，能装下多宽。视角由焦段和片门宽度算出来"],
+  ["height", "i-updown", "机位离地", "摄影机离地面多高。1.6 米上下是站着平视，低于 1 米就是仰拍的感觉"],
+  ["distance", "i-ruler", "距主体", "机位到它盯着的那个点有多远。推、拉、跟，变的就是这个数"],
+  ["pitch", "i-angle", "俯仰", "正是仰拍，负是俯拍，0 是平视"],
+  ["aperture", "i-aperture", "光圈 · 景深", "对焦点前后有多厚一段是清楚的。按薄透镜公式算，和真镜头一个道理"],
+  ["speed", "i-gauge", "机位速度", "机位此刻每秒走多远（按四分之一秒的净位移算，抖动不算数）"],
+  ["time", "i-timer", "时长 · 帧率", "这一镜多长、每秒多少帧"],
+];
+let physBuilt = false;
+function renderPhys(d) {
+  const el = $("phys");
+  if (!el) return;
+  const p = d.project.viewMode === "compare" ? null : physicalInfo(d);
+  el.hidden = !p;
+  if (!p) return;
+  if (!physBuilt) {
+    el.innerHTML = `<div class="ph"><svg class="gi"><use href="#i-ruler"/></svg><b data-k="title"></b><button id="physToggle" data-tip="收起 / 展开" data-tip-sub="这一镜此刻的真实参数：确定的、可测量的"><svg class="gi"><use href="#i-chev-d"/></svg></button></div>` +
+      PHYS_ROWS.map(([k, icon, tip, sub]) => `<div class="pv" data-row="${k}" data-tip="${tip}" data-tip-sub="${sub}"><svg class="gi"><use href="#${icon}"/></svg><b data-k="${k}"></b></div>`).join("");
+    $("physToggle").onclick = () => { ui.phys = !ui.phys; saveUi(); renderPhys(store.get()); };
+    physBuilt = true;
   }
-  const byEnt = new Map();
-  for (const a of assets) byEnt.set(a.entityId, [...(byEnt.get(a.entityId) || []), a]);
-  el.innerHTML = `<div class="cards">${[...byEnt.entries()].map(([eid, list]) => {
-    const e = d.entities.find((x) => x.id === eid);
-    return `<article class="card"><h3><span>${esc(e?.displayName || eid || "未绑定")}</span>${list.some((a) => a.approved) ? badge("approved") : badge("draft")}</h3>
-      ${list.map((a) => `<div class="row" style="align-items:flex-start">${a.mediaKind === "video" ? `<video class="thumb clickable" data-preview="${esc(a.url)}" data-kind="video" src="${esc(mediaHref(a.url))}" muted loop playsinline></video>` : `<img class="thumb clickable" data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" />`}<div style="flex:1;min-width:0"><div>${esc(a.label)}</div><div class="prompt">${esc(a.model || a.kind)}</div><div class="row" style="margin-top:4px"><button data-approve="${a.id}" class="${a.approved ? "on" : ""}">${a.approved ? "已批准" : "批准"}</button><button data-del="${a.id}">删除</button></div></div></div>`).join("")}
-      <div class="row"><button data-more="${eid}">再生成一张</button></div></article>`;
-  }).join("")}</div>`;
-  el.querySelectorAll("[data-approve]").forEach((b) => (b.onclick = () => report(dispatch("asset.approve", { id: b.dataset.approve, approved: !b.classList.contains("on") }))));
-  el.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => confirm("删除这张参考？") && dispatch("asset.delete", { id: b.dataset.del })));
-  el.querySelectorAll("[data-more]").forEach((b) => (b.onclick = () => report(dispatch("generation.reference", { entityId: b.dataset.more, view: "three-quarter" }))));
-  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "参考")));
+  // 舞台被抽屉挤矮了就自己收起来：一块读数面板不该盖掉半个画面
+  const open = ui.phys && (el.parentElement?.clientHeight || 999) >= 340;
+  el.classList.toggle("mini", !open);
+  $("physToggle").querySelector("use").setAttribute("href", open ? "#i-chev-d" : "#i-ruler");
+  if (!open) return;
+  const set = (k, html) => { const n = el.querySelector(`[data-k="${k}"]`); if (n && n.innerHTML !== html) n.innerHTML = html; };
+  set("title", esc(p.title));
+  set("focal", `${Math.round(p.focal)}<i>mm</i> · ${p.fov.toFixed(0)}<i>°</i>`);
+  set("height", `${pf.m(p.height)}<i>${pf.mUnit(p.height)}</i>`);
+  set("distance", `${pf.m(p.distance)}<i>${pf.mUnit(p.distance)}</i>`);
+  set("pitch", `${pf.deg(p.pitch)}<i>°</i>`);
+  set("aperture", `f/${p.aperture}${p.dof ? ` · ${pf.m(p.dof.total)}<i>${Number.isFinite(p.dof.total) ? pf.mUnit(p.dof.total) : ""}</i>` : ""}`);
+  set("speed", p.moving ? `${p.speed.toFixed(2)}<i>m/s</i>` : `0<i>m/s</i>`);
+  set("time", p.seconds ? `${p.seconds.toFixed(1)}<i>s</i> · ${p.fps}<i>fps</i>` : `${p.fps}<i>fps</i>`);
+  // 在动的那几项亮一下：一眼看出这一镜哪些数是随时间变的
+  for (const k of ["distance", "speed", "height"]) el.querySelector(`[data-row="${k}"]`)?.classList.toggle("live", p.moving);
+  // 机位贴地、或者景深薄到对不上焦，标红 —— 这两样是白模里最常见的「看着怪」的原因
+  el.querySelector('[data-row="height"]')?.classList.toggle("warn", p.height < 0.25);
 }
 
 function renderEvents(el, d) {
