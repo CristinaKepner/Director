@@ -119,9 +119,12 @@ export function createFilmAssembler(opts = {}) {
         const a = Math.max(0, Number(from) || 0);
         const b = Math.min(to == null ? dur : Number(to), dur || Number(to) || 0) || dur;
         const span = Math.max(0.01, b - a);
+        // "auto"：整条片子按时长取帧，每 2.5 秒一帧，6 到 24 之间。读一个镜头 6 帧够了，
+        // 读一整条要分场景，帧太少的话一整场可能一帧都没落到。
+        const n = count === "auto" ? Math.max(6, Math.min(24, Math.ceil(span / 2.5))) : Math.max(1, Math.min(24, Number(count) || 6));
         const out = [];
-        for (let i = 0; i < count; i++) {
-          const t = a + (span * (i + 0.5)) / count; // 取每段的中点，避开首尾的黑场与压缩伪影
+        for (let i = 0; i < n; i++) {
+          const t = a + (span * (i + 0.5)) / n; // 取每段的中点，避开首尾的黑场与压缩伪影
           const jpg = path.join(work, `f_${i}.jpg`);
           try {
             await run(bin, ["-y", "-ss", String(t), "-i", file, "-frames:v", "1", "-vf", `scale=${width}:-2`, "-q:v", "3", jpg]);

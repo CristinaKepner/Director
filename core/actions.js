@@ -43,7 +43,7 @@ import {
   ASSET_ROLES,} from "./schema.js";
 import { attachPrompts, compileShot } from "./prompts.js";
 import { MODEL_LIBRARY, ROOM_PATTERNS } from "./schema.js";
-import { compileReference, REPLICATE_MODES } from "./reference-plan.js";
+import { compileReference, inferReplicateMode, DEFAULT_REPLICATE_MODE, REPLICATE_MODES } from "./reference-plan.js";
 import { cameraStateAt, entityStateAt, sequenceLayout, subjectPoint, fovFor } from "./motion.js";
 
 export const RUNTIME_VERSION = "director-runtime/0.4";
@@ -372,7 +372,8 @@ register("scene.create", {
   handler({ id, name, environment, clear }) {
     const sceneId = id || uid("scene");
     store.patch((d) => {
-      d.scene = { id: sceneId, name: name || d.scene.name || "Scene", environment: { ...d.scene.environment, ...(environment || {}) } };
+      // 台面分块（pads）跟着场走：换个名字、改个环境不该把台拆了；清空才拆
+      d.scene = { id: sceneId, name: name || d.scene.name || "Scene", environment: { ...d.scene.environment, ...(environment || {}) }, ...(d.scene.pads?.length && !clear ? { pads: d.scene.pads } : {}) };
       if (clear) {
         d.entities = [];
         d.cameras = [];
@@ -437,10 +438,96 @@ register("scene.room", {
   },
 });
 
+// 白模的台分块：一条片子几个场景，台上就几块地。每块记中心、大小、名字，
+// 编译器把那一场的主体摆进去；页面把块画出来。运行时仍然只有一个 scene ——
+// 分块是摆位约定，不是第二套场次系统。
+register("scene.pads", {
+  doc: "把台面分成几块（每块一个场景）：pads=[{id,name,index,x,z,w,d}]；clear=true 拆掉分块。1/3/6/9 宫格由 core/reference-plan.js 的 padGrid 算",
+  params: { pads: "[{id,name,index,x,z,w,d,from,to}]", clear: "boolean" },
+  validate: ({ pads, clear }) => (!clear && !Array.isArray(pads) ? { error: "MISSING_PARAM", missing: ["pads"] } : null),
+  handler({ pads, clear }) {
+    store.patch((d) => {
+      if (clear || !pads?.length) { delete d.scene.pads; return; }
+      d.scene.pads = pads.slice(0, 12).map((p, i) => ({
+        id: String(p.id || `pad${i + 1}`),
+        name: String(p.name || `第 ${i + 1} 场`).slice(0, 40),
+        index: Number(p.index) || i + 1,
+        x: Number(p.x) || 0,
+        z: Number(p.z) || 0,
+        w: Math.max(2, Number(p.w) || 10),
+        d: Math.max(2, Number(p.d) || 10),
+        from: Number.isFinite(Number(p.from)) ? Number(p.from) : null,
+        to: Number.isFinite(Number(p.to)) ? Number(p.to) : null,
+      }));
+    });
+    return { ok: true, pads: D().scene.pads || [] };
+  },
+});
+
+// 谁在哪块台上：优先看它自己记的 padId（建场时写进去的），没记的按位置落在哪块算。
+// 没分块的工程一律 null —— 整台就是一块。
+export function padOf(d, x) {
+  if (!d?.scene?.pads?.length || !x) return null;
+  if (x.padId && d.scene.pads.some((p) => p.id === x.padId)) return x.padId;
+  const pos = x.transform?.position || x.pose?.position || null;
+  if (!pos) return null;
+  const hit = d.scene.pads.find((p) => Math.abs(pos[0] - p.x) <= p.w / 2 + 3 && Math.abs(pos[2] - p.z) <= p.d / 2 + 3);
+  return hit ? hit.id : null;
+}
+// 一镜属于哪块台：自己记的 → 它拍的主体在哪块 → 机位在哪块。机位放最后，因为大远景的机位
+// 常常站在台外十来米，按位置算会落空。
+export function shotPad(d, shot) {
+  if (!d?.scene?.pads?.length || !shot) return null;
+  if (shot.padId && d.scene.pads.some((p) => p.id === shot.padId)) return shot.padId;
+  for (const id of shot.targetIds || []) { const q = padOf(d, d.entities.find((e) => e.id === id)); if (q) return q; }
+  return padOf(d, d.cameras.find((c) => c.id === shot.cameraId));
+}
+// 这一镜的画面里该出现的东西：同一块台上的，加上没分到台的（全局布景、共用道具）。
+export function entitiesForShot(d, shot) {
+  if (!d.scene?.pads?.length) return d.entities;
+  const pid = shotPad(d, shot);
+  if (!pid) return d.entities;
+  return d.entities.filter((e) => { const q = padOf(d, e); return !q || q === pid; });
+}
+// 一块台的清单：人物、道具、机位、灯、镜头、定妆资产
+export function padSummary(d, padId) {
+  const pad = d.scene?.pads?.find((p) => p.id === padId);
+  if (!pad) return null;
+  const ents = d.entities.filter((e) => padOf(d, e) === padId);
+  const chars = ents.filter((e) => ["character", "animal"].includes(e.semanticType));
+  const props = ents.filter((e) => !chars.includes(e));
+  const shots = d.shots.filter((s) => shotPad(d, s) === padId);
+  const assets = (d.assets || []).filter((a) => ents.some((e) => e.id === a.entityId));
+  const seconds = shots.reduce((n, s) => n + (s.range.outFrame - s.range.inFrame), 0) / (d.project.fps || 24);
+  return { id: pad.id, index: pad.index, name: pad.name, from: pad.from, to: pad.to, characters: chars.map((e) => e.displayName), characterCount: chars.length, props: props.map((e) => e.displayName), propCount: props.length, cameras: d.cameras.filter((c) => padOf(d, c) === padId).length, shots: shots.map((s) => s.id), shotCount: shots.length, seconds: Math.round(seconds * 10) / 10, assets: assets.length, assetsApproved: assets.filter((a) => a.approved).length };
+}
+
+// 当前在看、在改的那块台。选了某一镜就切到它那块；切到 null 是整台一起看。
+register("scene.pad-select", {
+  doc: "切到某一块台（场景）：视口只画这块、自检和 Agent 上下文只看这块。id 省略 / null = 整台",
+  params: { id: "string|null" },
+  undoable: false,
+  validate: ({ id }, d) => (id && !d.scene.pads?.some((p) => p.id === id) ? { error: "NOT_FOUND" } : null),
+  handler({ id }) {
+    store.patch((d) => {
+      d.project.activePadId = id || null;
+      if (id) {
+        // 当前镜头不在这块台上就换成这块台的第一镜，Program 跟着走
+        const cur = d.shots.find((s) => s.id === d.project.currentShotId);
+        if (!cur || shotPad(d, cur) !== id) {
+          const first = d.shots.find((s) => shotPad(d, s) === id);
+          if (first) { d.project.currentShotId = first.id; d.project.programCameraId = first.cameraId; d.project.playhead = first.range.inFrame; d.project.playing = false; d.project.playSequence = false; }
+        }
+      }
+    });
+    return { ok: true, id: id || null, summary: id ? padSummary(D(), id) : null };
+  },
+});
+
 // ============ entity.* ============
 register("entity.create", {
   doc: `创建语义物体。type: ${SEMANTIC_TYPES.join("/")}；proxy 几何 box/sphere/cylinder/capsule/cone/plane；position=接地点`,
-  params: { id: "string", type: "semanticType", displayName: "string", proxy: "geometry", color: "#hex", dimensions: "[w,h,d]", position: "[x,y,z]", yaw: "radians", role: "string", aliases: "string[]", continuity: "object", agentMemory: "string[]", pose: Object.keys(POSES).join("|"), assetRef: "string" },
+  params: { id: "string", type: "semanticType", displayName: "string", proxy: "geometry", color: "#hex", dimensions: "[w,h,d]", position: "[x,y,z]", yaw: "radians", role: "string", aliases: "string[]", continuity: "object", agentMemory: "string[]", pose: Object.keys(POSES).join("|"), assetRef: "string", pad: "padId（属于哪块台；省略则按当前台 / 位置判断）" },
   validate: (p, d) => (p.id && d.entities.some((e) => e.id === p.id) ? { error: "DUPLICATE_ID" } : null),
   handler(p) {
     // glTF model from the library: sets semantic type, default dimensions and assetRef
@@ -458,6 +545,7 @@ register("entity.create", {
       role: p.role || "",
       proxy: { geometry, color: p.color || def.color, dimensions: parseVec(p.dimensions, [...def.dimensions]) },
       assetRef: p.assetRef || null,
+      padId: p.pad || p.padId || D().project.activePadId || null,
       transform: transform(parseVec(p.position, [0, 0, 0]), p.rotation ? parseVec(p.rotation) : [0, Number(p.yaw) || 0, 0], p.scale ? parseVec(p.scale) : [1, 1, 1]),
       pose: type === "character" ? p.pose || "idle" : null,
       joints: type === "character" ? poseJoints(p.pose || "idle", p.joints || {}) : null,
@@ -676,6 +764,7 @@ function makeCamera(p) {
     target: p.target || null,
     rig: CAMERA_RIGS.includes(p.rig) ? p.rig : "free",
     preset: p.preset || null,
+    padId: p.pad || p.padId || D().project.activePadId || null,
     tracks: [],
     version: 1,
   };
@@ -683,7 +772,7 @@ function makeCamera(p) {
 
 register("camera.create", {
   doc: "创建摄影机。focalLength 焦距 mm、position、target 实体 ID、rig、preset 景别",
-  params: { id: "string", name: "string", type: "perspective|cine|orthographic", focalLength: "mm", aperture: "f", sensorWidth: "mm", position: "[x,y,z]", target: "entityId", rig: CAMERA_RIGS.join("|"), preset: Object.keys(SHOT_SIZES).join("|") },
+  params: { id: "string", name: "string", type: "perspective|cine|orthographic", focalLength: "mm", aperture: "f", sensorWidth: "mm", position: "[x,y,z]", target: "entityId", rig: CAMERA_RIGS.join("|"), preset: Object.keys(SHOT_SIZES).join("|"), pad: "padId（属于哪块台）" },
   validate: (p, d) => (p.id && d.cameras.some((c) => c.id === p.id) ? { error: "DUPLICATE_ID" } : null),
   handler(p) {
     const id = p.id || uid("cam");
@@ -895,6 +984,7 @@ function makeLight(p) {
   const id = p.id || uid("lgt");
   return {
     id,
+    padId: p.pad || p.padId || (p.group === "practical" ? D().project.activePadId : null) || null,
     name: p.name || id,
     type: LIGHT_TYPES.includes(p.type) ? p.type : "spot",
     color: p.color || "#ffe6c8",
@@ -961,7 +1051,7 @@ const shotExists = ({ id }, d) => (d.shots.some((s) => s.id === id) ? null : { e
 
 register("shot.create", {
   doc: `创建镜头：绑定 cameraId（默认 Program）、duration 秒、motion 运镜（${MOTION_TYPE_LIST.join("/")}）、targetIds`,
-  params: { id: "string", title: "string", description: "string", cameraId: "string", duration: "seconds", motion: "motionType|{type,params}", targetIds: "string[]", index: "string", dialogue: "string" },
+  params: { id: "string", title: "string", description: "string", cameraId: "string", duration: "seconds", motion: "motionType|{type,params}", targetIds: "string[]", index: "string", dialogue: "string", pad: "padId（属于哪块台，默认跟机位）" },
   handler(p) {
     const d0 = D();
     const camId = p.cameraId || d0.project.programCameraId || d0.cameras[0]?.id;
@@ -976,6 +1066,7 @@ register("shot.create", {
     const shot = {
       id,
       sceneId: d0.scene.id,
+      padId: p.pad || p.padId || cam.padId || padOf(d0, cam) || null,
       sequenceId: "main",
       index: p.index || nextIndex(d0),
       title: p.title || "未命名镜头",
@@ -1049,8 +1140,13 @@ register("shot.select", {
       d.project.programCameraId = s.cameraId;
       d.project.playhead = s.range.inFrame;
       d.project.playing = false;
+      // 顺播全部之后再选一镜按播放，以前会跳回第一镜：playSequence 还挂着，
+      // 播放头 0 被当成整条的第 0 帧。选镜就是退出顺播。
+      d.project.playSequence = false;
       d.project.selectedKind = "shot";
       d.project.selectedId = id;
+      const pid = shotPad(d, s);
+      if (pid && d.project.activePadId) d.project.activePadId = pid;
     });
   },
 });
@@ -1153,6 +1249,54 @@ register("shot.duplicate", {
       d.project.currentShotId = nid;
     });
     return { ok: true, id: nid };
+  },
+});
+
+// 在时间线里把一镜切成两镜。切的是剪辑，不是机位：两镜共用同一个机位和运镜，
+// 后半段从切点接着走。拍（beats）按累计秒数分到两边，机位关键帧按帧分到两边并平移。
+register("shot.split", {
+  doc: "在某一帧把镜头切成两个：前半段保留原 id，后半段是新镜头，紧跟其后。frame 省略则用播放头",
+  params: { id: "string", frame: "number（相对镜头入点的帧）", seconds: "number（和 frame 二选一）" },
+  validate: (p, d) => shotExists({ id: p.id || d.project.currentShotId }, d),
+  handler({ id, frame, seconds }) {
+    const d0 = D();
+    const src = d0.shots.find((s) => s.id === (id || d0.project.currentShotId));
+    const fps = d0.project.fps;
+    const at = Math.round(seconds !== undefined ? src.range.inFrame + Number(seconds) * fps : frame !== undefined ? Number(frame) : d0.project.playhead);
+    if (!(at > src.range.inFrame && at < src.range.outFrame)) return { ok: false, error: "SPLIT_OUT_OF_RANGE", hint: `切点要在 ${src.range.inFrame + 1}–${src.range.outFrame - 1} 帧之间` };
+    const nid = uid("shot");
+    const rest = src.range.outFrame - at;
+    const tail = structuredClone(src);
+    Object.assign(tail, { id: nid, title: `${src.title} · 2`, takes: [], generationJobs: [], status: "draft", version: 1, prompts: null, promptVersions: [], imagePrompt: "", videoPrompt: "", range: { inFrame: 0, outFrame: rest } });
+    tail.keyframes = (src.keyframes || []).filter((k) => k.frame >= at).map((k) => ({ ...k, frame: k.frame - at }));
+    const cut = (at - src.range.inFrame) / fps;
+    if (Array.isArray(src.beats) && src.beats.length) {
+      let acc = 0;
+      const head = [], back = [];
+      for (const b of src.beats) {
+        const sec = Number(b.seconds) || 0;
+        if (acc + sec <= cut + 1e-6) head.push({ ...b });
+        else if (acc >= cut - 1e-6) back.push({ ...b });
+        else { head.push({ ...b, seconds: Math.round((cut - acc) * 10) / 10 }); back.push({ ...b, seconds: Math.round((acc + sec - cut) * 10) / 10 }); }
+        acc += sec;
+      }
+      tail.beats = back.length ? back : null;
+      src.beats = head.length ? head : null;
+    }
+    store.patch((d) => {
+      const s = d.shots.find((x) => x.id === src.id);
+      s.range.outFrame = at;
+      s.keyframes = (s.keyframes || []).filter((k) => k.frame <= at);
+      s.beats = src.beats;
+      s.version += 1;
+      const i = d.shots.findIndex((x) => x.id === src.id);
+      d.shots.splice(i + 1, 0, tail);
+      d.shots.forEach((x, k) => (x.index = String(k + 1).padStart(2, "0")));
+      d.project.currentShotId = nid;
+      d.project.playhead = 0;
+      refreshUsedBy(d);
+    });
+    return { ok: true, id: src.id, tail: nid, atSeconds: Math.round(cut * 10) / 10 };
   },
 });
 
@@ -1262,7 +1406,21 @@ register("motion.clear-keyframes", { doc: "清除镜头关键帧", params: { sho
 register("motion.delete-keyframe", { doc: "删除某帧关键帧", params: { shotId: "string", frame: "number" }, required: ["frame"], handler: ({ shotId, frame }) => store.patch((d) => { const s = d.shots.find((x) => x.id === (shotId || d.project.currentShotId)); if (s) s.keyframes = (s.keyframes || []).filter((k) => k.frame !== Number(frame)); }) });
 
 register("timeline.seek", { doc: "移动播放头（帧）", params: { frame: "number" }, required: ["frame"], undoable: false, handler: ({ frame }) => store.patch((d) => { d.project.playhead = Math.max(0, Number(frame)); d.project.playing = false; }) });
-register("timeline.play", { doc: "播放。sequence=true 顺播全部镜头", params: { loop: "boolean", sequence: "boolean" }, undoable: false, handler: ({ loop, sequence }) => store.patch((d) => { d.project.playing = true; if (loop !== undefined) d.project.loop = !!loop; d.project.playSequence = !!sequence; if (sequence) { const first = d.shots[0]; if (first) { d.project.currentShotId = first.id; d.project.programCameraId = first.cameraId; d.project.playhead = 0; } } }) });
+register("timeline.play", { doc: "播放。sequence=true 顺播全部镜头", params: { loop: "boolean", sequence: "boolean" }, undoable: false, handler: ({ loop, sequence }) => store.patch((d) => {
+  d.project.playing = true;
+  if (loop !== undefined) d.project.loop = !!loop;
+  const wasSeq = d.project.playSequence;
+  d.project.playSequence = !!sequence;
+  if (sequence) {
+    const first = d.shots[0];
+    if (first) { d.project.currentShotId = first.id; d.project.programCameraId = first.cameraId; d.project.playhead = 0; }
+  } else {
+    // 单镜播放的播放头是这一镜自己的帧；顺播留下来的是整条的帧，或者已经停在出点 —— 都得拉回入点，
+    // 否则 tick 第一帧就判定「到出点了」，按了播放什么都不动。
+    const s = d.shots.find((x) => x.id === d.project.currentShotId);
+    if (s && (wasSeq || d.project.playhead < s.range.inFrame || d.project.playhead >= s.range.outFrame)) d.project.playhead = s.range.inFrame;
+  }
+}) });
 register("timeline.pause", { doc: "暂停", undoable: false, handler: () => store.patch((d) => (d.project.playing = false)) });
 register("timeline.stop", { doc: "停止并回到入点", undoable: false, handler: () => store.patch((d) => { d.project.playing = false; const s = d.shots.find((x) => x.id === d.project.currentShotId); d.project.playhead = s ? s.range.inFrame : 0; }) });
 register("timeline.set-range", { doc: "设置镜头入出点（帧）", params: { shotId: "string", inFrame: "number", outFrame: "number" }, handler: ({ shotId, inFrame, outFrame }) => store.patch((d) => { const s = d.shots.find((x) => x.id === (shotId || d.project.currentShotId)); if (!s) return; if (inFrame !== undefined) s.range.inFrame = Number(inFrame); if (outFrame !== undefined) s.range.outFrame = Math.max(s.range.inFrame + 1, Number(outFrame)); }) });
@@ -1718,7 +1876,7 @@ function pushMessage(role, text, extra = {}) {
 
 register("reference.replicate", {
   doc: "复刻一条参照：链接（或已有素材）→ 下载 → 读出拍摄参数 → 在 3D 里把场景和分镜搭出来。之后录白模、生成由导演决定",
-  params: { url: "string（视频页地址，和 ref 二选一）", ref: "string（已有素材 /media/x.mp4，和 url 二选一）", from: "number（起始秒）", to: "number（结束秒）", mode: `复刻什么：${Object.keys(REPLICATE_MODES).join("/")}`, hint: "string（导演另外补充的自由文字，会写进镜头描述；有规划器时再按它调一遍）", build: "boolean（默认 true；false 就只读不建场）" },
+  params: { url: "string（视频页地址，和 ref 二选一）", ref: "string（已有素材 /media/x.mp4，和 url 二选一）", from: "number（起始秒）", to: "number（结束秒）", mode: `复刻什么：${Object.keys(REPLICATE_MODES).join("/")}（默认 ${DEFAULT_REPLICATE_MODE}：整条建出来，之后再换不用重读）`, hint: "string（导演另外补充的自由文字，会写进镜头描述；有规划器时再按它调一遍）", build: "boolean（默认 true；false 就只读不建场）" },
   undoable: false,
   validate(p) {
     if (!p.url && !p.ref) return { error: "MISSING_PARAM", missing: ["url|ref"], hint: "给一个链接，或者一个已经在 media 里的素材" };
@@ -1787,7 +1945,10 @@ register("reference.replicate", {
         updateJob(id, { progress: 45, note: "抽帧读画面" });
         // 下载时已经截过了，这里再按原片秒数截一次就截空了
         if (url) span = { from: undefined, to: undefined };
-        an = await hooks.reference.analyze({ ref: media, from: span.from, to: span.to, count: 6, hint });
+        // 整条视频：抽帧数按时长来（每两三秒一帧，最多 24），并让读取器按场景分段。
+        // 只取了一小段的还是 6 帧一场。
+        const whole = span.from == null && span.to == null;
+        an = await hooks.reference.analyze({ ref: media, from: span.from, to: span.to, count: whole ? "auto" : 6, scenes: true, hint });
       }
       if (!an.ok) { phase("read", "fail", an.hint || an.error); return updateJob(id, { status: "failed", error: an.error, hint: an.hint }); }
       const a = an.analysis;
@@ -1797,36 +1958,18 @@ register("reference.replicate", {
 
       if (!wantBuild) return updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "analysis", ref: media, ...an } });
 
-      // 没说要复刻什么，就先问 —— 而且是读完之后再问，所以问得出具体的问题。
-      // 「你想要什么样的片子」是废话；「这条是 CU 24mm 手持推进，你要它的运镜还是它的光」
-      // 才是一个人能回答的问题。这一步是整条链里唯一该停下来的地方：
-      // 建场之后再改意图，前面那些 Action 就白跑了。
-      if (!mode && !hint) {
-        const c2 = a.camera || {}, m2 = a.motion || {};
-        const who = (a.subjects || []).map((x) => x.displayName).join("、") || "画面主体";
-        phase("build", "wait", "等你说要复刻哪一部分");
-        updateJob(id, { status: "done", progress: 100, note: null, result: { kind: "analysis", ref: media, analysis: a, awaiting: "intent" } });
-        pushMessage("ask", `这条我看完了：${a.summary || a.brief || ""}`, {
-          ask: [{
-            question: `${c2.shotSize || "MS"} 景别、约 ${c2.focalMm ?? 40}mm、${m2.type || "static"} 运镜，主体是${who}。你想复刻它的哪一部分？`,
-            why: "复刻什么决定了下一步怎么建场：只要运镜就把主体换成你的，整条复刻就连场景一起搭。选错了得推倒重来。",
-            options: [
-              { label: "运镜和构图照搬，主体换成我的", detail: "机位、焦段、运动轨迹、景别都跟它走，场里放你的产品或角色。想复刻「那个感觉」基本都是这个。", recommended: true, next: { action: "reference.replicate", payload: { ref: media, mode: "motion" } } },
-              { label: "整条都复刻，包括主体和场景", detail: "连人带景一起搭成它那样。用来学它怎么拍的。", next: { action: "reference.replicate", payload: { ref: media, mode: "full" } } },
-              { label: "只要打光和色调", detail: "光位、明暗比、色温照搬，机位和主体你自己定。", next: { action: "reference.replicate", payload: { ref: media, mode: "light" } } },
-              { label: "只要节奏，镜头我自己来", detail: "按它的拍子分镜，每拍多长、什么时候切跟它一样，画面内容全换。", next: { action: "reference.replicate", payload: { ref: media, mode: "beats" } } },
-            ],
-          }],
-          notes: [`参照已经下到本地：${media}`, "选完我直接建场，不用再贴一次链接。想补充细节（比如「主体是一罐冷萃咖啡」）就直接打字说。"],
-        });
-        return;
-      }
+      // 没说要复刻什么，就整条复刻。以前这里停下来问「你要它的运镜还是它的光」——
+      // 问得再具体，也是在链路中间设一道闸：导演看到的是「等你说要复刻哪一部分」，
+      // 下一步录白模直接 NO_SHOTS。参照读完就存在工程里了，换个模式是一次免费重编译，
+      // 所以先建出来再把选项摆在旁边，而不是建之前拦着。
+      const useMode = mode || (hint ? inferReplicateMode(hint) : null) || DEFAULT_REPLICATE_MODE;
+      const defaulted = !mode;
 
       // 建场：编译，不是让模型重猜。读取器给的 shotSize / focalMm / heightMeters /
       // motion.type / beats[].seconds 本来就是数字，翻成 Action 是一组映射和一次乘法。
       phase("build", "run");
       updateJob(id, { progress: 70, note: "编译成 Action" });
-      const plan = compileReference(a, { mode: mode || "motion", prefix: id.replace(/^rep_/, "r"), hint, seconds: an.span && an.span.to > an.span.from ? an.span.to - an.span.from : span.to != null && span.from != null ? span.to - span.from : undefined });
+      const plan = compileReference(a, { mode: useMode, prefix: id.replace(/^rep_/, "r"), hint, seconds: an.span && an.span.to > an.span.from ? an.span.to - an.span.from : span.to != null && span.from != null ? span.to - span.from : undefined });
       const before = D().shots.length;
       const results = batch("复刻参照", (m) => plan.steps.map((st) => ({ step: st, r: dispatch(st.action, st.payload, m) })), { source: meta.source || "human", actorId: meta.actorId || "reference" });
       const failed = results.filter((x) => !x.r.ok);
@@ -1858,14 +2001,25 @@ register("reference.replicate", {
       }
 
       const notes = [...plan.warnings, ...failed.map((x) => `${x.step.action} 被拒（${x.r.error}）：${x.step.why}`)];
-      phase("build", "done", `${shots} 个镜头 · ${plan.steps.length - failed.length}/${plan.steps.length} 步`);
+      phase("build", "done", `${plan.scenes > 1 ? `${plan.scenes} 场（${plan.grid.label}）· ` : ""}${shots} 个镜头 · ${plan.steps.length - failed.length}/${plan.steps.length} 步`);
       updateJob(id, {
         status: "done",
         progress: 100,
         note: null,
-        result: { kind: "replicate", ref: media, analysis: a, shots, mode: plan.mode, summary: plan.summary, steps: plan.steps.map((st) => ({ action: st.action, why: st.why })), warnings: notes, refined },
+        result: { kind: "replicate", ref: media, analysis: a, shots, scenes: plan.scenes, pads: plan.pads, mode: plan.mode, defaulted, summary: plan.summary, steps: plan.steps.map((st) => ({ action: st.action, why: st.why })), warnings: notes, refined },
       });
-      if (notes.length) pushMessage("agent", `复刻完成：${plan.summary}。有几处运行时做不到的，先说一声：`, { notes });
+      if (defaulted) {
+        // 建完了再摆选项：现在换模式不用重新读参照（缓存命中），也不会让人卡在中间。
+        const others = Object.keys(REPLICATE_MODES).filter((k) => k !== plan.mode);
+        pushMessage("agent", `按整条复刻建好了：${plan.summary}。${plan.scenes > 1 ? `台面按 ${plan.scenes} 个场景分成了 ${plan.grid.label}，每场一块、各自一个机位。` : ""}只想要它的某一面的话，换一个：`, {
+          ...(notes.length ? { notes } : {}),
+          ask: [{
+            question: "要换成只复刻某一部分吗？（不换就直接录白模）",
+            why: "参照已经读过，换模式只是重新编译建场，不花钱也不用再等读片。",
+            options: others.map((k) => ({ label: REPLICATE_MODES[k].zh, next: { action: "reference.replicate", payload: { ref: media, mode: k, ...(span.from != null ? { from: span.from } : {}), ...(span.to != null ? { to: span.to } : {}) } } })),
+          }],
+        });
+      } else if (notes.length) pushMessage("agent", `复刻完成：${plan.summary}。有几处运行时做不到的，先说一声：`, { notes });
     })().catch((err) => updateJob(id, { status: "failed", error: "REPLICATE_FAILED", message: String(err?.message || err) }));
 
     return { ok: true, id, queued: true, hint: "复刻中：下载 → 读参照 → 建场。建完录白模就能看到一条能播的片子。" };
@@ -1874,6 +2028,20 @@ register("reference.replicate", {
 
 // referenceBrief() 曾经住在这里：把结构化分析压成一段中文散文，再交给规划器猜回 Action。
 // 它被 core/reference-plan.js 的编译器取代了 —— 留着一个没人调的导出只会让人再走一次那条路。
+
+register("reference.use", {
+  doc: "把之前读过的一条参照换回来当前用的那条。不重新读：读一次约 20 秒、一万多 token，结果本来就存在任务里",
+  params: { id: "string（当初读它的那个任务 id）" },
+  required: ["id"],
+  undoable: false,
+  handler({ id }) {
+    const j = D().jobs.find((x) => x.id === id);
+    const r = j?.result;
+    if (!r?.ref || !r.analysis) return { ok: false, error: "NOT_A_REFERENCE", hint: "这个任务没有留下参照分析（可能没读完）" };
+    store.patch((d) => (d.project.reference = { at: new Date().toISOString(), ref: r.ref, from: j.inputs?.from ?? null, to: j.inputs?.to ?? null, frames: r.frames ?? null, model: r.model || j.model, analysis: r.analysis }));
+    return { ok: true, ref: r.ref };
+  },
+});
 
 register("reference.result", {
   doc: "读回最近一次（或指定任务）的参照分析",
@@ -2517,8 +2685,10 @@ register("film.check", {
       // 最要紧的一条：这一镜的画面里到底有没有东西
       const probes = [x.range.inFrame, (x.range.inFrame + x.range.outFrame) / 2, x.range.outFrame - 1];
       const seen = new Map(); // entityId → 最大占幅
+      // 分了台的工程只看这一镜那块台上的东西：别的台上的人碰巧落进远景，不算这一镜拍到了谁
+      const pool = entitiesForShot(d, x);
       for (const f of probes) {
-        for (const e of d.entities) {
+        for (const e of pool) {
           const r = inFrame(d, x, e, f);
           if (r) seen.set(e.id, Math.max(seen.get(e.id) || 0, r.fill));
         }
@@ -2749,7 +2919,14 @@ register("review.compare", {
 export function summarize(d = D()) {
   const assets = (d.assets || []).map((a) => ({ id: a.id, entityId: a.entityId, label: a.label, approved: a.approved, kind: a.kind }));
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
+  // 切到某一块台时，Agent 看到的就是这一块：改「第一场的机位」不该把别的场一起改了。
+  // 别的台只留个名字和数量，要跨台改先 scene.pad-select。
+  const pads = (d.scene.pads || []).map((p) => padSummary(d, p.id)).filter(Boolean);
+  const active = d.project.activePadId && pads.some((p) => p.id === d.project.activePadId) ? d.project.activePadId : null;
+  const onPad = (x) => !active || !padOf(d, x) || padOf(d, x) === active;
+  const shotOnPad = (s) => !active || (shotPad(d, s) || active) === active;
   return {
+    pads: pads.length ? { activePadId: active, list: pads.map((p) => ({ id: p.id, index: p.index, name: p.name, characters: p.characters, props: p.propCount, shots: p.shotCount, seconds: p.seconds })), note: active ? "下面的 entities / cameras / lights / shots 只列了当前这块台；要改别的场先 scene.pad-select" : "没切到某一块，下面列的是整台" } : null,
     runtime: RUNTIME_VERSION,
     project: { id: d.project.id, name: d.project.name, fps: d.project.fps, aspect: d.project.aspect, version: d.project.version, state: d.project.currentState, fidelity: d.project.fidelity, buildMode: d.project.buildMode || "set", playhead: d.project.playhead, timecode: tc(d.project.playhead, d.project.fps) },
     reference: d.project.reference ? { ref: d.project.reference.ref, from: d.project.reference.from, to: d.project.reference.to, summary: d.project.reference.analysis?.summary, shotSize: d.project.reference.analysis?.camera?.shotSize, motion: d.project.reference.analysis?.motion?.type, subjects: (d.project.reference.analysis?.subjects || []).map((x) => x.displayName) } : null,
@@ -2757,10 +2934,10 @@ export function summarize(d = D()) {
     scene: { id: d.scene.id, name: d.scene.name, environment: d.scene.environment },
     programCamera: d.project.programCameraId,
     currentShot: shot ? { id: shot.id, index: shot.index, title: shot.title, motion: shot.motion.type, seconds: (shot.range.outFrame - shot.range.inFrame) / d.project.fps, status: shot.status } : null,
-    entities: d.entities.map((e) => ({ id: e.id, type: e.semanticType, name: e.displayName, role: e.role, position: e.transform.position.map((v) => +v.toFixed(2)), yaw: +e.transform.rotation[1].toFixed(2), pose: e.pose, proxy: e.proxy.geometry, usedByShots: e.usedByShots, memory: e.agentMemory })),
-    cameras: d.cameras.map((c) => ({ id: c.id, name: c.name, focal: c.lens.focalLength, aperture: c.lens.aperture, position: c.pose.position.map((v) => +v.toFixed(2)), target: c.target, rig: c.rig, preset: c.preset })),
-    lights: d.lights.map((l) => ({ id: l.id, name: l.name, type: l.type, group: l.group, color: l.color, intensity: l.intensity, enabled: l.enabled, position: l.transform.position })),
-    shots: d.shots.map((s) => ({ id: s.id, index: s.index, title: s.title, camera: s.cameraId, focal: s.lens.focalLength, motion: s.motion.type, seconds: (s.range.outFrame - s.range.inFrame) / d.project.fps, targets: s.targetIds, status: s.status, takes: s.takes.length, keyframes: s.keyframes?.length || 0, hasPrompts: !!s.prompts })),
+    entities: d.entities.filter(onPad).map((e) => ({ id: e.id, type: e.semanticType, name: e.displayName, role: e.role, pad: padOf(d, e), position: e.transform.position.map((v) => +v.toFixed(2)), yaw: +e.transform.rotation[1].toFixed(2), pose: e.pose, proxy: e.proxy.geometry, usedByShots: e.usedByShots, memory: e.agentMemory })),
+    cameras: d.cameras.filter(onPad).map((c) => ({ id: c.id, name: c.name, focal: c.lens.focalLength, aperture: c.lens.aperture, pad: padOf(d, c), position: c.pose.position.map((v) => +v.toFixed(2)), target: c.target, rig: c.rig, preset: c.preset })),
+    lights: d.lights.filter(onPad).map((l) => ({ id: l.id, name: l.name, type: l.type, group: l.group, color: l.color, intensity: l.intensity, enabled: l.enabled, position: l.transform.position })),
+    shots: d.shots.filter(shotOnPad).map((s) => ({ id: s.id, index: s.index, title: s.title, camera: s.cameraId, focal: s.lens.focalLength, motion: s.motion.type, seconds: (s.range.outFrame - s.range.inFrame) / d.project.fps, targets: s.targetIds, status: s.status, takes: s.takes.length, keyframes: s.keyframes?.length || 0, hasPrompts: !!s.prompts })),
     takes: d.takes.map((t) => ({ id: t.id, shotId: t.shotId, name: t.name, status: t.status, hasVideo: !!t.videoUrl })),
     storyboard: d.storyboard.map((c) => ({ id: c.id, shotId: c.shotId, status: c.status, take: c.selectedTake })),
     jobs: d.jobs.map((j) => ({ id: j.id, shotId: j.shotId, mode: j.mode, provider: j.provider, status: j.status, progress: j.progress })),
@@ -2848,6 +3025,7 @@ register("review.verdict", {
   },
 });
 
+register("context.pads", { doc: "台面分块清单：每块台上有谁、几个人、几个镜头、定妆了几个", undoable: false, handler: () => { const d = D(); return { ok: true, data: { activePadId: d.project.activePadId || null, pads: (d.scene.pads || []).map((p) => padSummary(d, p.id)) } }; } });
 register("context.scene", { doc: "当前场景摘要（Agent 记忆入口）", undoable: false, handler: () => ({ ok: true, data: summarize() }) });
 register("context.project", { doc: "完整工程 JSON", undoable: false, handler: () => ({ ok: true, data: persistable() }) });
 register("context.shot", {

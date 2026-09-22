@@ -76,7 +76,6 @@
           <label>画幅<select id="aspect"></select></label>
           <label>模式<span class="seg" id="buildMode"><button data-build="set" class="on">布景</button><button data-build="blocking">调度</button></span></label>
           <label>示例<select id="demoSelect"><option value="">选择…</option></select></label>
-          <div class="menu-row"><button id="fromRefBtn">从参照开始…</button></div>
           <div class="menu-row"><button id="exportBtn">导出工程</button><button id="importBtn">导入工程</button><input id="importFile" type="file" accept="application/json" hidden /></div>
           <div class="menu-row"><a href="../studio/" target="_blank" rel="noopener" style="flex:1"><button style="width:100%" title="可选的伴生应用（需本地构建）">Studio</button></a></div>
           <div class="menu-foot"><span id="saveHint"></span><span id="bridgePill" class="pill"></span></div>
@@ -110,6 +109,8 @@
       <!-- center: the picture, and the four controls you use every minute -->
       <main class="stage">
         <div id="viewport"></div>
+        <!-- 台面分块：几个场景几块台。这条在舞台顶上：切哪一场、这一场有谁、几个人、定妆了几个 -->
+        <div id="pads" class="pads" hidden></div>
         <div id="compare" class="stage-compare" hidden></div>
         <!-- 物理信息：这一镜此刻的真实参数。白模的意义就在于这些数是确定的、可测量的 -->
         <div id="phys" class="phys" hidden></div>
@@ -149,15 +150,15 @@
           <span class="spacer"></span>
           <!-- 四段流水线：先后关系摆在明面上。其余七个面板收进「更多」，一个都没少 -->
           <div class="pipe" id="pipe">
+            <button data-bottom="timeline"><svg class="gi"><use href="#i-list"/></svg><b>时间线</b><i></i><em></em></button>
             <button data-bottom="check"><svg class="gi"><use href="#i-shield"/></svg><b>检查</b><i></i><em></em></button>
             <button data-bottom="takes"><svg class="gi"><use href="#i-camera"/></svg><b>草片</b><i></i><em></em></button>
             <button data-bottom="gen"><svg class="gi"><use href="#i-sparkles"/></svg><b>生成</b><i></i><em></em></button>
             <button data-bottom="film"><svg class="gi"><use href="#i-clapper"/></svg><b>成片</b><i></i><em></em></button>
           </div>
-          <button id="moreBtn" class="icon" data-tip="更多" data-tip-sub="镜头、时间线、故事版、参照、事件、状态"><svg class="gi"><use href="#i-list"/></svg></button>
+          <button id="moreBtn" class="icon" data-tip="更多" data-tip-sub="镜头清单、故事版、参照、事件、状态"><svg class="gi"><use href="#i-list"/></svg></button>
           <div id="moreTabs" class="menu" hidden>
             <button data-bottom="shots">镜头清单</button>
-            <button data-bottom="timeline">时间线</button>
             <button data-bottom="board">故事版</button>
             <button data-bottom="ref">参照</button>
             <button data-bottom="log">事件</button>

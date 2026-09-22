@@ -24,6 +24,68 @@ export const REPLICATE_MODES = {
   beats: { zh: "只要节奏，镜头我自己来", scene: false, subjects: "minimal", camera: "neutral", light: false, beats: true },
 };
 
+// 从导演随口的一句话里听出他要复刻哪一部分。听不出来就返回 null —— 那就该反问，
+// 而不是替他猜一个默认值然后闷头建场（建完再改意图，前面的 Action 全白跑）。
+// 顺序有讲究：「整条」「只要光」这类说得最明确的先判，「运镜」放最后兜住泛指。
+const MODE_WORDS = [
+  ["full", /整条|全部|完全|一模一样|原样|照搬全部|连.{0,4}(场景|人|景).{0,3}一起|everything|exact/i],
+  ["light", /打光|灯光|光线|光位|布光|色调|色温|氛围光|只要光|lighting|color ?grade/i],
+  ["beats", /节奏|拍子|卡点|剪辑点|切点|时长分配|pacing|rhythm/i],
+  ["motion", /运镜|机位|构图|镜头运动|推拉|摇移|跟拍|景别|焦段|camera|framing/i],
+];
+// 没说复刻什么，就整条复刻。以前这里停下来反问（「你要它的运镜还是它的光」），
+// 结果是导演贴完链接看到一句「等你说要复刻哪一部分」，然后录白模那步报 NO_SHOTS ——
+// 一个都没建。问得再具体也是在流程中间设一道闸。现在先按整条建出来，参照已经读过、
+// 存在工程里，之后想换成「只要运镜」是一次免费的重编译，不是重来。
+export const DEFAULT_REPLICATE_MODE = "full";
+
+export function inferReplicateMode(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  for (const [mode, re] of MODE_WORDS) if (re.test(t)) return mode;
+  return null;
+}
+
+// ---- 台面分块 ----
+// 一条片子里有几个场景，白模的台就分几块：1 / 3 / 6 / 9 宫格（一排最多三块）。
+// 以前几个场景全建在同一个原点上，人和道具叠在一起，镜头对哪一场都拍到别的场的东西。
+// 每块是一个独立的地面，场次里的主体、机位内光源都按这块的中心平移；机位跟着主体走，不用另算。
+export const PAD = { w: 10, d: 10, pitchX: 16, pitchZ: 20 };
+
+export function padGrid(n) {
+  const count = Math.max(1, Number(n) || 1);
+  const cols = count === 1 ? 1 : Math.min(3, count);
+  const rows = Math.ceil(count / cols);
+  const cells = [];
+  for (let k = 0; k < count; k++) {
+    const r = Math.floor(k / cols), c = k % cols;
+    cells.push({ x: Math.round((c - (cols - 1) / 2) * PAD.pitchX * 100) / 100, z: Math.round((r - (rows - 1) / 2) * PAD.pitchZ * 100) / 100 });
+  }
+  return { cols, rows, cells, label: count === 1 ? "单台" : `${cols}×${rows} 宫格` };
+}
+
+// 整条视频的分析长这样：顶层还是那份（兼容只读一个镜头的旧结果），外加 scenes[] 逐场次一份。
+// 某一场缺了机位 / 光 / 主体，继承整条的读数 —— 不是退到「中景 35mm 前左」那种中性默认值。
+// 镜头选取降级过一次就等于没复刻。
+export function sceneSegments(analysis = {}) {
+  const list = Array.isArray(analysis.scenes) ? analysis.scenes.filter((x) => x && typeof x === "object") : [];
+  if (!list.length) return [{ ...analysis, name: analysis.scene?.name || null, from: null, to: null }];
+  const filled = (o) => o && typeof o === "object" && Object.keys(o).length > 0;
+  return list.map((sg, i) => ({
+    ...sg,
+    name: sg.name || sg.scene?.name || `第 ${i + 1} 场`,
+    from: Number.isFinite(Number(sg.from)) ? Number(sg.from) : null,
+    to: Number.isFinite(Number(sg.to)) ? Number(sg.to) : null,
+    brief: sg.brief || sg.summary || "",
+    scene: { ...(analysis.scene || {}), ...(sg.scene || {}) },
+    subjects: Array.isArray(sg.subjects) && sg.subjects.length ? sg.subjects : analysis.subjects || [],
+    camera: filled(sg.camera) ? sg.camera : analysis.camera || {},
+    lighting: filled(sg.lighting) ? sg.lighting : analysis.lighting || {},
+    motion: sg.motion?.type ? sg.motion : analysis.motion || {},
+    beats: Array.isArray(sg.beats) ? sg.beats : [],
+  }));
+}
+
 // ---- 词汇对齐 ----
 // 读取器的提示词和运行时的枚举各写各的，对不上的那几个一直是静默吞掉的：
 // 读取器会给 LS（运行时叫 WS）、truck-left（运行时是 truck 带方向）、tilt（运行时压根没有）。
@@ -139,6 +201,27 @@ function placeSubject(sub, index, total) {
   return [x, 0, Math.round(z * 100) / 100];
 }
 
+// 群体：读取器把「7 个伴舞」记成一条 subject 带 count=7。白模里得是 7 个人，不是一个。
+// 按站位摊开：一排最多 5 个，间距 0.9 m，第二排退后 1 m 并错开半个身位；名字带序号。
+// 一场最多 12 个，再多是人群，白模里摆不下也没意义。
+const GROUP_MAX = 12;
+export function expandSubjects(list = []) {
+  const out = [];
+  for (const s of list) {
+    const n = Math.max(1, Math.min(GROUP_MAX, Math.round(Number(s.count) || 1)));
+    if (n === 1) { out.push({ ...s, count: 1 }); continue; }
+    for (let i = 0; i < n; i++) out.push({ ...s, count: 1, group: s.displayName || s.semanticType, groupIndex: i, groupSize: n, displayName: `${s.displayName || "人"} ${i + 1}` });
+    if (out.length >= GROUP_MAX) break;
+  }
+  return out.slice(0, GROUP_MAX);
+}
+function groupOffset(sub) {
+  if (!sub.groupSize || sub.groupSize < 2) return [0, 0];
+  const perRow = 5, i = sub.groupIndex, row = Math.floor(i / perRow), col = i % perRow;
+  const inRow = Math.min(perRow, sub.groupSize - row * perRow);
+  return [Math.round(((col - (inRow - 1) / 2) * 0.9 + (row % 2 ? 0.45 : 0)) * 100) / 100, -row * 1.0];
+}
+
 const TYPE_ALIAS = { person: "character", people: "character", human: "character", man: "character", woman: "character", car: "vehicle", object: "prop", item: "prop", product: "prop", food: "prop", animal: "character", plant: "tree", light: "lamp" };
 
 function normalizeType(raw, warnings = []) {
@@ -151,105 +234,159 @@ function normalizeType(raw, warnings = []) {
 
 // ---- 编译 ----
 /**
- * @param analysis  reference.analyze 的结构化输出
- * @param opts { mode, prefix, fps, hint, title }
- * @returns { steps:[{action,payload,why}], warnings:[], summary, mode, ids }
+ * @param analysis  reference.analyze 的结构化输出（顶层一份；整条视频时另有 scenes[] 逐场次一份）
+ * @param opts { mode, prefix, fps, hint, title, seconds }
+ * @returns { steps:[{action,payload,why}], warnings:[], summary, mode, ids, pads, grid }
  */
 export function compileReference(analysis = {}, opts = {}) {
-  const mode = REPLICATE_MODES[opts.mode] ? opts.mode : "motion";
+  const mode = REPLICATE_MODES[opts.mode] ? opts.mode : DEFAULT_REPLICATE_MODE;
   const M = REPLICATE_MODES[mode];
   const p = opts.prefix || "ref";
   const warnings = [];
   const steps = [];
   const add = (action, payload, why) => steps.push({ action, payload, why });
 
-  const cam = analysis.camera || {};
-  const scene = analysis.scene || {};
-  const light = analysis.lighting || {};
-  const beats = Array.isArray(analysis.beats) ? analysis.beats.filter((b) => b && Number(b.seconds) > 0) : [];
-  const subjects = (Array.isArray(analysis.subjects) ? analysis.subjects : []).slice(0, 6);
+  const segs = sceneSegments(analysis);
+  const multi = segs.length > 1;
+  const grid = padGrid(segs.length);
+  const pads = multi ? segs.map((sg, k) => ({ id: `${p}_pad${k + 1}`, name: sg.name, index: k + 1, x: grid.cells[k].x, z: grid.cells[k].z, w: PAD.w, d: PAD.d, from: sg.from, to: sg.to })) : [];
+  const offset = (k) => (multi ? [grid.cells[k].x, 0, grid.cells[k].z] : [0, 0, 0]);
+  const shift = (pos, k) => { const o = offset(k); return [Math.round((pos[0] + o[0]) * 100) / 100, pos[1], Math.round((pos[2] + o[2]) * 100) / 100]; };
 
-  // 1. 场次
+  // 1. 场次。整条复刻时台上只有一个「场」（运行时就一个 scene），分块靠 pads。
+  const scene0 = analysis.scene || segs[0].scene || {};
+  const sceneName = scene0.name || scene0.setting || (multi ? `复刻 · ${segs.length} 场` : "复刻场");
   if (M.scene) {
-    add("scene.create", { name: scene.name || scene.setting || "复刻场", environment: {} }, `场次「${scene.name || scene.setting || "复刻场"}」${scene.timeOfDay ? "，" + scene.timeOfDay : ""}`);
+    add("scene.create", { name: sceneName, environment: {} }, `场次「${sceneName}」${scene0.timeOfDay ? "，" + scene0.timeOfDay : ""}`);
+  }
+  if (multi) add("scene.pads", { pads }, `台面分成 ${grid.label}：${segs.map((sg, k) => `${k + 1} ${sg.name}`).join(" / ")}`);
+
+  // 2. 灯光：台上只能挂一套预设灯，按第一场定；后面哪一场不一样，记在那一镜上并说出来。
+  let globalPreset = null;
+  if (M.light) {
+    globalPreset = pickLightPreset(segs[0].lighting || {}, segs[0].scene || {}, warnings);
+    add("scene.preset", { preset: globalPreset }, `布光 ${LIGHT_PRESETS[globalPreset].zh}${segs[0].lighting?.keyDirection ? "（参照主光：" + segs[0].lighting.keyDirection + "）" : ""}`);
   }
 
-  // 2. 主体。placeholder 模式也要建 —— 机位得有东西可看，白模得有东西可拍；
-  //    建出来的是占位，导演改名换成自己的产品或角色就行（这正是「不花钱先看构图」的前提）。
-  const ids = { subjects: [], camera: `${p}_cam`, shot: `${p}_shot` };
-  const wanted = M.subjects === false ? [] : M.subjects === "minimal" ? subjects.slice(0, 1) : subjects;
-  const useList = wanted.length ? wanted : [{ semanticType: "character", displayName: "主体", screenPosition: "中央" }];
-  useList.forEach((s, i) => {
-    const id = `${p}_sub${i + 1}`;
-    const type = normalizeType(s.semanticType, warnings);
-    ids.subjects.push(id);
-    add("entity.create", {
-      id,
-      type,
-      displayName: s.displayName || SEMANTIC_PROXY[type].label.split(" ")[0],
-      position: placeSubject(s, i, useList.length),
-      yaw: 0,
-      ...(M.subjects === "placeholder" ? { role: "占位：换成你自己的主体" } : {}),
-    }, `${s.displayName || type}${s.screenPosition ? " · " + s.screenPosition : ""}${M.subjects === "placeholder" ? "（占位）" : ""}`);
+  const ids = { subjects: [], camera: null, shot: null, scenes: [] };
+  let totalSeconds = 0;
+  let firstMotion = null, firstSize = null, firstFocal = null;
+
+  segs.forEach((sg, k) => {
+    const sp = multi ? `${p}_s${k + 1}` : p;
+    const cam = sg.camera || {};
+    const light = sg.lighting || {};
+    const beats = Array.isArray(sg.beats) ? sg.beats.filter((b) => b && Number(b.seconds) > 0) : [];
+    const subjects = expandSubjects(Array.isArray(sg.subjects) ? sg.subjects.slice(0, 8) : []);
+    const sid = { pad: pads[k]?.id || null, subjects: [], camera: `${sp}_cam`, shot: `${sp}_shot` };
+    const padArg = sid.pad ? { pad: sid.pad } : {};
+
+    // 主体。placeholder 模式也要建 —— 机位得有东西可看，白模得有东西可拍；
+    // 建出来的是占位，导演改名换成自己的产品或角色就行（这正是「不花钱先看构图」的前提）。
+    const wanted = M.subjects === false ? [] : M.subjects === "minimal" ? subjects.slice(0, 1) : subjects;
+    const useList = wanted.length ? wanted : [{ semanticType: "character", displayName: "主体", screenPosition: "中央" }];
+    // 群体成员共用同一个「锚点」（按第一个成员的位置提示算），再按站位错开
+    const anchors = new Map();
+    const distinct = [...new Set(useList.map((s) => s.group || s.displayName || s.semanticType))];
+    useList.forEach((s, i) => {
+      const id = `${sp}_sub${i + 1}`;
+      const type = normalizeType(s.semanticType, warnings);
+      sid.subjects.push(id);
+      const key = s.group || s.displayName || s.semanticType;
+      if (!anchors.has(key)) anchors.set(key, placeSubject(s, distinct.indexOf(key), distinct.length));
+      const base = anchors.get(key);
+      const [gx, gz] = groupOffset(s);
+      add("entity.create", {
+        id,
+        type,
+        displayName: s.displayName || SEMANTIC_PROXY[type].label.split(" ")[0],
+        position: shift([base[0] + gx, base[1], base[2] + gz], k),
+        yaw: 0,
+        ...padArg,
+        ...(M.subjects === "placeholder" ? { role: "占位：换成你自己的主体" } : {}),
+      }, `${multi ? `第 ${k + 1} 场 · ` : ""}${s.displayName || type}${s.screenPosition ? " · " + s.screenPosition : ""}${s.groupSize ? `（${s.group} ${s.groupIndex + 1}/${s.groupSize}）` : ""}${M.subjects === "placeholder" ? "（占位）" : ""}`);
+    });
+
+    // 画面内光源跟着这一块台走
+    if (M.light) {
+      for (const [i, name] of (light.practicals || []).slice(0, 4).entries()) {
+        add("light.create", { id: `${sp}_prac${i + 1}`, name: String(name).slice(0, 20), type: "point", group: "practical", intensity: 6, color: "#ffd9a8", position: shift([i % 2 ? 2.4 : -2.4, 2.2, -1.6 - i * 0.8], k), ...padArg }, `${multi ? `第 ${k + 1} 场 · ` : ""}画面内光源：${name}`);
+      }
+    }
+
+    // 机位。景别 / 焦段 / 高度都是分析里已有的数字，不必让模型再猜一遍。
+    // 先 create 再 frame：frame 按主体的真实位置和高度算距离，所以主体挪到哪块台，机位就跟到哪块。
+    const size = normalizeShotSize(cam.shotSize, warnings);
+    const focal = Number(cam.focalMm) > 0 ? Math.round(Number(cam.focalMm)) : SHOT_SIZES[size].focal;
+    const coverage = normalizeCoverage(cam, warnings);
+    const height = cameraHeight(cam);
+    const aperture = Number(cam.aperture) > 0 ? Number(cam.aperture) : undefined;
+    const target = sid.subjects[0];
+    if (M.camera === true) {
+      add("camera.create", { id: sid.camera, name: `${multi ? k + 1 + " · " : ""}${size} ${focal}mm`, focalLength: focal, ...(aperture ? { aperture } : {}), target, preset: size, ...padArg }, `机位：${SHOT_SIZES[size].zh} ${size} · ${focal}mm${aperture ? ` · f/${aperture}` : ""}`);
+      add("camera.frame", { id: sid.camera, target, size, angle: coverage, focalLength: focal, ...(height !== undefined ? { height } : {}) }, `按景别摆到${COVERAGE_ANGLES[coverage].zh}${height !== undefined ? `，离地 ${height} m` : ""}`);
+    } else {
+      add("camera.create", { id: sid.camera, name: `${multi ? k + 1 + " · " : ""}中景机位`, focalLength: 35, target, preset: "MS", ...padArg }, "中性机位：这个模式不复刻机位，先给一个能看见主体的");
+      add("camera.frame", { id: sid.camera, target, size: "MS", angle: "front_left" }, "中景 · 前左 3/4");
+    }
+    if (k === 0) add("camera.pilot", { id: sid.camera }, "设为 Program");
+
+    // 镜头。时长优先按拍数合计 —— 那是参照自己的节奏；整条视频时其次按这一场的起止秒。
+    const beatTotal = beats.reduce((n, b) => n + Number(b.seconds), 0);
+    const spanSecs = sg.from != null && sg.to != null && sg.to > sg.from ? sg.to - sg.from : null;
+    const fallback = multi ? (opts.seconds ? opts.seconds / segs.length : 4) : opts.seconds || 4;
+    const duration = Math.max(1, Math.round((beatTotal || spanSecs || fallback) * 10) / 10);
+    const motion = M.camera === true ? scaleMotion(normalizeMotion(sg.motion, warnings), sg.motion?.speed) : { type: "static" };
+    totalSeconds += duration;
+    if (k === 0) { firstMotion = motion; firstSize = size; firstFocal = focal; }
+    add("shot.create", {
+      id: sid.shot,
+      title: multi ? sg.name : opts.title || sg.name || analysis.summary?.slice(0, 18) || "复刻镜头",
+      description: [sg.brief || sg.summary || analysis.brief || analysis.summary || "", cam.framing ? `构图：${cam.framing}` : "", opts.hint ? `导演要求：${opts.hint}` : ""].filter(Boolean).join(" "),
+      cameraId: sid.camera,
+      duration,
+      motion: motion.params ? motion : motion.type,
+      targetIds: sid.subjects,
+      ...padArg,
+    }, `${multi ? `第 ${k + 1} 场 · ` : ""}镜头 ${duration}s · ${MOTION_TYPES[motion.type].zh}${beatTotal ? `（按参照的 ${beats.length} 拍合计）` : spanSecs ? `（原片 ${sg.from}s–${sg.to}s）` : ""}`);
+
+    // 拍。长镜头要分段续拍时，段边界按这里的拍走 —— 那是参照的节奏，不是模型的上限。
+    if (M.beats && beats.length > 1) {
+      add("shot.beats", { shotId: sid.shot, beats: beats.map((b) => ({ seconds: Math.round(Number(b.seconds) * 10) / 10, text: String(b.text || "").slice(0, 200) })) }, `拆成 ${beats.length} 拍：${beats.map((b) => `${b.seconds}s`).join(" + ")}`);
+    }
+
+    // 这一场的光和台上挂的那套不一样：记在镜头上（生成提示词会带），并说一声
+    if (M.light && k > 0) {
+      const mine = pickLightPreset(light, sg.scene || {}, []);
+      if (mine !== globalPreset) {
+        add("shot.update", { id: sid.shot, lightingState: mine }, `第 ${k + 1} 场的光是 ${LIGHT_PRESETS[mine].zh}，记在镜头上`);
+        warnings.push(`第 ${k + 1} 场「${sg.name}」读出来的光是 ${LIGHT_PRESETS[mine].zh}，台上只能挂一套灯，现在挂的是第 1 场的 ${LIGHT_PRESETS[globalPreset].zh}。这一镜记了自己的光，生成时会按它来；白模里要看就在灯光面板切`);
+      }
+    }
+
+    // 只有真的偏了才提醒。参照本来就是居中构图时还弹一句「白模里会在正中」，是句废话。
+    const framed = String(cam.framing || "");
+    if (/三分|偏左|偏右|靠左|靠右|off[- ]cent/i.test(framed) && !/居中|正中|中央|dead ?cent/i.test(framed)) {
+      warnings.push(`${multi ? `第 ${k + 1} 场` : "参照"}的构图是「${framed}」：运行时的机位锁定看向主体，白模里主体会在正中。这句已经写进镜头描述，生成时会带上；要在白模里也偏，得手动挪机位`);
+    }
+
+    ids.scenes.push(sid);
+    ids.subjects.push(...sid.subjects);
+    if (k === 0) { ids.camera = sid.camera; ids.shot = sid.shot; }
   });
 
-  // 3. 灯光
-  if (M.light) {
-    const preset = pickLightPreset(light, scene, warnings);
-    add("scene.preset", { preset }, `布光 ${LIGHT_PRESETS[preset].zh}${light.keyDirection ? "（参照主光：" + light.keyDirection + "）" : ""}`);
-    for (const [i, name] of (light.practicals || []).slice(0, 4).entries()) {
-      add("light.create", { id: `${p}_prac${i + 1}`, name: String(name).slice(0, 20), type: "point", group: "practical", intensity: 6, color: "#ffd9a8", position: [i % 2 ? 2.4 : -2.4, 2.2, -1.6 - i * 0.8] }, `画面内光源：${name}`);
-    }
-  }
-
-  // 4. 机位。景别 / 焦段 / 高度都是分析里已有的数字，不必让模型再猜一遍。
-  //    先 create 再 frame：frame 负责按主体的真实高度算距离和高度（它修过一次，见 §18）。
-  const size = normalizeShotSize(cam.shotSize, warnings);
-  const focal = Number(cam.focalMm) > 0 ? Math.round(Number(cam.focalMm)) : SHOT_SIZES[size].focal;
-  const coverage = normalizeCoverage(cam, warnings);
-  const height = cameraHeight(cam);
-  const aperture = Number(cam.aperture) > 0 ? Number(cam.aperture) : undefined;
-  const target = ids.subjects[0];
-  if (M.camera === true) {
-    add("camera.create", { id: ids.camera, name: `${size} ${focal}mm`, focalLength: focal, ...(aperture ? { aperture } : {}), target, preset: size }, `机位：${SHOT_SIZES[size].zh} ${size} · ${focal}mm${aperture ? ` · f/${aperture}` : ""}`);
-    add("camera.frame", { id: ids.camera, target, size, angle: coverage, focalLength: focal, ...(height !== undefined ? { height } : {}) }, `按景别摆到${COVERAGE_ANGLES[coverage].zh}${height !== undefined ? `，离地 ${height} m` : ""}`);
-  } else {
-    add("camera.create", { id: ids.camera, name: "中景机位", focalLength: 35, target, preset: "MS" }, "中性机位：这个模式不复刻机位，先给一个能看见主体的");
-    add("camera.frame", { id: ids.camera, target, size: "MS", angle: "front_left" }, "中景 · 前左 3/4");
-  }
-  add("camera.pilot", { id: ids.camera }, "设为 Program");
-
-  // 5. 镜头。时长优先按拍数合计 —— 那是参照自己的节奏，比一个拍脑袋的默认值准。
-  const beatTotal = beats.reduce((n, b) => n + Number(b.seconds), 0);
-  const duration = Math.max(1, Math.round((beatTotal || opts.seconds || 4) * 10) / 10);
-  const motion = M.camera === true ? scaleMotion(normalizeMotion(analysis.motion, warnings), analysis.motion?.speed) : { type: "static" };
-  add("shot.create", {
-    id: ids.shot,
-    title: opts.title || scene.name || analysis.summary?.slice(0, 18) || "复刻镜头",
-    description: [analysis.brief || analysis.summary || "", cam.framing ? `构图：${cam.framing}` : "", opts.hint ? `导演要求：${opts.hint}` : ""].filter(Boolean).join(" "),
-    cameraId: ids.camera,
-    duration,
-    motion: motion.params ? motion : motion.type,
-    targetIds: ids.subjects,
-  }, `镜头 ${duration}s · ${MOTION_TYPES[motion.type].zh}${beatTotal ? `（按参照的 ${beats.length} 拍合计）` : ""}`);
-
-  // 6. 拍。长镜头要分段续拍时，段边界按这里的拍走 —— 那是参照的节奏，不是模型的上限。
-  if (M.beats && beats.length > 1) {
-    add("shot.beats", { shotId: ids.shot, beats: beats.map((b) => ({ seconds: Math.round(Number(b.seconds) * 10) / 10, text: String(b.text || "").slice(0, 200) })) }, `拆成 ${beats.length} 拍：${beats.map((b) => `${b.seconds}s`).join(" + ")}`);
-  }
-
-  // 只有真的偏了才提醒。参照本来就是居中构图时还弹一句「白模里会在正中」，是句废话 ——
-  // 报警报到没人看，跟不报一样。
-  const framed = String(cam.framing || "");
-  if (/三分|偏左|偏右|靠左|靠右|off[- ]cent/i.test(framed) && !/居中|正中|中央|dead ?cent/i.test(framed)) {
-    warnings.push(`参照的构图是「${framed}」：运行时的机位锁定看向主体，白模里主体会在正中。这句已经写进镜头描述，生成时会带上；要在白模里也偏，得手动挪机位`);
-  }
-
+  const dur = Math.round(totalSeconds * 10) / 10;
   return {
     mode,
     steps,
     warnings,
     ids,
-    summary: `${REPLICATE_MODES[mode].zh} · ${steps.length} 步 · ${size} ${focal}mm ${MOTION_TYPES[motion.type].zh} · ${duration}s${beats.length > 1 ? ` · ${beats.length} 拍` : ""}`,
+    pads,
+    grid: multi ? grid : null,
+    scenes: segs.length,
+    seconds: dur,
+    summary: multi
+      ? `${REPLICATE_MODES[mode].zh} · ${segs.length} 场（${grid.label}）· ${steps.length} 步 · 共 ${dur}s`
+      : `${REPLICATE_MODES[mode].zh} · ${steps.length} 步 · ${firstSize} ${firstFocal}mm ${MOTION_TYPES[firstMotion.type].zh} · ${dur}s${segs[0].beats?.length > 1 ? ` · ${segs[0].beats.length} 拍` : ""}`,
   };
 }

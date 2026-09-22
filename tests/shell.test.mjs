@@ -36,7 +36,7 @@ test("菜单和 HUD 是同一组三档，少一档就会出现「菜单能去、
 
 // 0.6.0 把十一个平铺 tab 收成四段流水线。「收起来」不等于「删掉」——
 // 少一个面板就是真的少一块功能，所以十一个 data-bottom 一个都不能丢。
-test("四段流水线之外的七个面板，必须还能打开", () => {
+test("流水线之外的面板，必须还能打开", () => {
   const html = read("web/index.html");
   const tabs = [...html.matchAll(/data-bottom="([a-z]+)"/g)].map((m) => m[1]);
   const want = ["shots", "timeline", "takes", "board", "ref", "check", "gen", "film", "log", "health"];
@@ -44,7 +44,8 @@ test("四段流水线之外的七个面板，必须还能打开", () => {
   // 资产不在底部了：0.6.2 搬到左边和场景并排，叫角色库。搬家可以，入口不能丢
   assert.ok(html.includes('data-left="library"') && html.includes('id="library"'), "角色库得有入口和容器");
   const pipe = html.match(/<div class="pipe" id="pipe">([\s\S]*?)<\/div>/)?.[1] || "";
-  assert.deepEqual([...pipe.matchAll(/data-bottom="([a-z]+)"/g)].map((m) => m[1]), ["check", "takes", "gen", "film"], "主路径就是这四段");
+  // 0.6.3：时间线是剪辑本身，不该折在「更多」里 —— 放在检查前面，主路径成了五段
+  assert.deepEqual([...pipe.matchAll(/data-bottom="([a-z]+)"/g)].map((m) => m[1]), ["timeline", "check", "takes", "gen", "film"], "主路径：时间线 → 检查 → 草片 → 生成 → 成片");
 });
 
 // 界面上不写句子：说明退到 data-tip 里。图标必须指向雪碧图里真有的符号，

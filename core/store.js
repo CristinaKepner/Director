@@ -33,6 +33,7 @@ export function createEmptyProject() {
       programCameraId: null,
       previewCameraId: null,
       currentShotId: null,
+      activePadId: null, // 台面分了块时，当前在看/在改的那块；null = 整台
       playhead: 0,
       playing: false,
       loop: false,

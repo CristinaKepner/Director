@@ -307,7 +307,6 @@ function buildMenu() {
       label: "工程",
       submenu: [
         { label: "新建空工程", accelerator: "Cmd+N", click: async () => { await backupCurrent("新建工程前"); send("new-project"); } },
-        { label: "从参照开始…", accelerator: "Shift+Cmd+O", click: () => send("from-reference") },
         { label: "打开工程…", accelerator: "Cmd+O", click: openProject },
         { label: "存入工程库…", accelerator: "Shift+Cmd+S", click: saveToLibrary },
         { type: "separator" },

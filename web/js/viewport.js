@@ -7,6 +7,7 @@ import { RectAreaLightHelper } from "three/addons/helpers/RectAreaLightHelper.js
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { store } from "../../core/store.js";
+import { padOf } from "../../core/actions.js";
 import { setHooks } from "../../core/actions.js";
 import { dispatch } from "./client.js";
 import { cameraStateAt, entityStateAt, lightStateAt, gaitOffsets, sequenceLayout, subjectPoint } from "../../core/motion.js";
@@ -16,6 +17,7 @@ const HELPER_LAYER = 1; // grid, labels, camera markers, light helpers, paths �
 let renderer, scene, world, helpers, freeCam, programCam, orbit, gizmo, gizmoHelper, clock, canvas, host, raycaster;
 let hemi, ground, grid, fogObj;
 let roomObj = null, roomSig = "";
+let padsObj = null, padsSig = ""; // 白模台面分块：一个场景一块
 const gltfLoader = new GLTFLoader();
 const gltfCache = new Map(); // url → Promise<scene>
 const entityMap = new Map(), lightMap = new Map(), camMap = new Map();
@@ -197,6 +199,22 @@ function sync(d) {
     ground.visible = !env.room;
     grid.visible = !env.room;
   }
+  // 台面分块：几个场景几块地。块是摆位约定，画出来人才知道哪一场在哪
+  // 切到某一块时只画这一块：每个场景单独渲染，别的台上的人不会出现在这一场的远景里
+  const activePad = d.project.activePadId && d.scene.pads?.some((p) => p.id === d.project.activePadId) ? d.project.activePadId : null;
+  const psig = JSON.stringify(d.scene.pads || null) + "|" + activePad;
+  if (psig !== padsSig) {
+    padsSig = psig;
+    if (padsObj) {
+      world.remove(padsObj);
+      padsObj = null;
+    }
+    if (d.scene.pads?.length) {
+      padsObj = buildPads(activePad ? d.scene.pads.filter((p) => p.id === activePad) : d.scene.pads);
+      world.add(padsObj);
+    }
+  }
+  const onPad = (x) => { if (!activePad) return true; const q = padOf(d, x); return !q || q === activePad; };
   // entities
   const live = new Set();
   for (const ent of d.entities) {
@@ -215,6 +233,7 @@ function sync(d) {
       entityMap.set(ent.id, rec);
     }
     setHighlight(rec.obj, d.project.selectedKind === "entity" && d.project.selectedId === ent.id);
+    rec.obj.visible = onPad(ent);
   }
   for (const [id, rec] of entityMap) if (!live.has(id)) {
     world.remove(rec.obj);
@@ -249,6 +268,9 @@ function sync(d) {
     }
     if (l.type === "hemisphere") rec.light.groundColor.set(d.scene.environment.ground || "#150c0c");
     rec.marker.children[1].visible = d.project.selectedKind === "light" && d.project.selectedId === l.id;
+    const show = onPad(l);
+    rec.light.visible = show && l.enabled !== false;
+    rec.marker.visible = show;
   }
   for (const [id, rec] of lightMap) if (!liveL.has(id)) {
     world.remove(rec.light);
@@ -273,6 +295,7 @@ function sync(d) {
     m.userData.frustum.visible = isProgram;
     m.userData.label.material.map = textTexture(`${c.name} · ${c.lens.focalLength}mm`, isProgram ? "#e2b15a" : "#aab0c0");
     m.userData.label.material.needsUpdate = true;
+    m.visible = onPad(c) || isProgram;
   }
   for (const [id, m] of camMap) if (!liveC.has(id)) {
     helpers.remove(m);
@@ -646,6 +669,15 @@ function commitGizmo() {
   } else if (o.userData.kind === "light") dispatch("light.update", { id: o.userData.id, position: pos });
 }
 
+// 把自由视角搬到某一块台的上方斜前方；切场景时用。整台（null）就退回默认视角
+export function focusPad(pad) {
+  if (!pad) return resetView();
+  const cx = pad.x || 0, cz = pad.z || 0, w = Math.max(pad.w || 10, pad.d || 10);
+  orbit.target.set(cx, 0.9, cz);
+  freeCam.position.set(cx + w * 0.55, w * 0.7, cz + w * 1.05);
+  orbit.update();
+}
+
 export function focusSelected() {
   const d = store.get();
   let p = null;
@@ -822,6 +854,30 @@ function buildRoom(room) {
     }
   }
   g.traverse((o) => (o.userData.room = true));
+  return g;
+}
+
+// 一块台：一片略抬起的地面 + 描边 + 左前角一个「① 场名」的牌子。
+// 不做墙：块之间要能一眼看穿，导演才分得清哪一场在哪。
+function buildPads(pads) {
+  const g = new THREE.Group();
+  for (const p of pads) {
+    const w = Math.max(2, p.w || 10), dd = Math.max(2, p.d || 10);
+    const geo = new THREE.PlaneGeometry(w, dd);
+    const floor = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: "#1c2130", roughness: 0.8, metalness: 0.1, transparent: true, opacity: 0.72 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(p.x || 0, 0.012, p.z || 0);
+    floor.receiveShadow = true;
+    g.add(floor);
+    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: "#7657ff", transparent: true, opacity: 0.8 }));
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(p.x || 0, 0.02, p.z || 0);
+    g.add(edge);
+    const tag = label(`${p.index ? p.index + " " : ""}${p.name || ""}`, "pad");
+    tag.position.set((p.x || 0) - w / 2 + 1.4, 0.45, (p.z || 0) + dd / 2 - 0.5);
+    g.add(tag);
+  }
+  g.traverse((o) => (o.userData.pad = true));
   return g;
 }
 
@@ -1069,7 +1125,7 @@ function textTexture(text, color = "#e7d7a6") {
 }
 
 function label(text, type) {
-  const colors = { character: "#e7d7a6", vehicle: "#9fd3ff", weapon: "#ff9a9a", building: "#aab0c0", lamp: "#ffe3a3" };
+  const colors = { character: "#e7d7a6", vehicle: "#9fd3ff", weapon: "#ff9a9a", building: "#aab0c0", lamp: "#ffe3a3", pad: "#b9a8ff" };
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture(text, colors[type] || "#cfd3dc"), transparent: true, depthTest: false }));
   s.scale.set(2.4, 0.6, 1);
   s.layers.set(HELPER_LAYER);

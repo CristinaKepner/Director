@@ -26,8 +26,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 
 let ref = null; // { url, kind, name, from, to, duration }
 
+// 空工程 = 从参照开始。不看「见过没有」：打开一个空工程，入口就是这一屏，没有别的选项。
 export function maybeShowFirstRun() {
-  if (seen() || store.get().shots.length) return false;
+  const d = store.get();
+  if (d.shots.length || d.entities.length) return false;
   render();
   return true;
 }
@@ -190,29 +192,20 @@ function steps(list) {
   box.innerHTML = list.map((s) => `<div class="fr-step ${s.state}"><span>${s.state === "done" ? "✓" : s.state === "run" ? "◠" : s.state === "fail" ? "✗" : "·"}</span><b>${esc(s.label)}</b><i>${esc(s.note)}</i></div>`).join("");
 }
 
+// 文件和链接走同一条链：reference.replicate（读 → 编译 → 建场）。
+// 以前拖文件进来是先 reference.analyze，再把分析压成一段话交给规划器去猜 Action ——
+// 没接大模型就建不出镜头，接了也慢且不稳。链接那条早就改成编译了，文件没道理还走老路。
 async function startFromRef() {
   if (!ref) return;
   markSeen();
+  const video = ref.kind === "video";
   const plan = [
-    { key: "read", label: "读参照：景别 / 机位 / 光位 / 主体", state: "run", note: "" },
-    { key: "build", label: "在 3D 里把场景搭出来", state: "wait", note: "" },
+    { key: "read", label: video && ref.to == null ? "读整条：分场景，读景别 / 机位 / 光位 / 运镜" : "读参照：景别 / 机位 / 光位 / 主体", state: "run", note: "" },
+    { key: "build", label: "在 3D 里把场景和分镜搭出来", state: "wait", note: "" },
     { key: "blockout", label: "逐镜跑草片预演", state: "wait", note: "" },
     { key: "film", label: "拼成一条能播的片子", state: "wait", note: "" },
   ];
-  const set = (k, patch) => { Object.assign(plan.find((p) => p.key === k), patch); steps(plan); };
-  steps(plan);
-  disable(true);
-
-  const r = await dispatch("reference.analyze", { ref: ref.url, from: ref.from || undefined, to: ref.to || undefined, count: ref.kind === "video" ? 6 : 1 });
-  if (!r?.ok) { set("read", { state: "fail", note: r?.hint || r?.error || "读不了这个参照" }); return disable(false); }
-
-  const job = await waitJob(r.id, 5 * 60 * 1000, (j) => set("read", { state: "run", note: j.note || `${j.progress || 0}%` }));
-  const a = job?.result?.analysis;
-  if (!a) { set("read", { state: "fail", note: job?.hint || job?.error || "分析失败" }); return disable(false); }
-  const c = a.camera || {};
-  set("read", { state: "done", note: `${c.shotSize || ""} ${c.focalMm ? c.focalMm + "mm" : ""} ${c.heightMeters ? c.heightMeters + "m" : ""} · ${(a.subjects || []).length} 个主体` });
-
-  await build(briefFrom(a), set);
+  await replicate({ ref: ref.url, from: ref.to == null ? undefined : ref.from, to: ref.to == null ? undefined : ref.to }, plan, "read");
 }
 
 // 贴链接 → 一个搭好的工程。
@@ -224,28 +217,35 @@ async function startFromLink(link) {
   markSeen();
   const plan = [
     { key: "fetch", label: "把链接下下来", state: "run", note: "" },
-    { key: "read", label: "读出景别 / 机位 / 光位 / 运镜", state: "wait", note: "" },
+    { key: "read", label: "读整条：分场景，读景别 / 机位 / 光位 / 运镜", state: "wait", note: "" },
     { key: "build", label: "在 3D 里把场景和分镜搭出来", state: "wait", note: "" },
     { key: "blockout", label: "逐镜跑草片预演", state: "wait", note: "" },
     { key: "film", label: "拼成一条能播的片子", state: "wait", note: "" },
   ];
+  await replicate({ url: link }, plan, "fetch");
+}
+
+// 不传 mode：后端默认整条复刻，建完再把「只要运镜 / 只要光」的选项摆在对话里，不会停在中间等人选。
+async function replicate(payload, plan, failKey) {
   const set = (k, patch) => { const p = plan.find((x) => x.key === k); if (p) Object.assign(p, patch); steps(plan); };
   steps(plan);
   disable(true);
 
-  const r = await dispatch("reference.replicate", { url: link });
-  if (!r?.ok) { set("fetch", { state: "fail", note: r?.hint || r?.error || "这条链接下不了" }); return disable(false); }
+  const r = await dispatch("reference.replicate", payload);
+  if (!r?.ok) { set(failKey, { state: "fail", note: r?.hint || r?.error || "这条参照读不了" }); return disable(false); }
 
-  // 后端那三步的进度直接来自 job.phases，不在这里重算
+  // 后端那几步的进度直接来自 job.phases，不在这里重算
   const job = await waitJob(r.id, 20 * 60 * 1000, (j) => {
     for (const ph of j.phases || []) set(ph.key, { state: ph.state === "run" ? "run" : ph.state === "done" ? "done" : ph.state === "fail" ? "fail" : "wait", note: ph.note || (ph.state === "run" ? `${j.progress || 0}%` : "") });
   });
-  if (job?.status !== "done") {
+  if (job?.status !== "done" || !store.get().shots.length) {
     const bad = (job?.phases || []).find((p) => p.state === "fail");
-    set(bad?.key || "fetch", { state: "fail", note: job?.hint || bad?.note || job?.error || "复刻失败" });
+    set(bad?.key || (job ? "build" : failKey), { state: "fail", note: job?.hint || bad?.note || job?.error || (job ? "没建出镜头" : "等太久了，看底部「参照」里的任务") });
     return disable(false);
   }
   for (const ph of job.phases || []) set(ph.key, { state: "done", note: ph.note || "" });
+  const pads = store.get().scene.pads?.length;
+  if (pads) set("build", { state: "done", note: `${pads} 个场景 · ${store.get().shots.length} 个镜头 · 台面已分块` });
 
   await shoot(set);
 }
@@ -262,23 +262,6 @@ async function startFromText(text) {
   steps(plan);
   disable(true);
   await build(text, set);
-}
-
-// 结构化分析 → 一段 planner 能吃的导演口述。比直接丢 JSON 好：planner 读的是镜头语言。
-function briefFrom(a) {
-  const c = a.camera || {}, l = a.lighting || {}, s = a.scene || {}, m = a.motion || {};
-  const subs = (a.subjects || []).map((x) => `${x.displayName}（${x.semanticType}${x.look ? "，" + x.look : ""}${x.screenPosition ? "，在" + x.screenPosition : ""}）`).join("；");
-  const beats = (a.beats || []).length ? `\n按拍拆分：${a.beats.map((b, i) => `${i + 1}) ${b.seconds}s ${b.text}`).join("；")}` : "";
-  return [
-    `复刻这个参照镜头：${a.brief || a.summary || ""}`,
-    s.name || s.setting ? `场景：${s.name || ""}${s.setting ? "，" + s.setting : ""}${s.timeOfDay ? "，" + s.timeOfDay : ""}${s.palette ? "，主色调" + s.palette : ""}。` : "",
-    subs ? `画面里的主体：${subs}。把它们建成语义代理体并按描述摆位。` : "",
-    `机位：${c.shotSize || "MS"} 景别，${c.angle || "eye"} 视角，机位高度约 ${c.heightMeters ?? 1.5} 米，焦段约 ${c.focalMm ?? 40}mm，光圈 f/${c.aperture ?? 2.8}。${c.framing ? "构图：" + c.framing + "。" : ""}`,
-    `灯光：主光${l.keyDirection || "正面"}，${l.ratio || "柔和"}，${l.colorTemp || "中性"}。${(l.practicals || []).length ? "画面内光源：" + l.practicals.join("、") + "。" : ""}`,
-    `运镜：${m.type || "static"}${m.description ? "，" + m.description : ""}${m.speed ? "，" + m.speed : ""}。`,
-    beats,
-    "建成一个镜头就行，时长按上面的拍数合计；画幅 16:9。",
-  ].filter(Boolean).join("\n");
 }
 
 async function build(brief, set) {

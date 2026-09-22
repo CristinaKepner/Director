@@ -2,20 +2,32 @@
 // Renders from the store; every mutation goes through dispatch() (client.js routes it to the backend or the local replica).
 // What is on screen at rest: the picture, the shot strip, one Agent input, four stage controls. Everything else opens on demand.
 import { store, persistable, historyInfo } from "../../core/store.js";
-import { timecode, getHooks } from "../../core/actions.js";
+import { timecode, getHooks, referencesForShot, padOf, shotPad, padSummary } from "../../core/actions.js";
 import { DEMOS } from "../../core/demo.js";
 import { REPLICATE_MODES } from "../../core/reference-plan.js";
 import { threadItems } from "./thread.js";
 import { physicalInfo, fmt as pf } from "./phys.js";
 import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
 import { dispatch, client, isOnline } from "./client.js";
-import { focusSelected, resetView } from "./viewport.js";
+import { focusSelected, resetView, focusPad } from "./viewport.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const fmt = (v, n = 2) => (typeof v === "number" ? v.toFixed(n) : v);
 const promptTab = { mode: "video", lang: "en" };
 let saveTimer = null;
+// 顺播全部时播放头是整条的帧，单镜时是这一镜自己的帧。界面上所有「这一镜走到哪」都要先换算。
+function localPlayhead(d, shot) {
+  if (!shot) return d.project.playhead;
+  if (!d.project.playSequence) return Math.max(shot.range.inFrame, Math.min(shot.range.outFrame, d.project.playhead));
+  let start = 0;
+  for (const s of d.shots) { if (s.id === shot.id) break; start += s.range.outFrame - s.range.inFrame; }
+  return Math.max(shot.range.inFrame, Math.min(shot.range.outFrame, d.project.playhead - start + shot.range.inFrame));
+}
+// 正在被拖的那一样东西：定妆照 / Take / 关键帧 / 镜头段。dataTransfer 只有 drop 时才读得到，
+// Electron 里有时还读不到，所以自己也记一份。
+let dragItem = null;
+const dragAttr = (item) => `draggable="true" data-drag="${esc(JSON.stringify(item))}"`;
 let lastFullRender = 0;
 let lastSelected = null;
 const lastJobStatus = new Map();
@@ -139,6 +151,17 @@ export function openDrawer(tab) {
 }
 
 export function bindUI() {
+  // 任何带 data-drag 的东西都能拖：定妆照、Take、关键帧、镜头段。落点在时间线里
+  document.addEventListener("dragstart", (ev) => {
+    const n = ev.target.closest?.("[data-drag]");
+    if (!n) return;
+    try { dragItem = JSON.parse(n.dataset.drag); } catch { dragItem = null; }
+    if (!dragItem) return;
+    ev.dataTransfer.effectAllowed = "copyMove";
+    try { ev.dataTransfer.setData("application/x-director", JSON.stringify(dragItem)); ev.dataTransfer.setData("text/plain", dragItem.url || dragItem.id || ""); } catch {}
+    n.classList.add("dragging");
+  });
+  document.addEventListener("dragend", (ev) => { ev.target.closest?.("[data-drag]")?.classList.remove("dragging"); dragItem = null; });
   // top
   $("projectName").onchange = (e) => dispatch("project.rename", { name: e.target.value.trim() || "Untitled" });
   $("statePill").innerHTML = STATE_MACHINE.map((s) => `<option>${s}</option>`).join("");
@@ -149,12 +172,6 @@ export function bindUI() {
   $("undoBtn").onclick = () => report(dispatch("project.undo"));
   $("redoBtn").onclick = () => report(dispatch("project.redo"));
   $("guideBtn").onclick = () => showGuide(0);
-  // 首屏只在空工程时自动弹，所以必须有一个随时能叫出来的入口 ——
-  // 否则老工程里的人永远看不到"拖个参照进来"这条路。
-  $("fromRefBtn").onclick = async () => {
-    $("menu").hidden = true;
-    (await import("./firstrun.js")).showFirstRun();
-  };
   $("menuBtn").onclick = (e) => {
     e.stopPropagation();
     $("menu").hidden = !$("menu").hidden;
@@ -279,15 +296,21 @@ export function loadSaved() {
 }
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable()));
-      dispatch("project.mark-saved", {}, { silent: true });
-      $("saveHint").textContent = `本地保存 · ${new Date().toLocaleTimeString()}`;
-    } catch (err) {
-      $("saveHint").textContent = "保存失败";
-    }
-  }, 600);
+  saveTimer = setTimeout(saveNow, 600);
+}
+// 立刻保存。连着后端时每一步改动本来就落在后端的工程文件里，这里只是把「已保存」的时间点打上；
+// 单机模式写 localStorage。时间线上的「保存」按钮走的就是这个。
+function saveNow() {
+  clearTimeout(saveTimer);
+  try {
+    if (!isOnline()) localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable()));
+    dispatch("project.mark-saved", {}, { silent: true });
+    $("saveHint").textContent = `${isOnline() ? "已保存" : "本地保存"} · ${new Date().toLocaleTimeString()}`;
+    return true;
+  } catch (err) {
+    $("saveHint").textContent = "保存失败";
+    return false;
+  }
 }
 
 // ---------- helpers ----------
@@ -395,7 +418,7 @@ function onKey(e) {
 
 // ---------- render ----------
 function renderLight(d) {
-  $("hudTc").textContent = timecode(d.project.playhead, d.project.fps);
+  $("hudTc").textContent = timecode(localPlayhead(d, d.shots.find((s) => s.id === d.project.currentShotId)), d.project.fps);
   renderPhys(d);
   const head = document.querySelector(".tl-ruler .head");
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
@@ -476,6 +499,7 @@ function render(d) {
   // stage
   renderLight(d);
   renderShotStrip(d);
+  renderPads(d);
   renderTabs(d);
   renderCompare(d);
   if (ui.left === "scene") renderOutliner(d);
@@ -484,6 +508,34 @@ function render(d) {
   renderChips(d);
   if (ui.drawer) renderBottom(d);
   watchJobs(d);
+}
+
+// ---------- 场次条：台面分了几块，就有几个可以切的场 ----------
+// 每个场景单独渲染：点哪一场，舞台只画那一块，自检和 Agent 也只看那一块。
+// 一格里写的是导演最先要核对的：这一场有谁、几个人、定妆了几个、几镜多长。
+let padsSig = "";
+function renderPads(d) {
+  const el = $("pads");
+  if (!el) return;
+  const pads = d.scene.pads || [];
+  el.hidden = !pads.length || d.project.viewMode === "compare";
+  if (!pads.length) { el.innerHTML = ""; padsSig = ""; return; }
+  const active = d.project.activePadId;
+  const list = pads.map((p) => padSummary(d, p.id)).filter(Boolean);
+  const sig = JSON.stringify([active, list]);
+  if (sig === padsSig) return;
+  padsSig = sig;
+  el.innerHTML = `<button class="pad-all${active ? "" : " on"}" data-pad="" data-tip="整台" data-tip-sub="所有场景一起看：${pads.length} 块台">全部</button>` + list.map((p) => `
+    <button class="pad${p.id === active ? " on" : ""}" data-pad="${esc(p.id)}" data-tip="${esc(p.index + " " + p.name)}" data-tip-sub="${esc(`${p.characterCount} 人${p.characters.length ? "：" + p.characters.slice(0, 6).join("、") + (p.characters.length > 6 ? "…" : "") : ""} · ${p.propCount} 件道具 · ${p.shotCount} 镜 ${p.seconds}s · 定妆 ${p.assetsApproved}/${p.characterCount}${p.from != null ? ` · 原片 ${p.from}–${p.to}s` : ""}。点一下只看这一场`)}">
+      <b>${p.index}</b><span class="nm">${esc(p.name)}</span>
+      <span class="meta"><i>${p.characterCount} 人</i><i>${p.propCount} 物</i><i>${p.shotCount} 镜 · ${p.seconds}s</i><i class="${p.assetsApproved >= p.characterCount && p.characterCount ? "ok" : ""}">定妆 ${p.assetsApproved}/${p.characterCount}</i></span>
+      <span class="who">${esc(p.characters.slice(0, 4).join("、"))}${p.characters.length > 4 ? ` +${p.characters.length - 4}` : ""}</span>
+    </button>`).join("");
+  el.querySelectorAll("[data-pad]").forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.pad || null;
+    await dispatch("scene.pad-select", { id });
+    focusPad(id ? store.get().scene.pads.find((p) => p.id === id) : null);
+  }));
 }
 
 // ---------- shot strip + tabs ----------
@@ -512,6 +564,7 @@ function renderShotStrip(d) {
 // 四段流水线代替十一个平铺 tab。功能一个没少：主路径四段留在外面，
 // 其余七个收进「更多」—— 排的是发现路径，不是砍能力。
 const PIPE_TIP = {
+  timeline: ["时间线", "剪辑：镜头顺序、每镜时长、切开、把素材拖上去。原片的切镜也在这里对着看"],
   check: ["检查", "录之前先算一遍：这一镜的画面里到底有没有东西。有问题的会拦住，不让你白录"],
   takes: ["草片", "在 3D 里把每一镜录成视频。不花钱——机位、走位改到满意了再往下走"],
   gen: ["生成", "交给模型出真画面。构图跟着草片走，人物靠参考图锁住。这一步计费"],
@@ -525,9 +578,10 @@ function renderTabs(d) {
   const generated = d.shots.filter((s) => d.jobs.some((j) => j.shotId === s.id && j.status === "done" && j.result?.url)).length;
   const errors = checkData?.errors || 0;
 
-  const num = { check: !d.shots.length ? "—" : !checkData ? "还没查" : errors ? `${errors} 处要看` : "都过了", takes: d.shots.length ? `${recorded}/${d.shots.length}` : "—", gen: d.shots.length ? `${generated}/${d.shots.length}` : "—", film: films.at(-1)?.result?.seconds ? timecode(Math.round(films.at(-1).result.seconds * d.project.fps), d.project.fps).slice(3, 8) : "—" };
-  const badge = { check: errors || 0, takes: 0, gen: busy.filter((j) => j.kind !== "replicate").length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length };
-  const kind = { check: "bad", takes: "ok", gen: "busy", film: "busy" };
+  const totalFrames = d.shots.reduce((n, s) => n + (s.range.outFrame - s.range.inFrame), 0);
+  const num = { timeline: d.shots.length ? `${d.shots.length} 镜 · ${timecode(totalFrames, d.project.fps).slice(3, 8)}` : "—", check: !d.shots.length ? "—" : !checkData ? "还没查" : errors ? `${errors} 处要看` : "都过了", takes: d.shots.length ? `${recorded}/${d.shots.length}` : "—", gen: d.shots.length ? `${generated}/${d.shots.length}` : "—", film: films.at(-1)?.result?.seconds ? timecode(Math.round(films.at(-1).result.seconds * d.project.fps), d.project.fps).slice(3, 8) : "—" };
+  const badge = { timeline: 0, check: errors || 0, takes: 0, gen: busy.filter((j) => j.kind !== "replicate").length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length };
+  const kind = { timeline: "ok", check: "bad", takes: "ok", gen: "busy", film: "busy" };
 
   for (const b of $("pipe").querySelectorAll("[data-bottom]")) {
     const k = b.dataset.bottom;
@@ -543,8 +597,8 @@ function renderTabs(d) {
   }
 
   // 「更多」里的七个：没内容的就不摆出来
-  const has = { shots: d.shots.length > 0, timeline: !!d.project.currentShotId, board: d.storyboard.length > 0, ref: true, assets: (d.assets || []).length > 0, log: true, health: true };
-  const label = { shots: "镜头清单", timeline: "时间线", board: "故事版", ref: "参照", assets: "资产", log: "事件", health: "状态" };
+  const has = { shots: d.shots.length > 0, board: d.storyboard.length > 0, ref: true, assets: (d.assets || []).length > 0, log: true, health: true };
+  const label = { shots: "镜头清单", board: "故事版", ref: "参照", assets: "资产", log: "事件", health: "状态" };
   const extra = { board: d.storyboard.length, ref: d.jobs.filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind) && ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length };
   for (const b of $("moreTabs").querySelectorAll("[data-bottom]")) {
     const k = b.dataset.bottom;
@@ -562,14 +616,21 @@ function renderOutliner(d) {
   const sel = d.project.selectedId;
   const row = (kind, id, name, extra, dot = "") => `<div class="tree-item ${sel === id ? "sel" : ""}" data-kind="${kind}" data-id="${id}"><span class="dot ${dot}"></span><span class="name">${esc(name)}</span><span class="kind">${esc(extra)}</span></div>`;
   const group = (title, rows, count) => `<div class="group-label"><span>${title}</span><span>${count}</span></div>${rows.join("")}`;
-  const chars = d.entities.filter((e) => ["character", "vehicle", "weapon", "prop", "smoke", "flower"].includes(e.semanticType));
-  const set = d.entities.filter((e) => !chars.includes(e));
+  // 切到某一块台就只列这一块的（没分到台的全局布景照列）
+  const active = d.project.activePadId && d.scene.pads?.some((p) => p.id === d.project.activePadId) ? d.project.activePadId : null;
+  const onPad = (x) => !active || !padOf(d, x) || padOf(d, x) === active;
+  const ents = d.entities.filter(onPad), cams = d.cameras.filter(onPad), lights = d.lights.filter(onPad);
+  const chars = ents.filter((e) => ["character", "vehicle", "weapon", "prop", "smoke", "flower"].includes(e.semanticType));
+  const set = ents.filter((e) => !chars.includes(e));
+  const padName = active ? d.scene.pads.find((p) => p.id === active) : null;
   el.innerHTML = [
-    group("机位", d.cameras.map((c) => row("camera", c.id, c.name, `${c.lens.focalLength}mm`, c.id === d.project.programCameraId ? "program" : "")), d.cameras.length),
+    padName ? `<div class="pad-scope">只看 台 ${padName.index} · ${esc(padName.name)}<button data-allpads>整台</button></div>` : "",
+    group("机位", cams.map((c) => row("camera", c.id, c.name, `${c.lens.focalLength}mm`, c.id === d.project.programCameraId ? "program" : "")), cams.length),
     group("角色 · 道具", chars.map((e) => row("entity", e.id, e.displayName, `${e.semanticType}${e.pose ? " · " + e.pose : ""}`)), chars.length),
     group("布景", set.map((e) => row("entity", e.id, e.displayName, e.semanticType)), set.length),
-    group("灯光", d.lights.map((l) => row("light", l.id, l.name, `${l.group}${l.enabled === false ? " · off" : ""}`)), d.lights.length),
+    group("灯光", lights.map((l) => row("light", l.id, l.name, `${l.group}${l.enabled === false ? " · off" : ""}`)), lights.length),
   ].join("");
+  el.querySelector("[data-allpads]")?.addEventListener("click", async () => { await dispatch("scene.pad-select", { id: null }); focusPad(null); });
   el.querySelectorAll(".tree-item[data-id]").forEach((node) => {
     node.onclick = () => dispatch("project.select", { kind: node.dataset.kind, id: node.dataset.id });
     node.ondblclick = () => (node.dataset.kind === "camera" ? dispatch("camera.pilot", { id: node.dataset.id }) : focusSelected());
@@ -1004,7 +1065,8 @@ function comparePairs(d) {
     const take = d.takes.find((t) => t.id === s.selectedTake && t.videoUrl) || d.takes.filter((t) => t.shotId === s.id && t.videoUrl).at(-1);
     const gens = d.jobs.filter((j) => j.shotId === s.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url));
     const gen = gens.at(-1), prev = gens.length > 1 ? gens.at(-2) : null;
-    return { shot: s, blockout: take?.videoUrl || null, generated: gen?.result?.url || null, previous: prev?.result?.url || null, mode: gen?.mode, refs: (gen?.inputs?.references || []).length, verdict: s.lastVerdict || null };
+    const prevTake = take ? d.takes.filter((t) => t.shotId === s.id && t.videoUrl && t.id !== take.id).at(-1) : null;
+    return { shot: s, blockout: take?.videoUrl || null, blockoutPrev: prevTake?.videoUrl || null, generated: gen?.result?.url || null, previous: prev?.result?.url || null, mode: gen?.mode, refs: (gen?.inputs?.references || []).length, verdict: s.lastVerdict || null };
   }).filter((p) => p.blockout && p.generated);
 }
 
@@ -1037,16 +1099,41 @@ function bindSync(el) {
     setTimeout(() => renderCompare(store.get()), 1200);
   }));
 
-  // 一起播 / 一起停，拖任意一个另一个跟上 —— 对照的意义在于同一时刻的同一构图
-  el.querySelectorAll("[data-play]").forEach((b) => (b.onclick = () => {
-    const vs = [...el.querySelectorAll("video[data-sync]")];
-    const playing = vs.some((v) => !v.paused);
-    vs.forEach((v) => { v.currentTime = 0; playing ? v.pause() : v.play().catch(() => {}); });
-    b.textContent = playing ? "一起播" : "暂停";
-  }));
-  el.querySelectorAll("video[data-sync]").forEach((v) => (v.onseeking = () => {
-    el.querySelectorAll("video[data-sync]").forEach((o) => { if (o !== v && Math.abs(o.currentTime - v.currentTime) > 0.15) o.currentTime = v.currentTime; });
-  }));
+  // 一起播 / 一起停，拖任意一个另一个跟上 —— 对照的意义在于同一时刻的同一构图。
+  // 暂停就是停在当下这一帧：以前暂停顺手把 currentTime 归零，草片第 0 帧是录制器起手的黑场，
+  // 于是「一按暂停全黑」。回到开头是另一个按钮。按钮的字永远跟着真实状态走（播完、拖动、外部暂停都算）。
+  const vs = () => [...el.querySelectorAll("video[data-sync]")];
+  const playBtn = el.querySelector("[data-play]");
+  const scrub = el.querySelector("[data-scrub]");
+  const timeEl = el.querySelector("[data-time]");
+  const longest = () => Math.max(0.1, ...vs().map((v) => (Number.isFinite(v.duration) ? v.duration : 0)));
+  const syncUi = () => {
+    const playing = vs().some((v) => !v.paused && !v.ended);
+    if (playBtn) playBtn.textContent = playing ? "❚❚ 暂停" : vs().some((v) => v.currentTime > 0.05) ? "▶ 继续" : "▶ 一起播";
+    const lead = vs().find((v) => !v.paused) || vs()[0];
+    if (scrub && lead && !scrub.matches(":active")) scrub.value = String(Math.round((lead.currentTime / longest()) * 1000));
+    if (timeEl && lead) timeEl.textContent = `${lead.currentTime.toFixed(1)}s / ${longest().toFixed(1)}s`;
+  };
+  vs().forEach((v) => {
+    v.loop = false; // 播完就停在末帧并把按钮换回来，循环会让「暂停」永远追不上状态
+    v.preload = "auto";
+    v.onplay = v.onpause = v.onended = v.ontimeupdate = v.onloadedmetadata = syncUi;
+    v.onseeking = () => vs().forEach((o) => { if (o !== v && Math.abs(o.currentTime - v.currentTime) > 0.15) o.currentTime = v.currentTime; });
+  });
+  playBtn?.addEventListener("click", () => {
+    const playing = vs().some((v) => !v.paused && !v.ended);
+    if (playing) vs().forEach((v) => v.pause());
+    else {
+      // 都播到头了就从头来；否则从各自现在的位置接着播（时间对齐到最靠前的那个）
+      const done = vs().every((v) => v.ended || (v.duration && v.currentTime >= v.duration - 0.05));
+      const t = done ? 0 : Math.min(...vs().map((v) => v.currentTime));
+      vs().forEach((v) => { v.currentTime = t; v.play().catch(() => {}); });
+    }
+    syncUi();
+  });
+  el.querySelector("[data-restart]")?.addEventListener("click", () => { vs().forEach((v) => { v.pause(); v.currentTime = 0; }); syncUi(); });
+  scrub?.addEventListener("input", () => { const t = (Number(scrub.value) / 1000) * longest(); vs().forEach((v) => { v.currentTime = Math.min(t, v.duration || t); }); syncUi(); });
+  syncUi();
 }
 
 // 舞台对照：占满主画面的左右分屏。
@@ -1070,11 +1157,12 @@ export function renderCompare(d) {
   if (!shot) { el.innerHTML = `<div class="sc-empty">还没有镜头。</div>`; return; }
   const p = comparePairs(d).find((x) => x.shot.id === shot.id) || pairFor(d, shot);
   const three = showPrevGen && !!p.previous;
-  // 原片：复刻流程里最该被并排看的东西。还没生成的时候默认就摆出来 ——
-  // 这时候白模的唯一意义就是「和原片比，机位走位对上了没有」，不摆出来等于没法判断。
+  // 原片：复刻流程里最该被并排看的东西，默认就摆出来。
+  // 改完重录之后要看的是「改前 / 改后 / 生成」三样并排，所以草片给两栏：上一版和改完后这版；
+  // 生成那栏一直在，还没生成就写「还没有」—— 空着的一栏也在说事：下一步就是它。
   const origin = d.project.reference?.ref || null;
-  const withRef = origin && (showRefCol === null ? !p.generated : showRefCol);
-  const key = `${shot.id}|${p.blockout}|${p.generated}|${three ? p.previous : ""}|${withRef ? origin : ""}|${JSON.stringify(p.verdict || null)}`;
+  const withRef = origin && (showRefCol === null ? true : showRefCol);
+  const key = `${shot.id}|${p.blockout}|${p.blockoutPrev}|${p.generated}|${three ? p.previous : ""}|${withRef ? origin : ""}|${JSON.stringify(p.verdict || null)}`;
   if (el.dataset.key === key) return; // 别在播放时被每帧重绘打断
   el.dataset.key = key;
 
@@ -1082,13 +1170,16 @@ export function renderCompare(d) {
     url ? `<video class="sc-v" data-sync src="${esc(mediaHref(url))}" muted loop playsinline preload="metadata"></video>` : `<div class="sc-none">还没有</div>`
   }</div></div>`;
 
+  const cells = [
+    withRef ? cell("原片 · 你要复刻的那条", origin, "origin") : "",
+    p.blockoutPrev ? cell("草片 · 改之前", p.blockoutPrev, "prev") : "",
+    cell(p.blockoutPrev ? "草片 · 改完后 · 免费" : "草片 · 免费 · 你改的是这边", p.blockout),
+    three ? cell("生成 · 上一版", p.previous) : "",
+    cell(`生成 · ${esc(p.mode || "")}${three ? " · 新版" : ""} · 计费`, p.generated, "gen"),
+  ].filter(Boolean);
   el.innerHTML = `
-    <div class="sc-grid ${[withRef, three, !!p.generated || !withRef].filter(Boolean).length > 2 ? "three" : ""}">
-      ${withRef ? cell("原片 · 你要复刻的那条", origin, "origin") : ""}
-      ${cell("草片 · 免费 · 你改的是这边", p.blockout)}
-      ${three ? cell("生成 · 上一版", p.previous) : ""}
-      ${withRef && !p.generated ? "" : cell(`生成 · ${esc(p.mode || "")}${three ? " · 新版" : ""} · 计费`, p.generated, "gen")}
-    </div>
+    <div class="sc-grid n${cells.length}">${cells.join("")}</div>
+    <div class="sc-scrub"><input type="range" min="0" max="1000" value="0" data-scrub /><span class="sc-time" data-time>0.0s</span></div>
     <div class="sc-bar">
       <b>${esc(shot.index)} ${esc(shot.title)}</b>
       <span>${Math.round(shot.lens.focalLength)}mm · ${esc(shot.motion.type)} · ${((shot.range.outFrame - shot.range.inFrame) / d.project.fps).toFixed(1)}s</span>
@@ -1098,7 +1189,7 @@ export function renderCompare(d) {
       <div class="sc-btns">
         ${origin ? `<button data-origin class="${withRef ? "on" : ""}">${withRef ? "收起原片" : "对上原片"}</button>` : ""}
         ${p.previous ? `<button data-prev class="${three ? "on" : ""}">${three ? "只看两栏" : "加上一版"}</button>` : ""}
-        <button data-play>一起播</button>
+        <button data-play class="primary">▶ 一起播</button><button data-restart data-tip="回到开头" data-tip-sub="所有栏一起回到第 0 秒，停着">⇤</button>
         ${withRef ? `<button data-origin-gen="${esc(shot.id)}">直接照原片生成</button>` : ""}
         <button class="primary" data-regen="${esc(shot.id)}">改完重生成这一镜</button>
         <button data-close>退出对照</button>
@@ -1117,7 +1208,8 @@ export function renderCompare(d) {
 function pairFor(d, s) {
   const take = d.takes.find((t) => t.id === s.selectedTake && t.videoUrl) || d.takes.filter((t) => t.shotId === s.id && t.videoUrl).at(-1);
   const gens = d.jobs.filter((j) => j.shotId === s.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url));
-  return { shot: s, blockout: take?.videoUrl || null, generated: gens.at(-1)?.result?.url || null, previous: gens.length > 1 ? gens.at(-2).result.url : null, mode: [String(gens.at(-1)?.model || "").replace(/\s*\(.*\)$/, ""), gens.at(-1)?.mode].filter(Boolean).join(" · "), refs: (gens.at(-1)?.inputs?.references || []).length, verdict: s.lastVerdict || null };
+  const prevTake = take ? d.takes.filter((t) => t.shotId === s.id && t.videoUrl && t.id !== take.id).at(-1) : null;
+  return { shot: s, blockout: take?.videoUrl || null, blockoutPrev: prevTake?.videoUrl || null, generated: gens.at(-1)?.result?.url || null, previous: gens.length > 1 ? gens.at(-2).result.url : null, mode: [String(gens.at(-1)?.model || "").replace(/\s*\(.*\)$/, ""), gens.at(-1)?.mode].filter(Boolean).join(" · "), refs: (gens.at(-1)?.inputs?.references || []).length, verdict: s.lastVerdict || null };
 }
 
 // ---------- agent thread ----------
@@ -1673,14 +1765,16 @@ function renderTimeline(el, d) {
     el.innerHTML = emptyState("选一个镜头。");
     return;
   }
+  const fps = d.project.fps;
   const len = Math.max(1, shot.range.outFrame - shot.range.inFrame);
   const pct = (f) => `${((f - shot.range.inFrame) / len) * 100}%`;
+  const head = localPlayhead(d, shot);
   // 刻度按时长自适应：90 秒的镜头画 90 条秒线只会糊成一片。目标是最多十来个标签。
-  const secs = len / d.project.fps;
+  const secs = len / fps;
   const step = [1, 2, 5, 10, 15, 30, 60].find((x) => secs / x <= 12) || 120;
   const ticks = [];
   for (let t = 0; t <= secs + 1e-6; t += step) {
-    const f = shot.range.inFrame + t * d.project.fps;
+    const f = shot.range.inFrame + t * fps;
     if (f > shot.range.outFrame + 1e-6) break;
     ticks.push(`<div class="tick" style="left:${pct(f)}">${t >= 60 ? `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, "0")}` : `${Math.round(t)}s`}</div>`);
   }
@@ -1692,39 +1786,172 @@ function renderTimeline(el, d) {
   const subCount = d.entities.filter((e) => e.path?.length).length + d.lights.filter((l) => l.keyframes?.length).length;
   const layout = d.shots.map((s, i, arr) => ({ s, start: arr.slice(0, i).reduce((a, x) => a + x.range.outFrame - x.range.inFrame, 0), len: s.range.outFrame - s.range.inFrame }));
   const total = layout.reduce((a, x) => a + x.len, 0) || 1;
+  const pad = d.scene.pads?.find((p) => p.id === shotPad(d, shot));
+
+  // 整条的标尺：Sequence 轨和原片轨都按整条时长排，标尺上有整条播放头
+  const totalSecs = total / fps;
+  const seqStep = [1, 2, 5, 10, 15, 30, 60].find((x) => totalSecs / x <= 14) || 120;
+  const seqTicks = [];
+  for (let t = 0; t <= totalSecs + 1e-6; t += seqStep) seqTicks.push(`<div class="tick" style="left:calc(var(--tl-lbl) + (100% - var(--tl-lbl) - 16px) * ${(t * fps) / total})">${t >= 60 ? `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, "0")}` : `${Math.round(t)}s`}</div>`);
+  const globalHead = d.project.playSequence ? d.project.playhead : (layout.find((x) => x.s.id === shot.id)?.start || 0) + (head - shot.range.inFrame);
+  const seqRuler = `<div class="tl-ruler seq"><span class="lbl">整条</span>${seqTicks.join("")}<div class="head" style="left:calc(var(--tl-lbl) + (100% - var(--tl-lbl) - 16px) * ${Math.min(1, globalHead / total)})"></div></div>`;
+  // 原片切镜：读取器切出来的场景段，按原片时间摆到同一条标尺上。点一段跳到对应的镜头。
+  const refScenes = (d.project.reference?.analysis?.scenes || []).filter((sg) => Number.isFinite(Number(sg.from)) && Number.isFinite(Number(sg.to)) && sg.to > sg.from);
+  const refEnd = refScenes.length ? Math.max(...refScenes.map((sg) => Number(sg.to))) : 0;
+  const refTrack = refScenes.length ? `<div class="tl-track tl-ref"><span class="lbl" data-tip="原片切镜" data-tip-sub="读参照时切出来的 ${refScenes.length} 段，按原片时间摆。点一段跳到对应的镜头">原片</span>${refScenes.map((sg, i) => {
+    const padHit = d.scene.pads?.find((p) => p.from === Number(sg.from)) || d.scene.pads?.[i];
+    const target = padHit ? d.shots.find((x) => shotPad(d, x) === padHit.id) : d.shots[i];
+    return `<div class="seg-ref${target?.id === shot.id ? " cur" : ""}" data-refseg="${esc(target?.id || "")}" style="left:calc(var(--tl-lbl) + (100% - var(--tl-lbl) - 16px) * ${Number(sg.from) / refEnd});width:calc((100% - var(--tl-lbl) - 16px) * ${(Number(sg.to) - Number(sg.from)) / refEnd})" data-tip="${esc(`${i + 1} ${sg.name || ""}`)}" data-tip-sub="${esc(`原片 ${sg.from}s–${sg.to}s · ${(sg.camera?.shotSize || "")} ${sg.camera?.focalMm ? sg.camera.focalMm + "mm" : ""} ${sg.motion?.type || ""}${target ? ` → 镜头 ${target.index}` : ""}`)}">${i + 1} ${esc(sg.name || "")}</div>`;
+  }).join("")}</div>` : "";
+
+  // 这一镜手里的素材：故事版关键帧、选中的 Take、主体的定妆照。每一样都能拖到别的镜头段上。
+  const card = d.storyboard.find((c) => c.shotId === shot.id);
+  const takes = d.takes.filter((t) => t.shotId === shot.id && t.videoUrl);
+  const refs = referencesForShot(d, shot, 6);
+  const chips = [
+    ...(card?.keyframes || []).slice(0, 2).map((u) => `<span class="tl-chip" ${dragAttr({ kind: "keyframe", url: u })} data-tip="关键帧" data-tip-sub="拖到别的镜头段上，当那一镜的首帧"><img src="${esc(u)}" alt="" /><i>首帧</i></span>`),
+    ...takes.slice(-2).map((t) => `<span class="tl-chip" ${dragAttr({ kind: "take", id: t.id, shotId: shot.id })} data-tip="${esc(t.name)}" data-tip-sub="草片 Take。拖到别的镜头段上，当那一镜的草片"><video src="${esc(mediaHref(t.videoUrl))}" muted playsinline poster="${t.thumbnail || ""}"></video><i>${esc(t.name)}</i></span>`),
+    ...refs.map((r) => `<span class="tl-chip ok" ${dragAttr({ kind: "asset", id: r.assetId, entityId: r.entityId, url: r.url })} data-tip="${esc(r.name)} 的定妆照" data-tip-sub="拖到别的镜头段上，那一镜生成时也带上它"><img src="${esc(mediaHref(r.url))}" alt="" /><i>${esc(r.name)}</i></span>`),
+  ];
+
   el.innerHTML = `<div class="timeline">
     <div class="tl-side">
-      <div><b>${esc(shot.index)} ${esc(shot.title)}</b></div>
-      <div class="tcs">${timecode(d.project.playhead, d.project.fps)} / ${timecode(shot.range.outFrame, d.project.fps)}</div>
+      <div><b>${esc(shot.index)} ${esc(shot.title)}</b>${pad ? `<div class="tl-pad">台 ${pad.index} · ${esc(pad.name)}</div>` : ""}</div>
+      <div class="tcs">${timecode(head, fps)} / ${timecode(shot.range.outFrame, fps)}${d.project.playSequence ? `<span class="seqtc"> · 整条 ${timecode(d.project.playhead, fps)}</span>` : ""}</div>
       <div class="tl-buttons"><button data-tl="in">⇤</button><button data-tl="prev">◀</button><button data-tl="play">${d.project.playing ? "❚❚" : "▶"}</button><button data-tl="next">▶|</button><button data-tl="out">⇥</button><button data-tl="loop" class="${d.project.loop ? "on" : ""}">⟳</button></div>
       <div class="tl-buttons"><button data-tl="key">+ 机位关键帧</button><button data-tl="clear">清除关键帧</button></div>
+      <div class="tl-buttons"><button data-tl="split" data-tip="在播放头切开" data-tip-sub="前半段还是这一镜，后半段成一个新镜头，机位和运镜照旧">✂ 切开</button><button data-tl="del" data-tip="删这一镜" data-tip-sub="连同它的 Take 和故事版卡">删除</button><button data-tl="save" data-tip="保存工程" data-tip-sub="${isOnline() ? "连着后端时每一步都已经落盘，这里再打一次时间点" : "单机模式：写进这台浏览器"}">保存</button></div>
       <div class="tl-buttons"><button data-tl="seq">顺播全部</button><button data-tl="rec">● 录制 Take</button></div>
     </div>
     <div class="tl-main">
-      <div class="tl-ruler">${ticks.join("")}<div class="head" style="left:${pct(d.project.playhead)}"></div></div>
-      <input class="tl-scrub" type="range" min="${shot.range.inFrame}" max="${shot.range.outFrame}" step="1" value="${d.project.playhead}" />
+      <div class="tl-ruler">${ticks.join("")}<div class="head" style="left:${pct(head)}"></div></div>
+      <input class="tl-scrub" type="range" min="${shot.range.inFrame}" max="${shot.range.outFrame}" step="1" value="${head}" />
       <div class="tl-track"><span class="lbl">Camera</span><span>${esc(d.cameras.find((c) => c.id === shot.cameraId)?.name || "")} · ${(shot.keyframes || []).length ? `${shot.keyframes.length} 关键帧` : esc(MOTION_TYPES[shot.motion.type]?.zh || "")}</span>${keys}</div>
       <div class="tl-track"><span class="lbl">Lens</span><span>${Math.round(shot.lens.focalLength)} mm · f/${shot.lens.aperture}</span></div>
       ${subCount ? `<div class="tl-subs" style="--n:${Math.min(subCount, 4)}">${entKeys}${lightKeys}</div>` : ""}
-      <div class="tl-track"><span class="lbl">Sequence</span>${layout.map((x) => `<div class="seg-shot ${x.s.id === shot.id ? "cur" : ""}" data-seg="${x.s.id}" style="left:calc(var(--tl-lbl) + (100% - var(--tl-lbl) - 16px) * ${x.start / total});width:calc((100% - var(--tl-lbl) - 16px) * ${x.len / total})">${esc(x.s.index)} ${esc(x.s.title)}</div>`).join("")}</div>
+      <div class="tl-track tl-assets"><span class="lbl">素材</span>${chips.length ? chips.join("") : `<span class="dim">还没有素材：录一条 Take、或在角色库给主体定妆，就会出现在这里，能拖到任何一段上</span>`}</div>
+      ${seqRuler}${refTrack}
+      <div class="tl-track tl-seq" data-seqtrack="1"><span class="lbl">Sequence</span>${layout.map((x) => `<div class="seg-shot ${x.s.id === shot.id ? "cur" : ""}" data-seg="${x.s.id}" ${dragAttr({ kind: "shot", id: x.s.id })} style="left:calc(var(--tl-lbl) + (100% - var(--tl-lbl) - 16px) * ${x.start / total});width:calc((100% - var(--tl-lbl) - 16px) * ${x.len / total})" data-tip="${esc(x.s.index + " " + x.s.title)}" data-tip-sub="${(x.len / fps).toFixed(1)}s · 拖动换顺序 · 拖右边缘改时长 · 把素材拖上来"><span class="seg-txt">${esc(x.s.index)} ${esc(x.s.title)}</span><i class="trim" data-trim="${x.s.id}"></i></div>`).join("")}</div>
     </div></div>`;
   const scrub = el.querySelector(".tl-scrub");
   scrub.oninput = () => dispatch("timeline.seek", { frame: Number(scrub.value) }, { silent: true });
   el.querySelectorAll("[data-kf]").forEach((k) => (k.onclick = (ev) => (ev.shiftKey ? dispatch("motion.delete-keyframe", { shotId: shot.id, frame: Number(k.dataset.kf) }) : dispatch("timeline.seek", { frame: Number(k.dataset.kf) }))));
-  el.querySelectorAll("[data-seg]").forEach((s) => (s.onclick = () => dispatch("shot.select", { id: s.dataset.seg })));
+  el.querySelectorAll("[data-seg]").forEach((s) => (s.onclick = (ev) => { if (!ev.target.closest(".trim")) dispatch("shot.select", { id: s.dataset.seg }); }));
+  el.querySelectorAll("[data-refseg]").forEach((s) => (s.onclick = () => s.dataset.refseg && dispatch("shot.select", { id: s.dataset.refseg })));
   const act = {
     in: () => dispatch("timeline.seek", { frame: shot.range.inFrame }),
     out: () => dispatch("timeline.seek", { frame: shot.range.outFrame }),
-    prev: () => dispatch("timeline.seek", { frame: Math.max(shot.range.inFrame, d.project.playhead - 1) }),
-    next: () => dispatch("timeline.seek", { frame: Math.min(shot.range.outFrame, d.project.playhead + 1) }),
+    prev: () => dispatch("timeline.seek", { frame: Math.max(shot.range.inFrame, head - 1) }),
+    next: () => dispatch("timeline.seek", { frame: Math.min(shot.range.outFrame, head + 1) }),
     play: togglePlay,
     loop: () => store.patch((x) => (x.project.loop = !x.project.loop)),
     key: () => report(dispatch("motion.keyframe", { shotId: shot.id })),
     clear: () => dispatch("motion.clear-keyframes", { shotId: shot.id }),
+    split: async () => { const r = await report(dispatch("shot.split", { id: shot.id })); if (r?.ok) toast(`在 ${r.atSeconds}s 切开了，后半段是新的一镜`); },
+    del: () => { if (confirm(`删掉 ${shot.index} ${shot.title}？连同它的 Take 和故事版卡。`)) report(dispatch("shot.delete", { id: shot.id })); },
+    save: () => toast(saveNow() ? (isOnline() ? "已保存（后端工程文件）" : "已保存到本机") : "保存失败", false),
     seq: () => dispatch("timeline.play", { sequence: true }),
     rec: recordCurrent,
   };
   el.querySelectorAll("[data-tl]").forEach((b) => (b.onclick = act[b.dataset.tl]));
+  bindSequenceEditing(el, d, layout, total);
+}
+
+// 时间线里的剪辑：镜头段拖着换顺序、拖右边缘改时长、把素材拖到段上。
+// 每一下都是一个 Action（shot.reorder / shot.update / storyboard.add / asset.approve），
+// 所以能撤销、进事件日志，Agent 也能做同样的事。
+function bindSequenceEditing(el, d, layout, total) {
+  const track = el.querySelector("[data-seqtrack]");
+  if (!track) return;
+  const fps = d.project.fps;
+  const segs = [...track.querySelectorAll("[data-seg]")];
+
+  // 落点：镜头段
+  for (const seg of segs) {
+    seg.addEventListener("dragover", (ev) => { if (!dragItem) return; ev.preventDefault(); ev.dataTransfer.dropEffect = dragItem.kind === "shot" ? "move" : "copy"; seg.classList.add("over"); });
+    seg.addEventListener("dragleave", () => seg.classList.remove("over"));
+    seg.addEventListener("drop", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      seg.classList.remove("over");
+      let item = dragItem;
+      if (!item) { try { item = JSON.parse(ev.dataTransfer.getData("application/x-director") || "null"); } catch {} }
+      if (!item) return;
+      const targetId = seg.dataset.seg;
+      const target = store.get().shots.find((s) => s.id === targetId);
+      if (!target) return;
+      if (item.kind === "shot") {
+        if (item.id === targetId) return;
+        const rect = seg.getBoundingClientRect();
+        const after = ev.clientX > rect.left + rect.width / 2;
+        const list = store.get().shots;
+        const from = list.findIndex((s) => s.id === item.id);
+        let pos = list.findIndex((s) => s.id === targetId) + (after ? 1 : 0);
+        if (from < pos) pos -= 1;
+        return report(dispatch("shot.reorder", { id: item.id, position: pos }));
+      }
+      if (item.kind === "asset") {
+        const a = (store.get().assets || []).find((x) => x.id === item.id);
+        if (!a) return;
+        if (!a.approved) await report(dispatch("asset.approve", { id: a.id, approved: true }));
+        const ids = [...new Set([...(target.targetIds || []), a.entityId].filter(Boolean))];
+        await report(dispatch("shot.update", { id: targetId, targetIds: ids }));
+        return toast(`${target.index} 生成时会带上这张定妆照`);
+      }
+      if (item.kind === "take") {
+        const r = await report(dispatch("storyboard.add", { shotId: targetId, takeId: item.id }));
+        if (r?.ok) toast(`这条 Take 现在是 ${target.index} 的草片`);
+        return;
+      }
+      if (item.kind === "keyframe" && item.url) {
+        const r = await report(dispatch("storyboard.add", { shotId: targetId, keyframes: [item.url] }));
+        if (r?.ok) toast(`${target.index} 的首帧换成了这张`);
+      }
+    });
+  }
+  // 拖到轨道空白处 = 挪到最后
+  track.addEventListener("dragover", (ev) => { if (dragItem?.kind === "shot") { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; } });
+  track.addEventListener("drop", (ev) => {
+    if (dragItem?.kind !== "shot" || ev.target.closest("[data-seg]")) return;
+    ev.preventDefault();
+    report(dispatch("shot.reorder", { id: dragItem.id, position: store.get().shots.length }));
+  });
+
+  // 右边缘：拖着改时长。总长度随之变，所以按拖动开始时的「每像素多少秒」算。
+  for (const h of track.querySelectorAll("[data-trim]")) {
+    h.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const id = h.dataset.trim;
+      const seg = h.parentElement;
+      const lbl = seg.querySelector(".seg-txt");
+      const shot = store.get().shots.find((s) => s.id === id);
+      if (!shot) return;
+      const lblW = parseFloat(getComputedStyle(track).getPropertyValue("--tl-lbl")) || 104;
+      const trackPx = Math.max(1, track.clientWidth - lblW - 16);
+      const spp = total / fps / trackPx; // 秒 / 像素
+      const startSecs = (shot.range.outFrame - shot.range.inFrame) / fps;
+      const x0 = ev.clientX;
+      let secs = startSecs;
+      const w0 = seg.getBoundingClientRect().width;
+      seg.classList.add("trimming");
+      seg.draggable = false;
+      const move = (e) => {
+        secs = Math.max(0.5, Math.round((startSecs + (e.clientX - x0) * spp) * 10) / 10);
+        seg.style.width = `${Math.max(24, w0 + (e.clientX - x0))}px`;
+        lbl.textContent = `${shot.index} ${shot.title} · ${secs.toFixed(1)}s`;
+      };
+      const up = async () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        seg.classList.remove("trimming");
+        if (Math.abs(secs - startSecs) >= 0.05) await report(dispatch("shot.update", { id, duration: secs }));
+        else renderBottom(store.get());
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+  }
 }
 
 function renderTakes(el, d) {
@@ -1736,7 +1963,7 @@ function renderTakes(el, d) {
   el.innerHTML = `<table class="grid"><thead><tr><th></th><th>Take</th><th>镜头</th><th>帧</th><th>状态</th><th></th></tr></thead><tbody>
     ${[...d.takes].reverse().map((t) => {
       const s = d.shots.find((x) => x.id === t.shotId);
-      return `<tr class="row ${s?.id === d.project.currentShotId ? "sel" : ""}" data-take="${t.id}">
+      return `<tr class="row ${s?.id === d.project.currentShotId ? "sel" : ""}" data-take="${t.id}" ${t.videoUrl ? dragAttr({ kind: "take", id: t.id, shotId: t.shotId }) : ""}>
         <td>${t.videoUrl ? `<video class="thumb clickable" data-preview="${esc(t.videoUrl)}" data-kind="video" src="${esc(mediaHref(t.videoUrl))}" muted loop playsinline poster="${t.thumbnail || ""}" onmouseenter="this.play()" onmouseleave="this.pause()"></video>` : t.thumbnail ? `<img class="thumb" src="${t.thumbnail}" />` : `<div class="thumb"></div>`}</td>
         <td><b>${esc(t.name)}</b></td>
         <td class="mono">${esc(s ? `${s.index} ${s.title}` : t.shotId)}</td>
@@ -1789,7 +2016,8 @@ function renderBoard(el, d) {
     const gen = [...d.jobs].reverse().find((j) => j.shotId === c.shotId && j.status === "done" && j.result?.url);
     const running = d.jobs.filter((j) => j.shotId === c.shotId && ["queued", "running"].includes(j.status));
     const hero = gen ? (gen.result.kind === "image" ? `<img class="kf" data-preview="${esc(gen.result.url)}" data-kind="image" src="${esc(mediaHref(gen.result.url))}" title="生成结果 · ${esc(gen.model)}" />` : `<video class="kf" data-preview="${esc(gen.result.url)}" data-kind="video" src="${esc(mediaHref(gen.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()" title="生成结果 · ${esc(gen.model)}"></video>`) : take?.videoUrl ? `<video class="kf" data-preview="${esc(take.videoUrl)}" data-kind="video" src="${esc(mediaHref(take.videoUrl))}" muted loop playsinline poster="${c.keyframes?.[0] || ""}" onmouseenter="this.play()" onmouseleave="this.pause()" title="草片 Take"></video>` : c.keyframes?.[0] ? `<img class="kf" src="${c.keyframes[0]}" />` : `<div class="kf"></div>`;
-    return `<article class="card ${s?.id === d.project.currentShotId ? "sel" : ""}" data-card="${c.id}">
+    const drag = take?.videoUrl ? dragAttr({ kind: "take", id: take.id, shotId: c.shotId }) : c.keyframes?.[0] ? dragAttr({ kind: "keyframe", url: c.keyframes[0] }) : "";
+    return `<article class="card ${s?.id === d.project.currentShotId ? "sel" : ""}" data-card="${c.id}" ${drag}>
       <h3><span><span class="idx mono" style="color:var(--accent)">${esc(s?.index)}</span> ${esc(s?.title)}</span>${gen ? badge("generated") : badge(c.status)}</h3>
       ${hero}
       ${running.length ? `<div class="progress"><span style="width:${running[0].progress}%"></span></div>` : ""}
@@ -1934,7 +2162,10 @@ function renderLibrary(d) {
   if (badge) { badge.textContent = pending || ""; badge.classList.toggle("on", pending > 0); }
   if (!el || ui.left !== "library") return;
 
-  const groups = LIB_GROUPS.map(([name, types]) => [name, d.entities.filter((e) => types.includes(e.semanticType))]).filter(([, list]) => list.length);
+  const activePad = d.project.activePadId && d.scene.pads?.some((p) => p.id === d.project.activePadId) ? d.project.activePadId : null;
+  const inScope = (e) => !activePad || !padOf(d, e) || padOf(d, e) === activePad;
+  const padTag = (e) => { const q = padOf(d, e); const p = q && d.scene.pads.find((x) => x.id === q); return p && !activePad ? `<span class="pad-tag" data-tip="${esc(p.index + " " + p.name)}" data-tip-sub="在这块台上">${p.index}</span>` : ""; };
+  const groups = LIB_GROUPS.map(([name, types]) => [name, d.entities.filter((e) => types.includes(e.semanticType) && inScope(e))]).filter(([, list]) => list.length);
   const done = d.entities.filter((e) => assets.some((a) => a.entityId === e.id && a.approved)).length;
   const total = groups.reduce((n, [, list]) => n + list.length, 0);
   $("libCount").textContent = total ? `${done}/${total}` : "";
@@ -1947,11 +2178,11 @@ function renderLibrary(d) {
     const shots = d.shots.filter((sh) => (sh.targetIds || []).includes(e.id));
     return `<div class="lib-card${d.project.selectedId === e.id ? " sel" : ""}">
       <div class="lib-head" data-locate="${esc(e.id)}" data-tip="${esc(e.displayName)}" data-tip-sub="点一下在场里找到它">
-        <span class="sw" style="background:${esc(e.proxy?.color || "#8a7a5a")}"></span><b>${esc(e.displayName)}</b>
+        <span class="sw" style="background:${esc(e.proxy?.color || "#8a7a5a")}"></span><b>${esc(e.displayName)}</b>${padTag(e)}
         <span class="st${ok ? " ok" : ""}">${ok ? `<svg class="gi"><use href="#i-check"/></svg>定了` : mine.length ? "待批" : "没定妆"}</span>
       </div>
       <div class="lib-thumbs">
-        ${mine.map((a) => `<div class="lib-thumb${a.approved ? " ok" : ""}">${a.mediaKind === "video" ? `<video data-preview="${esc(a.url)}" data-kind="video" src="${esc(mediaHref(a.url))}" muted loop playsinline></video>` : `<img data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" alt="" />`}
+        ${mine.map((a) => `<div class="lib-thumb${a.approved ? " ok" : ""}" ${dragAttr({ kind: "asset", id: a.id, entityId: e.id, url: a.url })} data-tip="拖到时间线的镜头段上" data-tip-sub="那一镜生成时就会带上这张">${a.mediaKind === "video" ? `<video data-preview="${esc(a.url)}" data-kind="video" src="${esc(mediaHref(a.url))}" muted loop playsinline></video>` : `<img data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" alt="" />`}
           <button class="tk" data-approve="${a.id}" data-on="${a.approved ? 1 : 0}" data-tip="${a.approved ? "已批准" : "批准这张"}" data-tip-sub="${a.approved ? "它出现的每一镜都会自动带上这张。再点一下取消" : `批准后，${esc(e.displayName)}出现的每一镜生成时都会带上它 · ${esc(a.model || a.kind || "")}`}"><svg class="gi"><use href="#i-check"/></svg></button>
           <button class="rm" data-del="${a.id}" data-tip="删掉这张">×</button></div>`).join("")}
         <button class="lib-add${job ? " busy" : ""}" data-more="${esc(e.id)}" ${job ? "disabled" : ""} data-tip="${job ? "正在出" : mine.length ? "再来一张" : "定妆"}" data-tip-sub="${job ? "定妆照生成中" : "出一张定妆照。这一步计费"}">${job ? `${job.progress || 0}%` : `<svg class="gi"><use href="#i-plus"/></svg>`}</button>

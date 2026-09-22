@@ -647,11 +647,17 @@ register("agent.set-backend", {
 
 register("agent.say", {
   doc: "向 Agent 会话追加一条消息（外部 LLM 后端把回复写回会话用）",
-  params: { role: "agent|user|plan", text: "string" },
-  required: ["text"],
+  params: { role: "agent|user|plan", text: "string", media: "{url:'/media/x.jpg', kind:'image|video'}（这条消息附带的图或视频，只认本机 /media 下的文件）" },
   undoable: false,
-  handler: ({ role, text }) => {
-    say(role || "agent", text);
+  // 文字和附件至少要有一样。以前 text 是必填，于是「只丢一张图、一个字不说」这种最自然的
+  // 用法发不出去。附件只认 /media/ 下的单个文件：消息会广播给所有页面，不能让它带任意地址。
+  validate: ({ text, media }) => {
+    if (!String(text || "").trim() && !media) return { error: "MISSING_PARAM", missing: ["text|media"] };
+    if (media && !/^\/media\/[^/?#]+$/.test(String(media.url || ""))) return { error: "BAD_MEDIA", hint: "附件只能是 /media/ 下的文件（先走 /api/upload）" };
+    return null;
+  },
+  handler: ({ role, text, media }) => {
+    say(role || "agent", String(text || ""), media ? { media: { url: media.url, kind: media.kind === "video" ? "video" : "image" } } : {});
     return { ok: true };
   },
 });
