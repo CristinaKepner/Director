@@ -6,6 +6,7 @@
 // MediaRecorder webm proxy and a 720p Seedance mp4 can sit in the same timeline, then concat-demuxed.
 import fs from "node:fs";
 import os from "node:os";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
@@ -185,27 +186,36 @@ export function createFilmAssembler(opts = {}) {
     // span={from,to}：只送这一镜在原片里的那一段。照原片生成时整条片子是错的参考 ——
     // 改的是第 07 镜，模型看到的却是从第一帧开始的整条。切出来的片段留在媒体目录里，同一段只切一次。
     async toMp4(ref, span = null) {
-      const m = String(ref || "").match(/\/media\/([^/?#]+)/);
-      const name = m ? path.basename(decodeURIComponent(m[1])) : path.basename(String(ref || ""));
-      if (!name) return null;
-      const a = span && Number.isFinite(Number(span.from)) ? Math.max(0, Number(span.from)) : null;
-      const b = span && Number.isFinite(Number(span.to)) ? Number(span.to) : null;
-      const cut = a != null && b != null && b > a;
-      if (!cut && /\.mp4$/i.test(name)) return `/media/${name}`;
-      if (!bin) return null;
-      const src = path.join(mediaDir, name);
-      if (!fs.existsSync(src)) return null;
-      const stem = name.replace(/\.[^.]+$/, "");
-      const outName = cut ? `${stem}_${a.toFixed(1)}-${b.toFixed(1)}.mp4` : `${stem}_mp4.mp4`;
-      const out = path.join(mediaDir, outName);
-      if (fs.existsSync(out) && fs.statSync(out).size > 0) return mediaUrl(outName);
+      if (!bin) throw Object.assign(new Error("参考视频需要先转为 30 fps MP4，但 ffmpeg 不可用"), { code: "REFERENCE_TRANSCODE_FAILED" });
+      const work = fs.mkdtempSync(path.join(os.tmpdir(), "director-reference-"));
+      let partial = null;
       try {
-        await run(bin, ["-y", ...(cut ? ["-ss", String(a), "-t", String(Math.round((b - a) * 100) / 100)] : []), "-i", src, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]);
-        log(`ref → mp4: ${name}${cut ? ` @${a}–${b}s` : ""} → ${outName}`);
+        const src = await localize({ url: ref }, work, 0);
+        if (!src) throw new Error("找不到参考视频文件");
+        const a = span && Number.isFinite(Number(span.from)) ? Math.max(0, Number(span.from)) : null;
+        const b = span && Number.isFinite(Number(span.to)) ? Number(span.to) : null;
+        const cut = a != null && b != null && b > a;
+        // Versioned, content-addressed cache: old VFR/1000fps conversions are never reused.
+        const hash = createHash("sha256").update(JSON.stringify(["reference-cfr30-v1", cut ? [a, b] : null]));
+        for await (const chunk of fs.createReadStream(src)) hash.update(chunk);
+        const outName = `reference_${hash.digest("hex").slice(0, 24)}_30fps.mp4`;
+        const out = path.join(mediaDir, outName);
+        if (fs.existsSync(out) && fs.statSync(out).size > 0) return mediaUrl(outName);
+        fs.mkdirSync(mediaDir, { recursive: true });
+        partial = path.join(mediaDir, `.reference-${randomUUID()}.mp4`);
+        await run(bin, ["-y", ...(cut ? ["-ss", String(a)] : []), "-i", src,
+          ...(cut ? ["-t", String(b - a)] : []), "-map", "0:v:0", "-an",
+          "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2", "-r", "30", "-fps_mode", "cfr",
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", partial]);
+        fs.renameSync(partial, out);
+        log(`ref → CFR 30fps mp4: ${path.basename(src)} → ${outName}`);
         return mediaUrl(outName);
       } catch (err) {
         log(`toMp4 failed: ${err.message}`);
-        return null;
+        throw Object.assign(new Error(`参考视频转码失败，未提交生成：${err.message}`), { code: "REFERENCE_TRANSCODE_FAILED" });
+      } finally {
+        if (partial) fs.rmSync(partial, { force: true });
+        fs.rmSync(work, { recursive: true, force: true });
       }
     },
 
