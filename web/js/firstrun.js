@@ -276,12 +276,17 @@ async function build(brief, set) {
 
 // 白模只能在页面里跑：录的是真的在出帧的 Program 画面。这一步不在后端，也不该假装在。
 async function shoot(set) {
+  try { return await shootInner(set); }
+  catch (err) { set("film", { state: "fail", note: String(err?.message || err) }); disable(false); }
+}
+async function shootInner(set) {
   set("blockout", { state: "run", note: "" });
   const bo = await runBlockout({ onProgress: (p) => p.phase === "record" && set("blockout", { state: "run", note: `第 ${p.index}/${p.total} 镜 · ${p.title}` }) });
   if (!bo.ok) { set("blockout", { state: "fail", note: bo.hint || bo.error || "录制没成功" }); return disable(false); }
   set("blockout", { state: "done", note: `${bo.recorded}/${bo.of} 镜` });
 
   set("film", { state: "run", note: "" });
+  // 任何一步抛异常都要落到界面上，不能让步骤停在「◠ 100%」
   const film = await exportFilm({ source: "blockout", name: `${store.get().project.name.replace(/\s+/g, "_")}_blockout`, onProgress: (p) => set("film", { state: "run", note: p.note || `${p.progress || 0}%` }) });
   if (!film?.ok) { set("film", { state: "fail", note: film?.hint || film?.error || "拼接失败" }); return disable(false); }
   set("film", { state: "done", note: `${Math.round(film.seconds)} 秒` });

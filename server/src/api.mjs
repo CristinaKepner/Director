@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".webm": "video/webm", ".mp4": "video/mp4", ".md": "text/markdown; charset=utf-8", ".ico": "image/x-icon", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8" };
+const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".webm": "video/webm", ".mp4": "video/mp4", ".glb": "model/gltf-binary", ".md": "text/markdown; charset=utf-8", ".ico": "image/x-icon", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8" };
 const MAX_JSON = 20 * 1024 * 1024;
 const MAX_MEDIA = 200 * 1024 * 1024;
 
@@ -62,13 +62,25 @@ export function createApp(host, opts = {}) {
     return h === `Bearer ${token}` || url.searchParams.get("token") === token;
   }
 
-  function serveFile(res, abs, cacheable = false) {
+  // 视频要能拖、能循环、能从中间播，浏览器靠的是 Range 请求；不支持就只能从头顺播，
+  // 「一起播」把 currentTime 归零再 play 在没有 Range 的资源上会卡住。所以按 RFC 7233 答 206。
+  function serveFile(res, abs, cacheable = false, req = null) {
     fs.stat(abs, (err, st) => {
       if (err || !st.isFile()) {
         res.writeHead(404, { "content-type": "text/plain" });
         return res.end("not found");
       }
-      res.writeHead(200, { "content-type": MIME[path.extname(abs).toLowerCase()] || "application/octet-stream", "cache-control": cacheable ? "public, max-age=86400" : "no-cache", "content-length": st.size, "access-control-allow-origin": cors });
+      const type = MIME[path.extname(abs).toLowerCase()] || "application/octet-stream";
+      const base = { "content-type": type, "cache-control": cacheable ? "public, max-age=86400" : "no-cache", "accept-ranges": "bytes", "access-control-allow-origin": cors };
+      const range = req?.headers?.range && /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+      if (range && st.size > 0) {
+        const start = range[1] === "" ? Math.max(0, st.size - Number(range[2])) : Number(range[1]);
+        const end = range[2] === "" || range[1] === "" ? st.size - 1 : Math.min(Number(range[2]), st.size - 1);
+        if (start > end || start >= st.size) { res.writeHead(416, { "content-range": `bytes */${st.size}` }); return res.end(); }
+        res.writeHead(206, { ...base, "content-range": `bytes ${start}-${end}/${st.size}`, "content-length": end - start + 1 });
+        return fs.createReadStream(abs, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { ...base, "content-length": st.size });
       fs.createReadStream(abs).pipe(res);
     });
   }
@@ -185,7 +197,7 @@ export function createApp(host, opts = {}) {
           res.writeHead(404, { "content-type": "text/plain" });
           return res.end("not found");
         }
-        return serveFile(res, abs, true);
+        return serveFile(res, abs, true, req);
       }
       if (!staticRoot) return json(res, 404, { ok: false, error: "API_ONLY", hint: "frontend is served elsewhere; API lives under /api" });
       // optional companion app at /studio/ (private/studio/dist, local-only material; 404 when absent)

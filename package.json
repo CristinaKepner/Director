@@ -1,7 +1,7 @@
 {
   "name": "director-console",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.8.2",
   "type": "module",
   "description": "Director Console · 导演台 — decoupled 3D director console: core runtime (core/), HTTP/SSE backend (server/), static Three.js frontend (web/)",
   "bin": {
@@ -13,17 +13,20 @@
     "start:api": "node server/bin/director-server.mjs --port 5175 --api-only",
     "build:web": "node tools/build-web.mjs",
     "build:studio": "cd private/studio && bun install && bun run build",
-    "test": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs",
-    "test:api": "node --test server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs",
-    "test:all": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs",
+    "test": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs tests/seedance.test.mjs tests/coverage.test.mjs tests/imports.test.mjs tests/spatial.test.mjs tests/contract.test.mjs tests/stage-workspace.test.mjs",
+    "test:api": "node --test server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs server/tests/fetch.test.mjs gateway/tests/gateway.test.mjs",
+    "test:all": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs tests/seedance.test.mjs tests/coverage.test.mjs tests/imports.test.mjs tests/spatial.test.mjs tests/contract.test.mjs server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/tunnel.test.mjs server/tests/fetch.test.mjs gateway/tests/gateway.test.mjs tests/stage-workspace.test.mjs",
     "smoke": "node tools/smoke.mjs",
     "cli": "node server/bin/director.mjs",
-    "test:research": "node --test research/research.test.mjs",
-    "test:everything": "node --test tests/runtime.test.mjs tests/thread.test.mjs server/tests/api.test.mjs research/research.test.mjs",
+    "test:research": "node --test research/research.test.mjs research/gym.test.mjs research/lab/lab.test.mjs",
+    "test:everything": "node --test tests/runtime.test.mjs tests/thread.test.mjs tests/spatial.test.mjs server/tests/api.test.mjs research/research.test.mjs research/gym.test.mjs research/lab/lab.test.mjs",
     "research:probe": "node research/branch-probe.mjs",
     "research:attribute": "node research/attribute-demo.mjs",
     "research:coverage": "node research/repair-coverage.mjs",
-    "research:evolve": "node research/evolve-demo.mjs"
+    "research:evolve": "node research/evolve-demo.mjs",
+    "test:gateway": "node --test gateway/tests/gateway.test.mjs",
+    "gateway": "node gateway/bin/gateway.mjs",
+    "sync:seedance": "node tools/sync-seedance.mjs"
   },
   "engines": {
     "node": ">=18"

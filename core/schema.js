@@ -248,6 +248,8 @@ export const LOCK_ASPECTS = {
   background:  { zh: "背景环境", en: "background and set", keep: "identical set, props and background geometry", keepZh: "同一处布景、道具与背景结构", avoid: "new set dressing, changed background", guards: ["scene.create", "scene.preset", "scene.room", "entity.create", "entity.delete"], scope: "scene" },
   foreground:  { zh: "前景遮挡", en: "foreground occlusion", keep: "the same foreground element occluding the same part of frame", keepZh: "同一个前景物遮住画面的同一块位置", avoid: "removed foreground, changed occlusion", guards: ["entity.transform", "entity.delete"], scope: "any-entity" },
   lens:        { zh: "焦段光圈", en: "lens", keep: "exact same focal length and aperture, no zoom", keepZh: "焦段与光圈完全不变，不要变焦", avoid: "zoom, focal length change, dolly zoom", guards: ["camera.lens"], scope: "camera" },
+  // 接戏：这一镜要和上一镜接得上（主体在画面同一侧、机位不越轴）。不拦任何 Action —— 它是两镜之间的关系，只在核对时算
+  continuity:  { zh: "接戏", en: "cut continuity", keep: "the cut into this shot keeps the subject on the same side of frame and the camera on the same side of the axis", keepZh: "和上一镜接得上：主体在画面同一侧，机位不越轴", avoid: "crossing the line, subject jumping sides of frame", guards: [], scope: "camera" },
 };
 
 export const PROVIDERS = {

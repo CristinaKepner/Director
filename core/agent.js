@@ -2,7 +2,7 @@
 // every step is an Action with source="agent", so it shows up in the Event Log and can be undone.
 import { dispatch, register, summarize, capabilities, batch } from "./actions.js";
 import { store } from "./store.js";
-import { MOTION_TYPES, LIGHT_PRESETS, POSES, SHOT_SIZES, COVERAGE_ANGLES, PROVIDERS, GEN_MODES } from "./schema.js";
+import { MOTION_TYPES, LIGHT_PRESETS, POSES, SHOT_SIZES, COVERAGE_ANGLES, PROVIDERS, GEN_MODES, LOCK_ASPECTS } from "./schema.js";
 import { DEMOS } from "./demo.js";
 
 const ROLES = { scene: "scene-builder", cam: "cinematography", motion: "motion", light: "lighting", cont: "continuity", board: "storyboard", gen: "generation", review: "review", plan: "director-planner" };
@@ -141,7 +141,7 @@ function resolveShot(text, d, ctx) {
     const n = parseInt(m[1], 10);
     return d.shots.find((s) => s.id === `shot_${m[1]}` || parseInt(s.index, 10) === n) || null;
   }
-  const zh = text.match(/(?:第\s*)?(\d+|[一二三四五六七八九十])\s*[镜号]/);
+  const zh = text.match(/(?:第\s*)?(\d+|[一二三四五六七八九十])\s*个?\s*[镜号]/);
   if (zh) {
     const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
     const n = map[zh[1]] || parseInt(zh[1], 10);
@@ -173,12 +173,57 @@ export function plan(text, d = store.get()) {
   const steps = [];
   const ctx = { cam: null, shot: null };
   const add = (action, payload, label, role = ROLES.plan, extra = {}) => steps.push({ action, payload, label, role, ...extra });
-  const clauses = text.split(/\s*(?:并且|并|然后|接着|再|,|，|;|；|\band\b)\s*/i).map((c) => c.trim()).filter(Boolean);
+  const clauses0 = text.split(/\s*(?:并且|并|然后|接着|再|,|，|;|；|\band\b)\s*/i).map((c) => c.trim()).filter(Boolean);
+  // 「相机再向右移动一点」会被「再」切成「相机」和「向右移动一点」：只剩一个名词的分句并回下一句
+  const clauses = [];
+  for (const c of clauses0) { const last = clauses[clauses.length - 1]; if (last !== undefined && /^(相机|机位|镜头|摄影机|camera)$/i.test(last)) clauses[clauses.length - 1] = last + c; else clauses.push(c); }
   const notes = [];
+  let wantsContract = false; // 锁了东西或动了机位：计划末尾追加一次约束核对
 
   for (const raw0 of clauses) {
     const raw = raw0;
     const low = raw.toLowerCase();
+
+    // 「保持人物表情和场景不变」「不要变焦」「前景遮挡保留」「第四个镜头要接得上」→ 锁（shot.lock）。
+    // 点了名的镜头记进 ctx，后面「相机向右移动一点」才知道动的是哪一镜
+    if (/[镜]/.test(raw)) { const named = resolveShot(raw, d, { ...ctx, shot: null }); if (named && !/\b(shot|镜头)\b.*(录|record)/.test(low)) ctx.shot = named.id; }
+    if (/(保持|不变|保留|别动|不要动|不要变|不许变|锁住|锁定|接得上|接上|接戏|不变焦)/.test(low) && !/(机位|相机|摄影机)(保持|不动|不要动|别动)/.test(low)) {
+      const asp = [];
+      if (/表情|动作|表演|姿态/.test(low)) asp.push("performance");
+      if (/人物|身份|人不变|脸/.test(low)) asp.push("identity");
+      if (/服装|衣服|造型/.test(low)) asp.push("wardrobe");
+      if (/场景|背景|布景|环境/.test(low)) asp.push("background");
+      if (/变焦|焦段|焦距|lens|zoom/.test(low)) asp.push("lens");
+      if (/前景|遮挡/.test(low)) asp.push("foreground");
+      if (/光|灯|lighting/.test(low)) asp.push("lighting");
+      if (/构图|取景|景别/.test(low)) asp.push("framing");
+      if (/色彩|调子|palette/.test(low)) asp.push("palette");
+      if (/接得上|接上|接戏|连续|连得上/.test(low)) asp.push("continuity");
+      if (asp.length) {
+        const s = resolveShot(raw, d, ctx);
+        if (!s) { notes.push("没有镜头可锁"); continue; }
+        add("shot.lock", { shotId: s.id, aspects: asp, note: raw }, `${s.index} ${s.title}：锁住 ${asp.map((a) => LOCK_ASPECTS[a].zh).join("、")}`, ROLES.review);
+        wantsContract = true;
+        continue;
+      }
+    }
+    // 「相机向右移动一点」「机位往前推一些」→ camera.nudge：机位自身坐标系，只平移不摇不变焦。
+    // 「一点点 / 一点 / 一些 / 明显 / 大幅」是词表里的量；也可以直接说米
+    if (/(相机|机位|镜头|摄影机|camera)/.test(low) && /(往|向|移|挪|推|拉|升|降|nudge|move)/.test(low) && !/(移到|放到|放在|靠近|高度|离地|look|看向|对准|位置|到\s*\d)/.test(low)) {
+      const dir = /右|right/.test(low) ? "right" : /左|left/.test(low) ? "left" : /(上|升|高)|up/.test(low) ? "up" : /(下|降|低)|down/.test(low) ? "down" : /(推|前|近)|forward|closer/.test(low) ? "forward" : /(拉|后|远)|back/.test(low) ? "back" : null;
+      if (dir) {
+        const s = /镜/.test(raw) ? resolveShot(raw, d, ctx) : ctx.shot ? d.shots.find((x) => x.id === ctx.shot) : null;
+        const cam = s ? d.cameras.find((c) => c.id === s.cameraId) : resolveCamera(raw, d, ctx);
+        if (!cam) { notes.push("找不到要动的机位"); continue; }
+        const meters = num(/(\d+(?:\.\d+)?)\s*(?:m|米)/, raw);
+        const amount = meters !== null ? null : /一点点|稍微|一丁点/.test(low) ? "一点点" : /一些|一段/.test(low) ? "一些" : /明显|大点/.test(low) ? "明显" : /大幅|很多|一大段/.test(low) ? "大幅" : "一点";
+        const axis = dir === "right" || dir === "left" ? "right" : dir === "up" || dir === "down" ? "up" : "forward";
+        const payload = meters !== null ? { id: cam.id, [axis]: (dir === "left" || dir === "down" || dir === "back" ? -1 : 1) * meters } : { id: cam.id, direction: dir, amount };
+        add("camera.nudge", payload, `${cam.name}：${{ right: "右移", left: "左移", up: "升", down: "降", forward: "推近", back: "拉远" }[dir]}${meters !== null ? ` ${meters} m` : amount}（机位坐标系，只平移不摇不变焦）`, ROLES.cam);
+        wantsContract = true;
+        continue;
+      }
+    }
 
     if (/^(help|帮助|能做什么|怎么用)/.test(low)) {
       notes.push("help");
@@ -439,6 +484,8 @@ export function plan(text, d = store.get()) {
       add("project.set-state", { state: st }, `状态机 → ${st}`, ROLES.plan);
     } else notes.push(`没听懂「${raw}」`);
   }
+  // 锁了东西、或动了机位：最后核对一遍约束。几毫秒、不花钱，改坏了当场知道
+  if (wantsContract) add("review.contract", {}, "核对锁住的约束", ROLES.review, { quiet: true });
   return { text, steps, notes, needsConfirm: steps.some((s) => s.destructive || s.heavy) };
 }
 

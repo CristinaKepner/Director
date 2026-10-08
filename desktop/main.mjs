@@ -16,6 +16,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // packaged: extraResources puts core/ server/ web/ under Contents/Resources/app-src
 const ROOT = app.isPackaged ? path.join(process.resourcesPath, "app-src") : path.join(here, "..");
 const USER = app.getPath("userData");
+// 打包时放进 Contents/Resources/app-src/bin 的那一份 ffmpeg（见 tools/fetch-ffmpeg.mjs）
+const BUNDLED_FFMPEG = (() => {
+  const p = path.join(ROOT, "bin", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+  try { return fs.statSync(p).isFile() ? p : null; } catch { return null; }
+})();
 
 // 数据分两处放，因为它们的寿命、体积和「该不该被用户看见」都不一样：
 //
@@ -38,8 +43,26 @@ const PROJECT_FILE = path.join(DATA_DIR, "current.director.json");
 const LOG_FILE = path.join(USER, "backend.log");
 const PREFS_FILE = path.join(USER, "prefs.json");
 const KEYS_DIR = path.join(USER, "keys");
+const TRIAL_KEY_FILE = path.join(KEYS_DIR, "trial.key");
+
+// 体验码：一行字符串里既有身份也有地址，形如 dt_abc…@https://gw.example.com。
+// 拿到它的人不用知道什么是网关、也拿不到任何密钥 —— 密钥在发码人的服务器上，
+// 额度（token 数和出片次数）也在那边扣。见 gateway/。
+function parseTrial(raw) {
+  const t = String(raw || "").trim();
+  if (!t) return null;
+  const at = t.lastIndexOf("@");
+  if (at < 1) return null;
+  const code = t.slice(0, at).trim();
+  const url = t.slice(at + 1).trim().replace(/\/+$/, "");
+  if (!code || !/^https?:\/\//.test(url)) return null;
+  return { code, url, raw: `${code}@${url}` };
+}
+const trialOf = () => parseTrial(prefs.trial);
 const ARK_KEY_FILE = path.join(KEYS_DIR, "ark.key");
 const LLM_KEY_FILE = path.join(KEYS_DIR, "aigw.key");
+
+const DEFAULT_LLM_MODEL = "gpt-6-astra"; // 建白模只用它：没有在偏好设置里选别的模型时，规划器就是它
 
 // 0.5 之前所有东西都堆在 Application Support 里。首次启动把创作数据搬过去，只搬一次，
 // 目标已存在就不动（不覆盖用户已有的东西）。
@@ -97,12 +120,30 @@ function freePort(preferred) {
 
 // Credentials. Three sources, first hit wins: the Preferences window (userData/keys/*), a path the user
 // pointed at in Preferences, or the same key files the CLI reads (~/.ark-key, ~/.aigw-key).
+function seedDefaults() {
+  if (!prefs.llmModel) { prefs.llmModel = DEFAULT_LLM_MODEL; savePrefs(); }
+}
+
 function keyArgs() {
+  seedDefaults();
   const out = [];
   const pick = (flag, managed, prefPath, ...home) => {
     const hit = [managed, prefPath, ...home.map((c) => path.join(os.homedir(), c))].filter(Boolean).find((p) => fs.existsSync(p) && fs.readFileSync(p, "utf8").trim());
     if (hit) out.push(flag, hit);
   };
+  // 体验码在手就走发码人的网关：两条上游一起指过去，密钥位置放的是体验码本身。
+  // 少指一条就等于把那一条的密钥仍然留在客户端里，所以这两个 base 必须成对出现。
+  const trial = trialOf();
+  if (trial) {
+    fs.mkdirSync(KEYS_DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(TRIAL_KEY_FILE, trial.code, { mode: 0o600 });
+    out.push("--llm-key-file", TRIAL_KEY_FILE, "--ark-key-file", TRIAL_KEY_FILE,
+      "--llm-base", `${trial.url}/v1`, "--ark-base", `${trial.url}/ark`);
+    if (prefs.llmModel) out.push("--llm-model", prefs.llmModel);
+    if (prefs.publicUrl) out.push("--public-url", prefs.publicUrl);
+    else if (prefs.tunnel) out.push("--tunnel", "cloudflared");
+    return out;
+  }
   pick("--ark-key-file", ARK_KEY_FILE, prefs.arkKeyFile, ".ark-key");
   pick("--llm-key-file", LLM_KEY_FILE, prefs.llmKeyFile, ".aigw-key");
   if (prefs.llmModel) out.push("--llm-model", prefs.llmModel);
@@ -129,7 +170,8 @@ function keyState() {
   const shown = (v) => (v ? `${v.slice(0, 8)}…${v.slice(-4)}` : "");
   const ark = read(ARK_KEY_FILE) || read(prefs.arkKeyFile || "") || read(path.join(os.homedir(), ".ark-key"));
   const llm = read(LLM_KEY_FILE) || read(prefs.llmKeyFile || "") || read(path.join(os.homedir(), ".aigw-key"));
-  return { ark: shown(ark), llm: shown(llm), hasArk: !!ark, hasLlm: !!llm, llmModel: prefs.llmModel || "" };
+  const trial = trialOf();
+  return { ark: shown(ark), llm: shown(llm), hasArk: !!ark, hasLlm: !!llm, llmModel: prefs.llmModel || "", trial: trial?.raw || "", trialUrl: trial?.url || "" };
 }
 
 function writeKey(file, value) {
@@ -149,7 +191,13 @@ async function startBackend() {
     // 全新安装时不要自动建示例：有镜头的工程会把"给我一个参照"那一屏挡掉，
   // 新用户一上来就掉进一个不知道怎么来的 3D 场景里。空工程 → 首屏正常弹，
   // 想看示例的人在「工程 → 更多 → 载入示例」里，Agent 也会建议。
-  const args = [entry, "--port", String(port), "--host", "127.0.0.1", "--project", PROJECT_FILE, "--media-dir", MEDIA_DIR, "--demo", "none", ...keyArgs()];
+  const args = [entry, "--port", String(port), "--host", "127.0.0.1", "--project", PROJECT_FILE, "--media-dir", MEDIA_DIR,
+    // 自己装的下载器是应用状态，不是创作数据：放 Application Support，别混进 ~/Movies 的工程和素材里
+    "--tools-dir", path.join(USER, "tools"),
+    // 随包带的 ffmpeg（extraResources，按架构各一份）。读参照要抽帧、成片要拼接、v2v 要转码，
+    // 全靠它；机器上没装 Homebrew 也照样有。给不出来就让后端自己去 PATH 和常见位置找。
+    ...(BUNDLED_FFMPEG ? ["--ffmpeg", BUNDLED_FFMPEG] : []),
+    "--demo", "none", ...keyArgs()];
   const child = spawn(process.execPath, args, {
     cwd: ROOT,
     env: { ...process.env, PATH: toolPath(), ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production" },
@@ -589,7 +637,7 @@ async function approveAllAssets() {
 async function showDiagnostics() {
   const h = await backendHealth();
   const k = keyState();
-  const plan = await api("actions", { action: "film.plan", payload: {} }).catch(() => null);
+  const [plan, quota] = await Promise.all([api("actions", { action: "film.plan", payload: {} }).catch(() => null), trialQuota()]);
   dialog.showMessageBox(win, {
     type: "info",
     title: "运行诊断",
@@ -598,9 +646,12 @@ async function showDiagnostics() {
       `地址        ${server?.url || "—"}`,
       `工程        ${h?.project?.name || "—"}（${h?.project?.shots ?? 0} 镜 / ${h?.project?.takes ?? 0} Take / ${h?.project?.jobs ?? 0} 任务）`,
       `生成        ${h?.generation?.name || "模拟队列"}${h?.generation?.models ? ` · ${Object.keys(h.generation.models).join(" / ")}` : ""}`,
-      `火山密钥    ${k.hasArk ? `已配置 ${k.ark}` : "未配置 — Seedance / Seedream 会走模拟队列"}`,
-      `规划模型    ${h?.llm?.current || "rules 规则规划器"}${k.hasLlm ? "" : "（未配置网关密钥）"}`,
-      `拼接器      ${plan?.data?.assembler?.ready ? "ffmpeg 就绪" : "找不到 ffmpeg — brew install ffmpeg"}`,
+      `体验码      ${k.trial ? (quota?.error ? `${k.trialUrl} — ${quota.error}` : quota ? `${k.trialUrl} · 还剩 ${quota.tokens.left}/${quota.tokens.limit} token · ${quota.calls.left}/${quota.calls.limit} 次出片` : k.trialUrl) : "没填（用自己的密钥）"}`,
+      `火山密钥    ${k.trial ? "走体验码的网关，本机密钥不生效" : k.hasArk ? `已配置 ${k.ark}` : "未配置 — Seedance / Seedream 会走模拟队列"}`,
+      `规划模型    ${h?.llm?.current || "rules 规则规划器"}${k.trial || k.hasLlm ? "" : "（未配置网关密钥）"}`,
+      `拼接器      ${plan?.data?.assembler?.ready ? `ffmpeg 就绪${h?.tools?.ffmpeg === BUNDLED_FFMPEG ? "（应用自带的那一份）" : `（${h?.tools?.ffmpeg || "系统"}）`}` : "ffmpeg 起不来 — 看后端日志"}`,
+      `读参照      ${h?.reference?.ready ? `${h.reference.model} 就绪` : `还不能读：${(h?.reference?.missing || []).join("、") || "未知"}`}`,
+      `贴链接      ${h?.tools?.ytdlp ? `yt-dlp 就绪${h.tools.ytdlpManaged ? "（应用自带的那一份）" : `（${h.tools.ytdlp}）`}` : `第一次贴页面链接时自动取一份到 ${h?.tools?.toolsDir || "—"}；直链现在就能下`}`,
       `v2v 公网    ${h?.generation?.publicUrl ? `${h.generation.publicUrl}（${prefs.publicUrl ? "自有地址" : "隧道"}）` : prefs.publicUrl ? `${prefs.publicUrl}（后端还没确认）` : prefs.tunnel ? "隧道未建立（看后端日志）" : "未开启 — 偏好设置里可打开"}`,
       `版本        ${app.getVersion()} · 更新源 ${prefs.updateFeed || DEFAULT_FEED || "未配置"}${prefs.autoUpdate === false ? "（自动检查关闭）" : ""}`,
       `数据        ${DATA_DIR}（工程库 · 媒体）`,
@@ -629,6 +680,10 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
 </style>
 <h1>生成密钥与规划模型</h1>
 <p class="sub">密钥只保存在本机 <code id="dir"></code>，随后端进程启动，不会进工程文件。</p>
+<label>体验码 <span id="trialState"></span></label>
+<input id="trial" placeholder="dt_…@https://…（别人给你的那一行，粘进来就行）" autocomplete="off" spellcheck="false">
+<div class="hint">有体验码就不用自己配密钥：出片和规划都走发码人的网关，额度用完为止。填了它，下面两个密钥就不生效。</div>
+<div id="trialQuota" class="hint"></div>
 <label>火山引擎 Ark 密钥 <span id="arkState"></span></label>
 <input id="ark" placeholder="ark-… （留空表示不改动）" autocomplete="off" spellcheck="false">
 <div class="hint">给 Seedance 2.5 / 2.0 出视频、Seedream 5.0 出图与参考图。没有它这些供应商走可观察的模拟队列。</div>
@@ -663,6 +718,11 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
   window.prefsApi.load().then((s) => {
     state = s;
     $("dir").textContent = s.keysDir;
+    $("trial").value = s.trial || "";
+    $("trialState").innerHTML = s.trial ? '<span class="ok">在用</span>' : '<span class="warn">没填</span>';
+    if (s.quota) $("trialQuota").innerHTML = s.quota.error
+      ? '<span class="warn">' + s.quota.error + '</span>'
+      : '还剩 <span class="ok">' + s.quota.tokens.left + '/' + s.quota.tokens.limit + ' token · ' + s.quota.calls.left + '/' + s.quota.calls.limit + ' 次出片</span>';
     $("arkState").innerHTML = s.hasArk ? '<span class="ok">已配置 ' + s.ark + '</span>' : '<span class="warn">未配置</span>';
     $("llmState").innerHTML = s.hasLlm ? '<span class="ok">已配置 ' + s.llm + '</span>' : '<span class="warn">未配置</span>';
     $("model").innerHTML = ['<option value="">默认（后端决定）</option>', ...s.models.map((m) => '<option value="' + m + '"' + (m === s.llmModel ? " selected" : "") + '>' + m + '</option>')].join("");
@@ -673,8 +733,8 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
     $("feed").placeholder = s.defaultFeed;
   });
   $("cancel").onclick = () => window.prefsApi.close();
-  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ ark: $("ark").value, llm: $("llm").value, llmModel: $("model").value, tunnel: $("tunnel").checked, publicUrl: $("publicUrl").value.trim(), autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
-  $("clear").onclick = () => window.prefsApi.save({ ark: "", llm: "", llmModel: "", clear: true });
+  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ trial: $("trial").value.trim(), ark: $("ark").value, llm: $("llm").value, llmModel: $("model").value, tunnel: $("tunnel").checked, publicUrl: $("publicUrl").value.trim(), autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
+  $("clear").onclick = () => window.prefsApi.save({ trial: "", ark: "", llm: "", llmModel: "", clear: true });
 </script>`;
 
 const PREFS_PRELOAD = `const { contextBridge, ipcRenderer } = require("electron");
@@ -712,17 +772,45 @@ function openPrefs() {
   prefsWin.on("closed", () => (prefsWin = null));
 }
 
+// 体验额度：直接问发码人的网关。这个数只有那一侧算得准 ——
+// 客户端里的任何计数都是一个可以删掉的文件，所以这里只负责显示。
+async function trialQuota() {
+  const t = trialOf();
+  if (!t) return null;
+  try {
+    const r = await fetch(`${t.url}/v1/quota`, { headers: { authorization: `Bearer ${t.code}` }, signal: AbortSignal.timeout(8000) });
+    if (r.status === 401) return { error: "这个体验码网关不认，可能已经停用" };
+    if (!r.ok) return { error: `网关回了 HTTP ${r.status}` };
+    return await r.json();
+  } catch {
+    return { error: "连不上发码人的网关，检查网络" };
+  }
+}
+
 ipcMain.handle("prefs:load", async () => {
-  const h = await backendHealth();
-  return { ...keyState(), keysDir: KEYS_DIR, models: h?.llm?.models || [], tunnel: !!prefs.tunnel, publicUrl: prefs.publicUrl || "", autoUpdate: prefs.autoUpdate !== false, updateFeed: prefs.updateFeed || "", defaultFeed: DEFAULT_FEED };
+  const [h, quota] = await Promise.all([backendHealth(), trialQuota()]);
+  return { ...keyState(), keysDir: KEYS_DIR, models: h?.llm?.models || [], tunnel: !!prefs.tunnel, publicUrl: prefs.publicUrl || "", autoUpdate: prefs.autoUpdate !== false, updateFeed: prefs.updateFeed || "", defaultFeed: DEFAULT_FEED, quota };
 });
 ipcMain.handle("prefs:close", () => prefsWin?.close());
 ipcMain.handle("prefs:save", async (_e, v) => {
   if (v.clear) {
     writeKey(ARK_KEY_FILE, "");
     writeKey(LLM_KEY_FILE, "");
+    writeKey(TRIAL_KEY_FILE, "");
+    delete prefs.trial;
     delete prefs.llmModel;
   } else {
+    // 体验码写错了比没填更难查：解析不出来就当没填，并且说一声 —— 否则后端会拿着
+    // 一个坏地址去请求，界面上只会看到「上游没有响应」，人查不到是这一格填错了。
+    if (v.trial !== undefined) {
+      const t = parseTrial(v.trial);
+      if (t) prefs.trial = t.raw;
+      else {
+        if (String(v.trial || "").trim()) dialog.showErrorBox("体验码没保存", `「${String(v.trial).trim().slice(0, 60)}」不像一个体验码。\n\n正确的样子是 dt_xxx@https://网关地址，整行一起粘。`);
+        delete prefs.trial;
+        writeKey(TRIAL_KEY_FILE, "");
+      }
+    }
     if (v.ark?.trim()) writeKey(ARK_KEY_FILE, v.ark);
     if (v.llm?.trim()) writeKey(LLM_KEY_FILE, v.llm);
     if (v.llmModel !== undefined) { if (v.llmModel) prefs.llmModel = v.llmModel; else delete prefs.llmModel; }

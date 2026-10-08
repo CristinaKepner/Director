@@ -7,17 +7,28 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const CANDIDATES = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"];
 
+// 「有这个文件、而且带 x 位」不等于「跑得起来」：应用自带的那一份如果被 Gatekeeper 拦下，
+// 或者架构不对，spawn 当场就废 —— 而那时候界面上只会说「找不到 ffmpeg」，人会去装一个已经有的东西。
+// 所以选中之前先真的跑一次 -version，跑不起来就继续往下找。启动时一两次 spawn，换一个准确的结论。
+function isRunnable(p) {
+  if (!isExe(p)) return false;
+  const r = spawnSync(p, ["-version"], { stdio: "ignore", timeout: 10_000 });
+  return !r.error && r.status === 0;
+}
+
 export function findFfmpeg(explicit) {
+  // --ffmpeg none：把本机当成「没装 ffmpeg」，用来复现一台刚装好的 Mac
+  if (explicit === "none") return null;
   const tries = [explicit, process.env.FFMPEG, ...CANDIDATES].filter(Boolean);
-  for (const p of tries) if (isExe(p)) return p;
+  for (const p of tries) if (isRunnable(p)) return p;
   // last resort: PATH
   for (const dir of (process.env.PATH || "").split(path.delimiter)) {
     const p = path.join(dir, "ffmpeg");
-    if (isExe(p)) return p;
+    if (isRunnable(p)) return p;
   }
   return null;
 }
@@ -39,6 +50,35 @@ function probeDuration(ffprobe, file) {
     c.on("exit", () => resolve(Number(o.trim()) || 0));
     c.on("error", () => resolve(0));
   });
+}
+
+// ffmpeg 自己也知道时长：`ffmpeg -i FILE` 把 "Duration: 00:00:12.34" 打在 stderr 上
+// （然后以非零码退出 —— 没有输出文件，这是正常的）。
+const DUR_RE = /Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)/;
+function durationViaFfmpeg(bin, file) {
+  return new Promise((resolve) => {
+    const c = spawn(bin, ["-hide_banner", "-i", file], { stdio: ["ignore", "ignore", "pipe"] });
+    let e = "";
+    c.stderr.on("data", (b) => (e += b));
+    c.on("exit", () => {
+      const m = e.match(DUR_RE);
+      resolve(m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : 0);
+    });
+    c.on("error", () => resolve(0));
+  });
+}
+
+// 时长：旁边有 ffprobe 就用它（一行数字，最省事）；没有就问 ffmpeg 自己。
+// 这条退路是为了「应用自带一个 ffmpeg 就够」——静态构建的 ffmpeg 和 ffprobe 各 45–79 MB，
+// 只为了读一个秒数再塞一个进安装包不值得。
+export async function mediaDuration(bin, file) {
+  if (!bin) return 0;
+  const probe = path.join(path.dirname(bin), process.platform === "win32" ? "ffprobe.exe" : "ffprobe");
+  if (isExe(probe)) {
+    const d = await probeDuration(probe, file);
+    if (d) return d;
+  }
+  return durationViaFfmpeg(bin, file);
 }
 
 function run(bin, args, { onLine } = {}) {
@@ -115,7 +155,7 @@ export function createFilmAssembler(opts = {}) {
           await run(bin, ["-y", "-i", file, "-vf", `scale=${width}:-2`, "-frames:v", "1", out]);
           return [{ t: 0, data: asData(out) }];
         }
-        const dur = await probeDuration(path.join(path.dirname(bin), "ffprobe"), file);
+        const dur = await mediaDuration(bin, file);
         const a = Math.max(0, Number(from) || 0);
         const b = Math.min(to == null ? dur : Number(to), dur || Number(to) || 0) || dur;
         const span = Math.max(0.01, b - a);
@@ -142,20 +182,26 @@ export function createFilmAssembler(opts = {}) {
     // 实测：Ark 的 reference_video 不收 WebM（任务能创建，抓取时才 Bad Request）。
     // 白模 Take 是 MediaRecorder 出的 webm，所以交给供应商之前要先转成 mp4。
     // 转完留在媒体目录里，同一段只转一次。
-    async toMp4(ref) {
+    // span={from,to}：只送这一镜在原片里的那一段。照原片生成时整条片子是错的参考 ——
+    // 改的是第 07 镜，模型看到的却是从第一帧开始的整条。切出来的片段留在媒体目录里，同一段只切一次。
+    async toMp4(ref, span = null) {
       const m = String(ref || "").match(/\/media\/([^/?#]+)/);
       const name = m ? path.basename(decodeURIComponent(m[1])) : path.basename(String(ref || ""));
       if (!name) return null;
-      if (/\.mp4$/i.test(name)) return `/media/${name}`;
+      const a = span && Number.isFinite(Number(span.from)) ? Math.max(0, Number(span.from)) : null;
+      const b = span && Number.isFinite(Number(span.to)) ? Number(span.to) : null;
+      const cut = a != null && b != null && b > a;
+      if (!cut && /\.mp4$/i.test(name)) return `/media/${name}`;
       if (!bin) return null;
       const src = path.join(mediaDir, name);
       if (!fs.existsSync(src)) return null;
-      const outName = `${name.replace(/\.[^.]+$/, "")}_mp4.mp4`;
+      const stem = name.replace(/\.[^.]+$/, "");
+      const outName = cut ? `${stem}_${a.toFixed(1)}-${b.toFixed(1)}.mp4` : `${stem}_mp4.mp4`;
       const out = path.join(mediaDir, outName);
       if (fs.existsSync(out) && fs.statSync(out).size > 0) return mediaUrl(outName);
       try {
-        await run(bin, ["-y", "-i", src, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]);
-        log(`ref → mp4: ${name} → ${outName}`);
+        await run(bin, ["-y", ...(cut ? ["-ss", String(a), "-t", String(Math.round((b - a) * 100) / 100)] : []), "-i", src, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]);
+        log(`ref → mp4: ${name}${cut ? ` @${a}–${b}s` : ""} → ${outName}`);
         return mediaUrl(outName);
       } catch (err) {
         log(`toMp4 failed: ${err.message}`);
@@ -171,7 +217,7 @@ export function createFilmAssembler(opts = {}) {
       try {
         const file = await localize({ url: ref }, work, 0);
         if (!file) return null;
-        const dur = await probeDuration(path.join(path.dirname(bin), "ffprobe"), file);
+        const dur = await mediaDuration(bin, file);
         const at = Math.max(0, dur - beforeEnd);
         const jpg = path.join(work, "tail.jpg");
         await run(bin, ["-y", "-ss", String(at), "-i", file, "-frames:v", "1", "-q:v", "2", jpg]);

@@ -3,8 +3,10 @@
 import { store } from "./store.js";
 import { SHOT_SIZES, MOTION_TYPES, LIGHT_PRESETS, heightWord, inferShotSize, hexToKelvin, kelvinWord, deg, LOCK_ASPECTS} from "./schema.js";
 import { cameraStateAt, V } from "./motion.js";
+import { templateFor, timelineBlock, promptNotes, templateTitle } from "./seedance.js";
+import { coveragePrompt } from "./coverage.js";
 
-export const COMPILER_VERSION = "prompt-compiler/0.3";
+export const COMPILER_VERSION = "prompt-compiler/0.4"; // 0.4：按 awesome-seedance 的验证结构排版，分拍进提示词
 
 const TYPE_EN = { character: "person", vehicle: "vehicle", prop: "prop", weapon: "handgun", building: "building", tree: "tree", flower: "flowers", lamp: "street lamp", environment: "ground", smoke: "smoke" };
 const TYPE_ZH = { character: "人物", vehicle: "车辆", prop: "道具", weapon: "手枪", building: "建筑", tree: "树", flower: "花", lamp: "路灯", environment: "地面", smoke: "烟雾" };
@@ -124,27 +126,45 @@ export function compileShot(shotId, opts = {}) {
   };
 
   const continuity = targets.flatMap((e) => (e.agentMemory || []).slice(0, 2).map((m) => `${e.displayName}: ${m}`));
+
+  // 提示词的块序不是随便排的。awesome-seedance 从 460 多条验证过的案例里总结出同一个骨架：
+  //   全局（时长/画幅/帧率/风格）→ 固定（全片不变的人、光、场）→ 时间轴（一段一拍）→ 约束（负向清单）
+  // 最要紧的是约束放在时间轴**之后**，以及分拍必须真的写成 `[00:00-00:04]` 的段 ——
+  // 声明了时长却不分段的那一半案例，六秒之后明显漂移。导演台本来就有 shot.beats，
+  // 以前只用来切分段续拍，从没进过提示词。见 core/seedance.js。
+  const picked = opts.template === null ? null : templateFor(shot, d);
+  const tpl = picked?.template || null;
+  const beatsEn = tpl ? timelineBlock(shot, d, "en") : [];
+  const beatsZh = tpl ? timelineBlock(shot, d, "zh") : [];
+
   const video = {
     en: [
-      `Single continuous shot, ${seconds}s, ${d.project.fps}fps, ${d.project.aspect}. ${shot.title}.`,
+      // 全局
+      `Single continuous shot, ${seconds}s, ${d.project.fps}fps, ${d.project.aspect}. ${shot.title}. ${styleEn}.`,
+      // 固定：整条不变的那些
       `Camera: ${motionWords(shot, hero, "en")}; starts ${sizeInfo.en} ${angEn} at ${heightEn}${Math.abs(endState.focalLength - state.focalLength) > 2 ? `, focal ${mm}mm → ${Math.round(endState.focalLength)}mm` : `, ${mm}mm locked, no zoom`}.`,
       hero ? `Subject: ${entityDesc(hero, "en")}${hero.path?.length ? " travelling through frame" : ""}. Identity and wardrobe stay constant.` : "",
       targets.length > 1 ? `Secondary: ${targets.slice(1).map((e) => entityDesc(e, "en")).join("; ")}.` : "",
       `Lighting: ${lightingWords(d, "en")}.`,
-      shot.description ? `Action beat: ${shot.description}` : "",
+      shot.description ? `Action: ${shot.description}` : "",
       continuity.length ? `Continuity: ${continuity.join("; ")}.` : "",
+      // 时间轴
+      ...(beatsEn.length ? ["Timeline (contiguous, sums to the stated duration):", ...beatsEn] : []),
+      // 约束：永远在时间轴之后
       "Camera never clips through objects, horizon stays level unless handheld, motion is smooth and physically plausible.",
-      `${styleEn}. No on-screen text.`,
+      "No on-screen text.",
     ].filter(Boolean).join("\n"),
     zh: [
-      `单镜头连续拍摄，${seconds} 秒，${d.project.fps}fps，${d.project.aspect}。${shot.title}。`,
+      `单镜头连续拍摄，${seconds} 秒，${d.project.fps}fps，${d.project.aspect}。${shot.title}。${styleZh}。`,
       `运镜：${motionWords(shot, hero, "zh")}；起始 ${sizeInfo.zh} ${angZh} ${heightZh}${Math.abs(endState.focalLength - state.focalLength) > 2 ? `，焦距 ${mm}mm → ${Math.round(endState.focalLength)}mm` : `，${mm}mm 锁定不变焦`}。`,
       hero ? `主体：${entityDesc(hero, "zh")}${hero.path?.length ? "，在画面中移动" : ""}。身份与外观保持一致。` : "",
+      targets.length > 1 ? `同框：${targets.slice(1).map((e) => entityDesc(e, "zh")).join("；")}。` : "",
       `灯光：${lightingWords(d, "zh")}。`,
       shot.description ? `动作：${shot.description}` : "",
       continuity.length ? `连续性：${continuity.join("；")}。` : "",
+      ...(beatsZh.length ? ["时间轴（首尾相接，合计等于上面的时长）：", ...beatsZh] : []),
       "镜头不穿模，非手持时地平线保持水平，运动平滑且物理可信。",
-      `${styleZh}。画面无文字。`,
+      "画面无文字。",
     ].filter(Boolean).join("\n"),
   };
 
@@ -204,7 +224,14 @@ export function compileShot(shotId, opts = {}) {
   return {
     compiler: COMPILER_VERSION,
     createdAt: new Date().toISOString(),
-    meta: { shotSize: size, angle: angEn, height: heightEn, focal: mm, aperture, seconds, motion: shot.motion?.type || "static", keyframes: shot.keyframes?.length || 0, fidelity, subjects: targets.map((e) => e.id), lightingPreset: d.scene.environment.preset, locks: shot.locks?.aspects || [], lastMove: mv || null },
+    meta: { shotSize: size, angle: angEn, height: heightEn, focal: mm, aperture, seconds, motion: shot.motion?.type || "static", keyframes: shot.keyframes?.length || 0, fidelity, subjects: targets.map((e) => e.id), lightingPreset: d.scene.environment.preset, locks: shot.locks?.aspects || [], lastMove: mv || null,
+      // 用的是哪个模板、为什么是它、分了几段。出了问题能对着这三样回溯，不用重编一次。
+      template: tpl ? { id: tpl.id, title: templateTitle(tpl, "zh"), category: tpl.category, why: picked.why, auto: picked.auto, beats: beatsZh.length } : null },
+    // 模板自己说的坑，能机械查的这里查了。只报事实，不替导演做决定。
+    notes: tpl ? promptNotes(shot, d, tpl) : [],
+    // 多机位覆盖：只有排过机位表的镜头才有这一栏。它和 video 是两种东西 ——
+    // video 是「拍一条新的」，coverage 是「同一条素材换机位再拍一遍」，所以分开存。
+    coverage: shot.coverage ? { zh: coveragePrompt(shot, d, shot.coverage, "zh"), en: coveragePrompt(shot, d, shot.coverage, "en"), count: shot.coverage.count } : null,
     image, video, v2v, negative,
   };
 }

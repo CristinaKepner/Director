@@ -13,6 +13,18 @@ const { store, dispatch, persistable, loadProjectData, capabilities, historyInfo
 
 export const SERVER_VERSION = "director-server/0.5";
 
+// 网关回的 401 / 402 / 429 body 形如 {"error":{"code":"OUT_OF_TOKENS","message":"…"}}；
+// llm 适配器把整段 body 当成 Error.message 抛上来，这里把里面那句人话取出来。
+function trialReason(err) {
+  if (!/^HTTP_(401|402|429)$/.test(String(err?.code || ""))) return null;
+  try {
+    const j = JSON.parse(String(err.message));
+    return j?.error?.message || null;
+  } catch {
+    return null;
+  }
+}
+
 export function createHost(opts = {}) {
   const projectFile = opts.projectFile ? path.resolve(opts.projectFile) : null;
   const mediaDir = path.resolve(opts.mediaDir || (projectFile ? path.join(path.dirname(projectFile), "media") : "data/media"));
@@ -38,7 +50,7 @@ export function createHost(opts = {}) {
       },
       getJob: (id) => store.get().jobs.find((j) => j.id === id) || null,
       publicUrl: opts.publicUrl || null,
-      toMp4: (ref) => film.toMp4(ref), // v2v 参考视频必须是 mp4
+      toMp4: (ref, span) => film.toMp4(ref, span), // v2v 参考视频必须是 mp4；span 给了就只切这一镜那一段
       publisher: opts.publisher || null,
       fallback: R.simulatedAdapter,
       log,
@@ -52,7 +64,7 @@ export function createHost(opts = {}) {
   // ---- film assembler (ffmpeg): the cut, blockout or generated, into one file under mediaDir ----
   const film = createFilmAssembler({ ffmpeg: opts.ffmpeg, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
   R.setHooks({ film });
-  log(film.ready ? `film assembler: ffmpeg (${film.bin})` : "film assembler: ffmpeg NOT FOUND — film.export 会提示安装（brew install ffmpeg）");
+  log(film.ready ? `film assembler: ffmpeg (${film.bin})` : "film assembler: 没有能跑的 ffmpeg —— 桌面端随包自带一份；单独跑后端用 --ffmpeg 指定，或 brew install ffmpeg");
 
   // ---- 自动验收：抽帧 + 多模态模型对比新旧两版 ----
   if (opts.judgeKey) {
@@ -62,16 +74,21 @@ export function createHost(opts = {}) {
   }
 
   // ---- 参照读取：图 / 视频 → 拍摄参数（入口比"说一句话"低得多）----
-  if (opts.judgeKey && film.ready) {
-    const reference = createReferenceReader({ apiKey: opts.judgeKey, baseUrl: opts.judgeBase, model: opts.referenceModel || opts.judgeModel, frames: (ref, o) => film.frames(ref, o), log });
-    R.setHooks({ reference });
-    log(`reference reader: ${reference.model}`);
-  }
+  // 条件不满足也要把它挂上：挂着才说得出缺的是哪一样。以前缺一样就整个不挂，
+  // 上层只能给一句「要网关密钥和 ffmpeg」，而缺的常常只有其中一个。
+  const reference = createReferenceReader({ apiKey: opts.judgeKey || null, baseUrl: opts.judgeBase, model: opts.referenceModel || opts.judgeModel, frames: film.ready ? (ref, o) => film.frames(ref, o) : null, log });
+  R.setHooks({ reference });
+  log(reference.ready ? `reference reader: ${reference.model}` : `reference reader: 还不能读 —— 缺 ${reference.missing.join("、")}`);
 
   // ---- 进料口：链接 → 本地素材。复刻一条片子的第一步 ----
-  const fetcher = createFetcher({ ytdlp: opts.ytdlp, ffmpeg: film.bin, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
+  // 下载器不在机器上也不拦着：直链走普通 HTTP，页面链接第一次用时自己取一份 yt-dlp
+  // 到 toolsDir（默认在媒体目录旁边），校验和核对过再落盘。装 brew 不该是第一步。
+  const toolsDir = opts.toolsDir || (mediaDir ? path.join(path.dirname(path.resolve(mediaDir)), "tools") : null);
+  const fetcher = createFetcher({ ytdlp: opts.ytdlp === "none" ? null : opts.ytdlp, system: opts.ytdlp !== "none", ytdlpUrl: opts.ytdlpUrl, toolsDir, ffmpeg: film.bin, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
   R.setHooks({ fetcher });
-  log(fetcher.ready ? `link fetcher: yt-dlp (${fetcher.bin})${fetcher.ffmpeg ? ` + ffmpeg ${fetcher.ffmpeg}` : " · 没找到 ffmpeg，合流会失败"}` : "link fetcher: yt-dlp NOT FOUND — reference.fetch 会提示安装（brew install yt-dlp）");
+  log(fetcher.hasBin
+    ? `link fetcher: yt-dlp (${fetcher.bin})${fetcher.ffmpeg ? ` + ffmpeg ${fetcher.ffmpeg}` : " · 没找到 ffmpeg，分轨的站点会退到单文件格式"}`
+    : `link fetcher: 机器上没有 yt-dlp —— 直链直接下；页面链接第一次用时自动取一份到 ${toolsDir || "(无工具目录)"}`);
 
   // ---- LLM planner (Agent Director backend) ----
   let planner = null;
@@ -259,13 +276,17 @@ export function createHost(opts = {}) {
         onDelta: (d) => emitThinking({ model, phase: "planning", reasoning: d.reasoning ? d.reasoning.slice(-4000) : "", steps: d.steps || [], chars: (d.content || "").length }),
       });
     } catch (err) {
+      // 体验码那一头的失败不是「模型不行」：额度用完、码被停用、码填错了。
+      // 包在「LLM 调用失败」里再塞一段 JSON，人看到的就是一句读不懂的话 + 一句「没听懂」，
+      // 而真正该做的事（换个码、找发码的人要额度）一个字都没说。
+      const trial = trialReason(err);
       log(`llm failed (${err.code || ""} ${err.message}); falling back to rules`);
-      emitThinking({ model, phase: "failed", error: String(err.message).slice(0, 200) });
+      emitThinking({ model, phase: "failed", error: String(trial || err.message).slice(0, 200) });
       store.patch((x) => (x.agent.busy = false));
-      R.say("agent", `LLM（${model}）调用失败：${String(err.message).slice(0, 160)}。改用内置规则规划器。`);
+      R.say("agent", trial ? `${trial}。规划先改用内置规则规划器 —— 它不花额度，但听不懂复杂的话。` : `LLM（${model}）调用失败：${String(err.message).slice(0, 160)}。改用内置规则规划器。`);
       const rp = R.plan(text, store.get());
       const out = R.runPlan({ ...rp, text }, { mode, force: payload.force === true, source: "agent" });
-      return { ok: true, backend: "rules", fallback: true, error_llm: err.message, plan: out?.plan?.steps, notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+      return { ok: true, backend: "rules", fallback: true, error_llm: trial || err.message, trial: !!trial, plan: out?.plan?.steps, notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
     }
     emitThinking({ model, phase: "executing", reasoning: p.reasoning ? p.reasoning.slice(-4000) : "", steps: p.steps.map((s) => s.label || s.action), chars: 0 });
     store.patch((x) => (x.agent.busy = false));
@@ -328,7 +349,7 @@ export function createHost(opts = {}) {
   }
 
   // ---- media (proxy videos / thumbnails uploaded by browser clients) ----
-  const MEDIA_EXT = { "video/webm": ".webm", "video/mp4": ".mp4", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
+  const MEDIA_EXT = { "model/gltf-binary": ".glb", "video/webm": ".webm", "video/mp4": ".mp4", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
   function saveMedia(takeId, buffer, mime = "video/webm") {
     const take = store.get().takes.find((t) => t.id === takeId);
     if (!take) return { ok: false, error: "TAKE_NOT_FOUND" };
@@ -372,6 +393,9 @@ export function createHost(opts = {}) {
       project: { id: d.project.id, name: d.project.name, version: d.project.version, state: d.project.currentState, scene: d.scene.name, shots: d.shots.length, takes: d.takes.length, jobs: d.jobs.length },
       persistence: { file: projectFile, dirty, lastSavedAt },
       media: { dir: mediaDir },
+      // 贴链接这条路能不能走：ffmpeg 有没有、下载器在哪（自己装的那一份也算），装在哪个目录
+      tools: { ffmpeg: film.bin || null, ytdlp: fetcher.bin || null, ytdlpManaged: !!fetcher.bin && fetcher.bin === (toolsDir ? path.join(toolsDir, "yt-dlp") : null), toolsDir },
+      reference: { ready: reference.ready, model: reference.model, missing: reference.missing },
       generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated", publisher: opts.publisher?.kind || "none", publicUrl: (typeof opts.publicUrl === "function" ? opts.publicUrl() : opts.publicUrl) || null, tunnel: (typeof opts.tunnelState === "function" ? opts.tunnelState() : opts.tunnelState) || "off" } : { name: "simulated", models: {} },
       llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models, current: d.agent.backend } : { name: "rules", models: [], current: "rules" },
       recording: d.project.recording || null,

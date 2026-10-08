@@ -1,7 +1,7 @@
 {
   "name": "director-console-desktop",
   "productName": "导演台",
-  "version": "0.6.4",
+  "version": "0.9.3",
   "private": true,
   "type": "module",
   "description": "Director Console · 导演台 — macOS client. Wraps the same core runtime, backend and web console in a native window.",
@@ -9,9 +9,10 @@
   "scripts": {
     "start": "electron .",
     "icon": "node build/make-icon.mjs && ./build/make-icns.sh",
-    "pack": "electron-builder --mac --dir",
-    "dist": "electron-builder --mac",
-    "manifest": "node ../tools/make-update-manifest.mjs --dist dist"
+    "pack": "node ../tools/fetch-ffmpeg.mjs --arch both && electron-builder --mac --dir",
+    "dist": "node ../tools/fetch-ffmpeg.mjs --arch both && electron-builder --mac",
+    "manifest": "node ../tools/make-update-manifest.mjs --dist dist",
+    "bin": "node ../tools/fetch-ffmpeg.mjs --arch both"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -56,6 +57,10 @@
       {
         "from": "../package.json",
         "to": "app-src/package.json"
+      },
+      {
+        "from": "build/bin/${arch}",
+        "to": "app-src/bin"
       }
     ],
     "mac": {

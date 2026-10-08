@@ -328,6 +328,49 @@ test("群体主体按 count 摊开：7 个伴舞就是 7 个人，名字带序�
   assert.equal(R.expandSubjects([{ semanticType: "character", displayName: "人群", count: 40 }]).length, 12, "封顶 12");
 });
 
+test("人数没填在 count 里就从字里抠：一场七个人，白模上就该站七个", () => {
+  // 读取器最常见的失手：把人数写进名字（「七个伴舞」）而 count 留空，
+  // 或者逐条都写 1 却在 peopleCount 里说这一场有七个人。两种都要摆出七个人来。
+  assert.equal(R.countOf({ displayName: "七个伴舞" }), 7);
+  assert.equal(R.countOf({ displayName: "伴舞", look: "3 名穿红裙的舞者" }), 3);
+  assert.equal(R.countOf({ displayName: "女主", count: "2 人" }), 2);
+  assert.equal(R.countOf({ displayName: "女主" }), 1);
+  assert.equal(R.countOf({ displayName: "十二个人" }), 12);
+
+  const list = R.expandSubjects(
+    [{ semanticType: "character", displayName: "主唱" }, { semanticType: "character", displayName: "伴舞" }],
+    { people: 7 },
+  );
+  assert.equal(list.length, 7, "差的五个补到人最多的那一条上");
+  assert.equal(list.filter((x) => x.group === "伴舞").length, 6);
+
+  // peopleCount 走到编译器：七个人的一场，建出七个 entity.create
+  const seven = { ...ANALYSIS, peopleCount: 7, subjects: [{ semanticType: "character", displayName: "主唱", screenPosition: "正中" }, { semanticType: "character", displayName: "伴舞", screenPosition: "两侧" }] };
+  const plan = compileReference(seven, { mode: "full", prefix: "p7" });
+  assert.equal(plan.steps.filter((st) => st.action === "entity.create").length, 7);
+});
+
+test("人数补不上就说出来，不再静默少站几个人", () => {
+  const plan = compileReference({ ...ANALYSIS, peopleCount: 7, subjects: [{ semanticType: "prop", displayName: "话筒" }] }, { mode: "full", prefix: "p0" });
+  assert.ok(plan.warnings.some((w) => /7 个人/.test(w)), plan.warnings.join(" / "));
+});
+
+test("一镜在原片里是哪一段：对照按它起播，照原片生成也只送这一段", () => {
+  dispatch("project.new", {}, { source: "test" });
+  const plan = compileReference(WHOLE, { mode: "full", prefix: "sp" });
+  for (const st of plan.steps) assert.ok(dispatch(st.action, st.payload, { source: "test" }).ok, st.action);
+  const d = store.get();
+  // 第 2 场在原片的 4–9 秒：对照那一栏的原片从第 4 秒起播，不是从第一帧
+  assert.deepEqual(R.shotSourceSpan(d, d.shots[1]), { from: 4, to: 9 });
+  assert.deepEqual(R.shotSourceSpan(d, d.shots[2]), { from: 9, to: 15 });
+  // 没分块的工程退回当初读参照取的那一段
+  dispatch("project.new", {}, { source: "test" });
+  const one = compileReference(ANALYSIS, { mode: "full", prefix: "s1" });
+  for (const st of one.steps) dispatch(st.action, st.payload, { source: "test" });
+  store.patch((x) => (x.project.reference = { ref: "/media/ref.mp4", from: 12, to: 20 }));
+  assert.deepEqual(R.shotSourceSpan(store.get(), store.get().shots[0]), { from: 12, to: 20 });
+});
+
 test("建出来的每样东西都记着自己在哪块台上；切到某块台，自检只看这块台", () => {
   dispatch("project.new", {}, { source: "test" });
   const plan = compileReference(WHOLE, { mode: "full", prefix: "w" });

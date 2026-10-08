@@ -187,3 +187,19 @@ test("token auth and api-only static behaviour", async () => {
   app2.server.close();
   h2.close();
 });
+
+test("导入 GLB：上传存成 .glb，按 model/gltf-binary 回给加载器，挂到新实体上", async () => {
+  const glb = Buffer.concat([Buffer.from("glTF"), Buffer.alloc(16)]);
+  const up = await post("/api/upload?label=model", glb, { "content-type": "model/gltf-binary" });
+  assert.equal(up.ok, true);
+  assert.match(up.url, /^\/media\/model_.*\.glb$/);
+  const r = await fetch(base + up.url);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("content-type"), "model/gltf-binary");
+  const made = await post("/api/actions", { action: "entity.create", payload: { type: "prop", proxy: "pyramid", displayName: "我的模型", assetRef: up.url, dimensions: [2, 1.5, 3] } });
+  assert.equal(made.ok, true, JSON.stringify(made));
+  const ent = (await get("/api/state")).snapshot.entities.find((e) => e.displayName === "我的模型");
+  assert.equal(ent.assetRef, up.url);
+  assert.equal(ent.proxy.geometry, "pyramid");
+  assert.deepEqual(ent.proxy.dimensions, [2, 1.5, 3]);
+});

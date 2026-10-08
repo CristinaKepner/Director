@@ -42,9 +42,13 @@ import {
   LOCK_ASPECTS,
   ASSET_ROLES,} from "./schema.js";
 import { attachPrompts, compileShot } from "./prompts.js";
+import { templateList, templateById, templateFor, templateTitle, SEEDANCE_SOURCE } from "./seedance.js";
+import { planCoverage, suggestCount, MAX_ANGLES } from "./coverage.js";
 import { MODEL_LIBRARY, ROOM_PATTERNS } from "./schema.js";
 import { compileReference, inferReplicateMode, DEFAULT_REPLICATE_MODE, REPLICATE_MODES } from "./reference-plan.js";
 import { cameraStateAt, entityStateAt, sequenceLayout, subjectPoint, fovFor } from "./motion.js";
+import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, topDownMap, mapToSvg, mapToAscii, occluderOf, sizeFromHeightFill } from "./spatial.js";
+import { shotBaseline, verifyShotContract } from "./contract.js";
 
 export const RUNTIME_VERSION = "director-runtime/0.4";
 export const SHOT_STATUSES = ["draft", "blocking", "rehearsal", "recorded", "review", "approved"];
@@ -489,6 +493,27 @@ export function entitiesForShot(d, shot) {
   if (!pid) return d.entities;
   return d.entities.filter((e) => { const q = padOf(d, e); return !q || q === pid; });
 }
+// 俯视图、轨迹、约束核对看的「这一镜的世界」：同一块台上的实体、机位、灯，加上没分到台的。
+// 整条复刻会把九场摆成一张宫格，不收一下，俯视图的边界会被撑到整张宫格，别的场的人也会画进来。
+export function sceneForShot(d, shot) {
+  const pid = d.scene?.pads?.length ? shotPad(d, shot) : null;
+  if (!pid) return d;
+  const on = (x) => { const q = padOf(d, x); return !q || q === pid; };
+  return { ...d, entities: d.entities.filter(on), cameras: d.cameras.filter((c) => c.id === shot.cameraId || on(c)), lights: d.lights.filter((l) => !l.padId || l.padId === pid) };
+}
+// 这一镜对应原片里的哪一段（秒）。整条复刻时每一场是台面上的一块，块上记着 from / to ——
+// 那就是读参照时切出来的场次边界。没分块的工程退回当初读参照取的那一段。
+// 对照那一屏拿它决定原片从第几秒起播；照原片生成拿它决定送出去的是哪一段，
+// 而不是把整条片子当成这一镜的参考。
+export function shotSourceSpan(d, shot) {
+  if (!shot) return null;
+  const pad = d?.scene?.pads?.find((x) => x.id === shotPad(d, shot));
+  if (pad && Number.isFinite(pad.from) && Number.isFinite(pad.to) && pad.to > pad.from) return { from: pad.from, to: pad.to };
+  const r = d?.project?.reference;
+  if (r && Number.isFinite(r.from) && Number.isFinite(r.to) && r.to > r.from) return { from: r.from, to: r.to };
+  return null;
+}
+
 // 一块台的清单：人物、道具、机位、灯、镜头、定妆资产
 export function padSummary(d, padId) {
   const pad = d.scene?.pads?.find((p) => p.id === padId);
@@ -526,7 +551,7 @@ register("scene.pad-select", {
 
 // ============ entity.* ============
 register("entity.create", {
-  doc: `创建语义物体。type: ${SEMANTIC_TYPES.join("/")}；proxy 几何 box/sphere/cylinder/capsule/cone/plane；position=接地点`,
+  doc: `创建语义物体。type: ${SEMANTIC_TYPES.join("/")}；proxy 几何 box/sphere/cylinder/capsule/cone/pyramid/plane；model: 模型库键；assetRef: 任意 glb 地址（本地导入的走 /media/…glb）；position=接地点`,
   params: { id: "string", type: "semanticType", displayName: "string", proxy: "geometry", color: "#hex", dimensions: "[w,h,d]", position: "[x,y,z]", yaw: "radians", role: "string", aliases: "string[]", continuity: "object", agentMemory: "string[]", pose: Object.keys(POSES).join("|"), assetRef: "string", pad: "padId（属于哪块台；省略则按当前台 / 位置判断）" },
   validate: (p, d) => (p.id && d.entities.some((e) => e.id === p.id) ? { error: "DUPLICATE_ID" } : null),
   handler(p) {
@@ -1210,10 +1235,14 @@ register("shot.lock", {
         reference: referenceFrame || sh.locks?.reference || lastGen?.result?.url || take?.thumbnail || null,
         jobId: lastGen?.id || sh.locks?.jobId || null,
         promptVersion: sh.promptVersions?.at(-1)?.version || 1,
+        // 几何基准：锁的不只是「那一版画面」，还有此刻评估出来的逐帧机位、主体在画面里的位置、谁挡在前面。
+        // 之后每一次改动都拿这份基准核对（review.contract），不看 Action 返回的 ok
+        baseline: shotBaseline(d, sh),
+        eventId: d.events[0]?.id || null, // 锁定时最新的事件：回退到这里 = 回到锁定时的样子
       };
       sh.version += 1;
     });
-    return { ok: true, id: s.id, aspects: list, zh: list.map((a) => LOCK_ASPECTS[a].zh), reference: D().shots.find((x) => x.id === s.id).locks.reference };
+    return { ok: true, id: s.id, aspects: list, zh: list.map((a) => LOCK_ASPECTS[a].zh), reference: D().shots.find((x) => x.id === s.id).locks.reference, baselineFrames: D().shots.find((x) => x.id === s.id).locks.baseline.frames.length };
   },
 });
 
@@ -1762,7 +1791,7 @@ register("reference.analyze", {
   undoable: false,
   handler({ ref, from, to, count, hint }, meta) {
     if (!hooks.reference) return { ok: false, error: "NO_READER", hint: "读参照在后端做；连上后端再试" };
-    if (!hooks.reference.ready) return { ok: false, error: "READER_NOT_READY", hint: "需要网关密钥（--llm-key-file）和 ffmpeg" };
+    if (!hooks.reference.ready) return { ok: false, error: "READER_NOT_READY", missing: hooks.reference.missing || null, hint: `读参照还差：${readerMissing()}` };
     const id = uid("ref");
     const job = {
       id,
@@ -1803,6 +1832,14 @@ register("reference.analyze", {
 // 落成本地文件之后，接的还是原来那条路（reference.analyze → planner 建场 → 白模 → 生成）。
 // 链接能不能用，dispatch 当场就知道 —— 没理由先建一个任务、再让它在后台失败。
 // 深一层的检查（站点认不认、要不要登录）留给适配器，那些确实得试了才知道。
+// 读参照缺什么，由适配器自己说（见 server/src/adapters/reference.mjs 的 missing）。
+// 「要网关密钥和 ffmpeg」是一句两头都可能不成立的话：缺的常常只有其中一个，
+// 人照着它去装了一个本来就有的东西，问题还在原地。
+function readerMissing() {
+  const m = hooks.reference?.missing;
+  return Array.isArray(m) && m.length ? m.join("、") : "网关密钥或 ffmpeg";
+}
+
 function badLink(url) {
   let u;
   try { u = new URL(String(url || "").trim()); } catch { return { error: "BAD_URL", hint: "这不是一个链接。把视频页的地址整条贴进来。" }; }
@@ -1818,7 +1855,7 @@ register("reference.fetch", {
   validate: ({ url }) => badLink(url),
   handler({ url, from, to }, meta) {
     if (!hooks.fetcher) return { ok: false, error: "NO_FETCHER", hint: "下链接在后端做；连上后端再试" };
-    if (!hooks.fetcher.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "装一个 yt-dlp（brew install yt-dlp）就能贴链接了" };
+    if (!hooks.fetcher.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "后端没有可写的媒体目录，存不下素材" };
     const id = uid("fetch");
     store.patch((d) => d.jobs.push({
       id,
@@ -1840,10 +1877,12 @@ register("reference.fetch", {
       .then(async () => {
         updateJob(id, { status: "running", progress: 1, note: "连接" });
         // 先探一下：标题和时长几秒就回来，先让人看到「下的是这条」，再开始等进度
-        const meta2 = await hooks.fetcher.probe(url);
+        // 第一次贴链接时这一步可能在取下载器（机器上没有 yt-dlp），所以探测也要能报进度：
+        // 界面上看到的是「准备下载器」，不是一条卡住不动的任务
+        const meta2 = await hooks.fetcher.probe(url, (p) => updateJob(id, { note: p.note }));
         if (meta2.ok) updateJob(id, { note: meta2.title, inputs: { url, from: from ?? null, to: to ?? null, title: meta2.title, site: meta2.site, uploader: meta2.uploader, duration: meta2.duration, thumbnail: meta2.thumbnail } });
         else if (meta2.error === "BAD_URL" || meta2.error === "BAD_PROTOCOL") return meta2;
-        return hooks.fetcher.download({ url, from, to, onProgress: (p) => updateJob(id, { progress: Math.round(p.percent), note: p.note ? `${meta2.title || ""} · ${p.note}` : meta2.title }) });
+        return hooks.fetcher.download({ url, from, to, direct: meta2.direct, onProgress: (p) => updateJob(id, { progress: Math.round(p.percent), note: p.note ? `${meta2.title || ""} · ${p.note}` : meta2.title }) });
       })
       .then((r) => {
         if (!r.ok) return updateJob(id, { status: "failed", error: r.error, message: r.message, hint: r.hint });
@@ -1884,8 +1923,8 @@ register("reference.replicate", {
   },
   handler({ url, ref, from, to, mode, hint, build }, meta) {
     const wantBuild = build !== false;
-    if (url && !hooks.fetcher?.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "贴链接要 yt-dlp（brew install yt-dlp）。也可以把视频直接拖进来。" };
-    if (!hooks.reference?.ready) return { ok: false, error: "READER_NOT_READY", hint: "读参照要网关密钥和 ffmpeg" };
+    if (url && !hooks.fetcher?.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "后端没有可写的媒体目录，存不下素材。也可以把视频直接拖进来。" };
+    if (!hooks.reference?.ready) return { ok: false, error: "READER_NOT_READY", missing: hooks.reference?.missing || null, hint: `把链接下下来了也读不了 —— 还差：${readerMissing()}` };
     // 建场不再要规划器：空间参数是编译出来的，不是猜出来的（见 core/reference-plan.js）。
     // 规划器只在导演另外打了一句自由文字时才上场，而且是在场已经建好之后。
 
@@ -1918,15 +1957,15 @@ register("reference.replicate", {
     });
 
     (async () => {
-      let media = ref, span = { from, to };
+      let media = ref, span = { from, to }, meta2 = null;
       if (url) {
         phase("fetch", "run");
         updateJob(id, { status: "running", progress: 5, note: "连接" });
-        const meta2 = await hooks.fetcher.probe(url);
+        meta2 = await hooks.fetcher.probe(url, (p) => { phase("fetch", "run", p.note); updateJob(id, { note: p.note }); });
         if (meta2.ok) phase("fetch", "run", meta2.title);
         // 指定了起止秒就只下那一段：实测同一条片子整段 59.9 MB / 15 s，8 秒那段 2.8 MB / 3 s。
         // 之后想换一段重下一次就是了，比一开始就把整条片子拖下来划算得多。
-        const got = await hooks.fetcher.download({ url, from, to, onProgress: (p) => updateJob(id, { progress: 5 + Math.round(p.percent * 0.35), note: p.note }) });
+        const got = await hooks.fetcher.download({ url, from, to, direct: meta2.direct, onProgress: (p) => updateJob(id, { progress: 5 + Math.round(p.percent * 0.35), note: p.note }) });
         if (!got.ok) { phase("fetch", "fail", got.hint || got.error); return updateJob(id, { status: "failed", error: got.error, message: got.message, hint: got.hint }); }
         media = got.url;
         phase("fetch", "done", `${(got.bytes / 1e6).toFixed(1)} MB · ${got.site}`);
@@ -1971,7 +2010,14 @@ register("reference.replicate", {
       updateJob(id, { progress: 70, note: "编译成 Action" });
       const plan = compileReference(a, { mode: useMode, prefix: id.replace(/^rep_/, "r"), hint, seconds: an.span && an.span.to > an.span.from ? an.span.to - an.span.from : span.to != null && span.from != null ? span.to - span.from : undefined });
       const before = D().shots.length;
-      const results = batch("复刻参照", (m) => plan.steps.map((st) => ({ step: st, r: dispatch(st.action, st.payload, m) })), { source: meta.source || "human", actorId: meta.actorId || "reference" });
+      // 工程名：复刻建的是新场，工程却还叫上一个示例的名字（「City Edge」）。按参照的标题起名；没有标题就用场名。
+      // 放在同一个 batch 里，撤销时整条复刻连同改名一起收回
+      const title = String(meta2?.title || a.scene?.name || a.scene?.setting || "").replace(/\s*[-|·—]\s*(YouTube|bilibili|哔哩哔哩|抖音|TikTok|Vimeo).*$/i, "").trim().slice(0, 60);
+      const results = batch("复刻参照", (m) => {
+        const rs = plan.steps.map((st) => ({ step: st, r: dispatch(st.action, st.payload, m) }));
+        if (title) dispatch("project.rename", { name: title }, m);
+        return rs;
+      }, { source: meta.source || "human", actorId: meta.actorId || "reference" });
       const failed = results.filter((x) => !x.r.ok);
       const shots = D().shots.length - before;
 
@@ -2155,6 +2201,67 @@ register("generation.reference", {
   },
 });
 
+// 提示词模板：结构从哪来。空间参数是导演台自己编译的，句式和块序来自 awesome-seedance
+// 那 460 多条验证过的案例（core/seedance-library.js，MIT）。不指定就按这一镜的信号自动挑，
+// 挑了哪个、为什么挑，都写在编译结果的 meta.template 里 —— 看得见才改得动。
+// 一条素材，多个机位。做法来自 Scenario 那条实测（19.53 秒固定机位 → 13 个新机位，原声同步）：
+// 一段带时间码的机位清单 + 一条「只准换机位和镜头」的硬约束。
+// 导演台这边这些机位不是形容词 —— 距离、离地高度、俯仰角都是按主体尺寸算的，
+// 和 camera.frame 真正摆机位用的是同一套公式（见 core/coverage.js）。
+register("shot.coverage", {
+  doc: `把一条已经拍好的素材从多个新机位再拍一遍：按时长切段，每段一个机位（最多 ${MAX_ANGLES} 个）。clear=true 取消`,
+  params: { shotId: "string（默认当前镜）", count: `number（几个机位；省略按时长算，约 1.5 秒一个）`, clear: "boolean" },
+  handler({ shotId, count, clear }) {
+    const d0 = D();
+    const s = d0.shots.find((x) => x.id === (shotId || d0.project.currentShotId));
+    if (!s) return { ok: false, error: "NO_SHOT" };
+    if (clear) {
+      store.patch((d) => delete d.shots.find((x) => x.id === s.id).coverage);
+      return { ok: true, id: s.id, cleared: true };
+    }
+    const seconds = (s.range.outFrame - s.range.inFrame) / d0.project.fps;
+    if (seconds < 2) return { ok: false, error: "TOO_SHORT", hint: "这一镜太短了，切不出几个机位。多机位覆盖至少要 2 秒" };
+    const plan = planCoverage(s, d0, { count });
+    store.patch((d) => (d.shots.find((x) => x.id === s.id).coverage = plan));
+    return { ok: true, id: s.id, count: plan.count, seconds: plan.seconds, suggested: suggestCount(seconds), segments: plan.segments.map((x) => ({ span: x.span, size: x.size, angle: x.angle, focal: x.focal, height: x.height, pitch: x.pitch })) };
+  },
+});
+
+register("prompt.template", {
+  doc: "指定这一镜（或整条工程）用哪个 Seedance 提示词模板；clear=true 改回自动挑。不带参数就只回报当前用的是哪个",
+  params: { id: "templateId（见 context.templates）", shotId: "string（省略则作用于整条工程）", clear: "boolean" },
+  undoable: true,
+  validate: ({ id, clear }) => (id && !clear && !templateById(id) ? { error: "NOT_FOUND", hint: "没有这个模板 id，先 context.templates 看清单" } : null),
+  handler({ id, shotId, clear }) {
+    const d0 = D();
+    const sid = shotId === undefined ? undefined : shotId || d0.project.currentShotId;
+    if (sid !== undefined && !d0.shots.some((x) => x.id === sid)) return { ok: false, error: "NO_SHOT" };
+    if (id || clear) {
+      store.patch((d) => {
+        if (sid === undefined) { if (clear) delete d.project.promptTemplate; else d.project.promptTemplate = id; }
+        else { const s2 = d.shots.find((x) => x.id === sid); if (clear) delete s2.promptTemplate; else s2.promptTemplate = id; }
+      });
+    }
+    const d = D();
+    const shot = d.shots.find((x) => x.id === (sid === undefined ? d.project.currentShotId : sid));
+    const cur = shot ? templateFor(shot, d) : null;
+    return { ok: true, scope: sid === undefined ? "project" : sid, id: id || null, cleared: !!clear, using: cur ? { id: cur.template.id, title: templateTitle(cur.template), why: cur.why, auto: cur.auto } : null };
+  },
+});
+
+register("context.templates", {
+  doc: "Seedance 提示词模板清单：25 个模板分 6 类，每个说清什么时候用它。来自 awesome-seedance（MIT）",
+  params: { category: "string（只看某一类）" },
+  undoable: false,
+  handler({ category }) {
+    const list = templateList("zh").filter((t) => !category || t.category === category);
+    const d = D();
+    const shot = d.shots.find((x) => x.id === d.project.currentShotId);
+    const cur = shot ? templateFor(shot, d) : null;
+    return { ok: true, data: { source: SEEDANCE_SOURCE, count: list.length, current: cur ? { id: cur.template.id, title: templateTitle(cur.template), why: cur.why, auto: cur.auto } : null, templates: list } };
+  },
+});
+
 register("generation.prompt", {
   doc: "把镜头编译成结构化 image / video(T2V,I2V) / v2v 提示词（中英）+ 负面词，存为新版本",
   params: { shotId: "string (default current)", style: "string en", styleZh: "string zh" },
@@ -2242,7 +2349,9 @@ register("generation.submit", {
       // and the approved reference assets of the entities in this shot (identity / product consistency)
       // reference "origin"：拿原片当参考视频，跳过白模直接照着它的运动生成。
       // 快，但运镜是原片的、不是导演调过的 —— 想改机位就得回到白模那条路。
-      inputs: { image: card?.keyframes?.[0] || take?.thumbnail || null, video: (reference === "origin" ? d0.project.reference?.ref : null) || take?.videoUrl || null, videoFrom: reference === "origin" && d0.project.reference?.ref ? "origin" : "take", references: referencesForShot(d0, s) },
+      // 照原片生成：送出去的是这一镜在原片里的那一段，不是整条片子。
+      // 给整条，模型看到的运动是第一场的运动 —— 改的是 07 镜，参考的却是 01 镜。
+      inputs: { image: card?.keyframes?.[0] || take?.thumbnail || null, video: (reference === "origin" ? d0.project.reference?.ref : null) || take?.videoUrl || null, videoFrom: reference === "origin" && d0.project.reference?.ref ? "origin" : "take", ...(reference === "origin" && d0.project.reference?.ref && shotSourceSpan(d0, s) ? { videoSpan: shotSourceSpan(d0, s) } : {}), references: referencesForShot(d0, s) },
       status: "queued",
       progress: 0,
       result: null,
@@ -2744,6 +2853,17 @@ register("film.check", {
         });
       }
 
+      // 锁住的约束被改坏了：这是导演明说过「满意」的部分，比任何构图警告都要紧
+      if (x.locks?.aspects?.length) {
+        const c = verifyShotContract(d, x);
+        for (const it of c.items.filter((q) => q.status === "violate")) add({
+          level: "error", code: "CONTRACT_VIOLATED", shotId: x.id, label, aspect: it.aspect,
+          title: `锁住的「${it.zh}」被改坏了`,
+          why: `${it.measured || ""}${it.worstFrame !== undefined ? `（第 ${it.worstFrame} 帧最明显）` : ""}。锁是导演说过「这一块我满意」的记录；改了就得回退，或者明确解锁。`,
+          fix: x.locks.eventId ? { action: "project.undo-to", payload: { eventId: x.locks.eventId }, label: "回退到锁定时", needsInput: "确认放弃锁定之后的改动" } : { action: "shot.unlock", payload: { shotId: x.id, aspects: [it.aspect] }, label: `解锁「${it.zh}」`, needsInput: "确认不再保这一条" },
+        });
+      }
+
       // 标题写着「轮胎」，而轮胎不在画面里 —— 这条最值钱：
       // 它不需要导演事先指定 target，光凭镜头自己的标题就能发现机位摆错了。
       // 实测那条 10 分钟片子里，正是这一类让画面变成了一堵墙。
@@ -2768,6 +2888,34 @@ register("film.check", {
         why: "机位朝向或位置不对，主体在画外。",
         fix: { action: "shot.reframe", payload: { shotId: x.id, target: missing[0], size: x.size || "MS" }, label: "按这个主体重新摆机位" },
       });
+
+      // 主体在视锥里，但被别的实心代理体挡住了。「在不在画面里」只看视锥，看不出这一条 ——
+      // 导演台-RL 的 repair-check 任务实测：主体 100% 被箱子挡住，自检照样全绿。
+      const lead0 = named.find((id) => seen.has(id));
+      if (lead0) {
+        const ent = d.entities.find((e) => e.id === lead0);
+        const hits = probes.map((f) => { const cs = cameraStateAt(d, x, f); return cs ? occluderOf(d, cs.position, subjectPoint(ent, f, x.size || cam.preset), f, [lead0]) : null; }).filter(Boolean);
+        if (hits.length >= 2) {
+          const blocker = d.entities.find((e) => e.id === hits[0].id);
+          // 换一个没被挡的角度：按 camera.frame 同一套算法试一圈覆盖角，挑第一个看得见的
+          const S = SHOT_SIZES[x.size] || SHOT_SIZES.MS, st = entityStateAt(ent, x.range.inFrame), { h, max } = subjectSize(ent);
+          const aim = subjectPoint(ent, x.range.inFrame, x.size || cam.preset), dist = Math.max(0.6, S.distance * Math.max(h, max * 0.6));
+          const clear = Object.entries(COVERAGE_ANGLES).find(([, A]) => {
+            const yaw = (st.yaw || 0) + (A.yaw * Math.PI) / 180, eye = st.position[1] + h / 2;
+            const pos = [st.position[0] + Math.sin(yaw) * dist, Math.max(0.15, eye + h * ((A.height ?? S.height) - 0.5)), st.position[2] + Math.cos(yaw) * dist];
+            return !occluderOf(d, pos, aim, x.range.inFrame, [lead0]);
+          });
+          add({
+            level: "error", code: "SUBJECT_OCCLUDED", shotId: x.id, label,
+            entityIds: [lead0, blocker?.id].filter(Boolean),
+            title: `「${ent.displayName}」被「${blocker?.displayName || hits[0].id}」挡住了`,
+            why: "主体在视锥里，但镜头和它之间隔着一个实心代理体 —— 录出来拍到的是挡在前面的那个东西。",
+            fix: clear
+              ? { action: "shot.reframe", payload: { shotId: x.id, target: lead0, size: x.size || "MS", angle: clear[0] }, label: `换到${clear[1].zh}，那边没有遮挡` }
+              : { action: "shot.reframe", payload: { shotId: x.id, target: lead0, size: x.size || "MS" }, label: "试过的角度都被挡住，需要挪开遮挡物或自己摆机位", needsInput: "angle" },
+          });
+        }
+      }
 
       // 没指定主体，但画面里有东西 —— 提醒一下，运镜跟随要靠 target
       if (!named.length) {
@@ -2864,7 +3012,10 @@ register("film.export", {
 
     // async like generation.submit: the job carries progress, SSE pushes it, film.status reads it
     Promise.resolve()
-      .then(() => hooks.film.assemble({ id: name ? String(name).replace(/\.mp4$/i, "").replace(/[^\w.-]+/g, "_") : id, width: res.width, height: res.height, fps: d.project.fps, clips: job.clips }, (patch) => updateJob(id, patch)))
+      // 组装器最后一次回调会先报 status:done、progress:100，而 result 要等它返回才有。中间那一瞬被 SSE 推出去，
+      // 页面看到「done 但没有 result」就当完成去读 url —— 首次流程实测就卡死在「拼成一条能播的片子 100%」。
+      // 所以回调里的 done 一律压成 running，done 只由下面带 result 的那一次写。（shot.chain 早就这么做了）
+      .then(() => hooks.film.assemble({ id: name ? String(name).replace(/\.mp4$/i, "").replace(/[^\w.-]+/g, "_") : id, width: res.width, height: res.height, fps: d.project.fps, clips: job.clips }, (patch) => updateJob(id, { ...patch, status: patch.status === "done" ? "running" : patch.status })))
       .then((out) => {
         if (!out.ok) return updateJob(id, { status: "failed", error: out.error, message: out.message, hint: out.hint, progress: 0 });
         updateJob(id, { status: "done", progress: 100, result: { kind: "video", url: out.url, bytes: out.bytes, seconds: out.seconds, clips: out.clips } });
@@ -3014,6 +3165,29 @@ register("review.verify", {
   },
 });
 
+// 约束核对：锁住的东西还在不在。纯本地几何，几毫秒，不花钱 —— 改完机位立刻就能知道「说好只平移，视线却转了 1.7°」。
+// 身份 / 服装 / 色彩这类白模验不了的，老实标成「需要判定模型」，不算通过。
+register("review.contract", {
+  doc: "核对这一镜锁住的约束：拿评估出来的逐帧几何和锁定时的基准比。每条给 pass / violate / unverifiable，附最坏的一帧和回退点。shotId 不给就查全片有锁的镜头",
+  params: { shotId: "string (默认全片)" },
+  undoable: false,
+  handler({ shotId }) {
+    const d = D();
+    const shots = shotId ? d.shots.filter((x) => x.id === shotId) : d.shots.filter((x) => x.locks?.aspects?.length);
+    if (shotId && !shots.length) return { ok: false, error: "NO_SHOT" };
+    const reports = shots.map((sh) => {
+      const r = verifyShotContract(d, sh);
+      // 回退点：锁定之后、动到这一镜的第一条可撤销事件
+      const since = sh.locks?.lockedAt || "";
+      const touched = [...d.events].reverse().filter((e) => e.timestamp > since && e.undoable && e.ok && !/^shot\.(un)?lock$/.test(e.action) && (e.targetIds?.includes(sh.id) || e.targetIds?.includes(sh.cameraId) || (sh.targetIds || []).some((t) => e.targetIds?.includes(t)) || /^(scene|light)\./.test(e.action)));
+      return { ...r, title: `${sh.index} ${sh.title}`, aspects: sh.locks?.aspects || [], editsSinceLock: touched.length, rollback: touched[0] ? { action: "project.undo-to", payload: { eventId: touched[0].id }, label: `回退到锁定时（撤销 ${touched.length} 步）` } : null };
+    });
+    const n = (k) => reports.reduce((a, r) => a + r[k], 0);
+    return { ok: true, shots: reports.length, pass: n("pass"), violate: n("violate"), unverifiable: n("unverifiable"), reports,
+      summary: !reports.length ? "没有锁住任何镜头" : n("violate") ? `${reports.filter((r) => r.violate).length} 个镜头的约束被改坏了` : n("unverifiable") ? `几何上都在，${n("unverifiable")} 条要判定模型看画面` : "锁住的都在" };
+  },
+});
+
 register("review.verdict", {
   doc: "读验收结论",
   params: { shotId: "string" },
@@ -3044,6 +3218,38 @@ register("context.events", { doc: "最近事件", params: { limit: "number" }, u
 register("context.history", { doc: "撤销栈信息", undoable: false, handler: () => ({ ok: true, data: historyInfo() }) });
 register("context.capabilities", { doc: "列出全部 Action 及参数、状态机许可（Agent 工具清单）", undoable: false, handler: () => ({ ok: true, data: capabilities() }) });
 register("context.sequence", { doc: "镜头序列时间布局", undoable: false, handler: () => ({ ok: true, data: sequenceLayout(D().shots).map((x) => ({ ...x, in: tc(x.start), out: tc(x.end) })) }) });
+register("context.trajectory", {
+  doc: "这一镜机位实际走出来的轨迹：逐帧位置/朝向/焦段、运动学（路程、速度、加加速度）、按轨迹判出来的运镜类型（和镜头声明的对不对得上），以及主体在画面里的位置、占幅、有没有被挡",
+  params: { shotId: "string (default current)", samples: "number (默认逐帧)", targetId: "entityId (默认这一镜的主体)" },
+  undoable: false,
+  handler({ shotId, samples = 0, targetId }) {
+    const d = D();
+    const shot = d.shots.find((x) => x.id === (shotId || d.project.currentShotId));
+    if (!shot) return { ok: false, error: "NO_SHOT" };
+    const tr = cameraTrajectory(sceneForShot(d, shot), shot, { samples: Number(samples) || 0, targetId: targetId || null });
+    const kinematics = trajectoryKinematics(tr, d.project.fps);
+    const evaluated = classifyMove(kinematics);
+    const declared = shot.keyframes?.length >= 2 ? "keyframed" : shot.motion?.type || "static";
+    const framing = framingReport(tr);
+    return { ok: true, shotId: shot.id, declared, evaluated, mismatch: declared !== "keyframed" && declared !== evaluated.type, kinematics, framing: framing ? { ...framing, reads: sizeFromHeightFill(framing.heightFillMean) } : null, samples: tr };
+  },
+});
+register("context.map", {
+  doc: "俯视平面图：谁站在哪、机位怎么走、此刻拍到哪一片。as: json（矢量图层）/ svg / ascii / raster（[C,H,W] 栅格，给策略网络用）",
+  params: { shotId: "string (default current)", frame: "number (default 入点)", as: "json|svg|ascii|raster", size: "number (栅格边长，默认 32)", px: "number (svg 边长，默认 480)" },
+  undoable: false,
+  handler({ shotId, frame, as, format, size, px }) {
+    const d = D();
+    format = as || format || "json"; // CLI 自己占用了 --format，所以参数叫 as
+    const N = Number(size) || (format === "raster" || format === "ascii" ? 32 : 0);
+    const shot = d.shots.find((x) => x.id === (shotId || d.project.currentShotId)) || d.shots[0];
+    const map = topDownMap(shot ? sceneForShot(d, shot) : d, { shotId: shot?.id, frame: frame === undefined ? null : Number(frame), size: N });
+    if (format === "svg") return { ok: true, shotId: map.shotId, svg: mapToSvg(map, { px: Number(px) || 480 }) };
+    if (format === "ascii") return { ok: true, shotId: map.shotId, ascii: mapToAscii(map, N) };
+    if (map.raster) map.raster = { ...map.raster, data: Array.from(map.raster.data) }; // JSON 里 Float32Array 会变成对象
+    return { ok: true, ...map };
+  },
+});
 register("context.schema", { doc: "词汇表：语义类型、姿态、运镜、景别、灯光预设、供应商", undoable: false, handler: () => ({ ok: true, data: { semanticTypes: SEMANTIC_PROXY, poses: Object.keys(POSES), joints: JOINT_NAMES, motions: Object.fromEntries(Object.entries(MOTION_TYPES).map(([k, v]) => [k, { zh: v.zh, en: v.en, rig: v.rig, params: v.params }])), shotSizes: SHOT_SIZES, coverage: COVERAGE_ANGLES, lightPresets: Object.fromEntries(Object.entries(LIGHT_PRESETS).map(([k, v]) => [k, v.zh])), lightTypes: LIGHT_TYPES, rigs: CAMERA_RIGS, providers: PROVIDERS, genModes: GEN_MODES, states: STATE_MACHINE, aspects: Object.keys(ASPECTS) } }) });
 
 register("health.report", {

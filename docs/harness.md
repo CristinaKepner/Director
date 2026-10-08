@@ -127,7 +127,7 @@ Agent 每执行一步都留一张卡片。卡片要回答三个问题，而不�
 | `film` | `server/src/film.mjs` | `assemble` / `frames` / `toMp4` / `lastFrame`，ffmpeg |
 | `judge` | `adapters/judge.mjs` | 抽帧 + 多模态比对新旧两版，出验收结论 |
 | `reference` | `adapters/reference.mjs` | 图 / 视频 → 结构化拍摄参数 + 一句可建场的 brief |
-| `fetcher` | `server/src/fetch.mjs` | `probe` / `download`，链接 → 本地素材（yt-dlp） |
+| `fetcher` | `server/src/fetch.mjs` | `probe` / `download`，链接 → 本地素材。直链走普通 HTTP；页面链接要 yt-dlp，机器上没有就自己取官方的独立可执行文件到 `--tools-dir`（核对 SHA2-256SUMS，对不上不落盘），不要 Homebrew |
 | `planner` | `server/src/host.mjs` | `build(brief)`，自然语言 → Action 计划并执行。**规划器也是可替换的能力**，编排型 Action 通过它建场 |
 
 规则：**hook 缺席时产品降级但不报错**。没有 ark key → 模拟队列照样能演完整流程；没有 ffmpeg → `film.export` 返回带安装建议的错误而不是崩；没有浏览器 → `take.record` 无头完成，只留快照。

@@ -6,8 +6,9 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { RectAreaLightHelper } from "three/addons/helpers/RectAreaLightHelper.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { store } from "../../core/store.js";
-import { padOf } from "../../core/actions.js";
+import { padOf, shotPad } from "../../core/actions.js";
 import { setHooks } from "../../core/actions.js";
 import { dispatch } from "./client.js";
 import { cameraStateAt, entityStateAt, lightStateAt, gaitOffsets, sequenceLayout, subjectPoint } from "../../core/motion.js";
@@ -150,7 +151,11 @@ function programRect(full = false) {
     h = H * 0.4;
     w = h * a;
   }
-  return { x: W - w - 14, y: H - h - 14, w, h };
+  // Reserve the lower corners for the top-down map and generated V output.
+  // Program monitoring stays above them and uses the same rect for DOM and WebGL.
+  w = Math.min(w, 240);
+  h = w / a;
+  return { x: 14, y: Math.min(110, Math.max(56, H * 0.22)), w, h };
 }
 
 function layoutFrames() {
@@ -159,7 +164,7 @@ function layoutFrames() {
   const r = programRect(program);
   lastRect = r;
   const css = (el, rr) => Object.assign(el.style, { left: `${rr.x}px`, top: `${rr.y}px`, width: `${rr.w}px`, height: `${rr.h}px` });
-  pipFrame.hidden = program || !d.project.pip;
+  pipFrame.hidden = program || !d.project.pip || host.clientHeight < 420;
   safeFrame.hidden = !program || !d.project.safeFrame;
   css(pipFrame, r);
   css(safeFrame, r);
@@ -509,6 +514,45 @@ function orientMarker(m, c, d, frame, curShot) {
   f.geometry.attributes.position.needsUpdate = true;
 }
 
+// 摄影机拍到的那一框，只属于当前这一镜所在的那块台。
+// 视口左上角那排「全部 / 只看某一块」是给导演看的，跟拍到什么无关：
+// 之前它俩是同一个开关，于是导演在「全部」底下录第一场的草片，录进去的是九块台
+// —— 第一场的草片里站着别的场的人。现在节目画面自己收一次范围，
+// 录草片录的就是这一框（见 blitProgram / grabProgram），所以草片里不会再混进别的场。
+function programScope(d) {
+  if (!d.scene?.pads?.length) return null;
+  const shot = d.shots.find((s) => s.id === d.project.currentShotId);
+  const pid = shot ? shotPad(d, shot) : null;
+  if (!pid) return null;
+  const hidden = [];
+  for (const ent of d.entities) {
+    const rec = entityMap.get(ent.id);
+    if (!rec || !rec.obj.visible) continue;
+    const q = padOf(d, ent);
+    if (q && q !== pid) { rec.obj.visible = false; hidden.push(rec.obj); }
+  }
+  if (padsObj) padsObj.traverse((o) => { if (o.visible && o.userData.padId && o.userData.padId !== pid) { o.visible = false; hidden.push(o); } });
+  // 别的台的画面内光源也不该照到这一场：隔着十几米也会在地上留一片暖光
+  const dimmed = [];
+  for (const l of d.lights) {
+    const rec = lightMap.get(l.id);
+    if (!rec || !rec.light.intensity) continue;
+    // 只认灯自己记着的那块台。按位置猜会出事：整台那套预设灯建在世界原点上，
+    // 而 3×3 宫格的正中那块台也在原点 —— 猜一次就能把主光从别的场里全关掉。
+    if (l.padId && d.scene.pads.some((p) => p.id === l.padId) && l.padId !== pid) { dimmed.push([rec.light, rec.light.intensity]); rec.light.intensity = 0; }
+  }
+  return { hidden, dimmed };
+}
+
+function renderProgram(d, r = renderer) {
+  const scope = programScope(d);
+  r.render(scene, programCam);
+  if (scope) {
+    for (const o of scope.hidden) o.visible = true;
+    for (const [l, v] of scope.dimmed) l.intensity = v;
+  }
+}
+
 function render(d) {
   const W = canvas.width, H = canvas.height;
   const dpr = renderer.getPixelRatio();
@@ -522,18 +566,18 @@ function render(d) {
     renderer.setViewport(r.x, host.clientHeight - r.y - r.h, r.w, r.h);
     renderer.setScissor(r.x, host.clientHeight - r.y - r.h, r.w, r.h);
     renderer.clear();
-    renderer.render(scene, programCam);
+    renderProgram(d);
     renderer.setScissorTest(false);
     return;
   }
   renderer.render(scene, freeCam);
-  if (d.project.pip && d.cameras.length) {
+  if (d.project.pip && d.cameras.length && host.clientHeight >= 420) {
     const r = lastRect;
     renderer.setScissorTest(true);
     renderer.setViewport(r.x, host.clientHeight - r.y - r.h, r.w, r.h);
     renderer.setScissor(r.x, host.clientHeight - r.y - r.h, r.w, r.h);
     renderer.clear();
-    renderer.render(scene, programCam);
+    renderProgram(d);
     renderer.setScissorTest(false);
   }
 }
@@ -548,7 +592,7 @@ function grabProgram() {
   renderer.setScissorTest(true);
   renderer.setViewport(r.x, host.clientHeight - r.y - r.h, r.w, r.h);
   renderer.setScissor(r.x, host.clientHeight - r.y - r.h, r.w, r.h);
-  renderer.render(scene, programCam);
+  renderProgram(store.get());
   renderer.setScissorTest(false);
   const out = document.createElement("canvas");
   const scale = Math.min(1, 640 / (r.w * dpr));
@@ -556,6 +600,72 @@ function grabProgram() {
   out.height = Math.round(r.h * dpr * scale);
   out.getContext("2d").drawImage(canvas, r.x * dpr, r.y * dpr, r.w * dpr, r.h * dpr, 0, 0, out.width, out.height);
   return out.toDataURL("image/jpeg", 0.72);
+}
+
+// 导入的 GLB 按它自己的尺寸进场（glTF 的单位是米）：先量一下包围盒，量出来的就是实体的 dimensions。
+// 量不出来、或者明显不是米（小于 1 厘米 / 大过 500 米）就返回 null，交给调用方用默认值。
+export async function measureGlb(url) {
+  if (!gltfCache.has(url)) gltfCache.set(url, new Promise((res, rej) => gltfLoader.load(url, (gltf) => res(gltf.scene), undefined, rej)));
+  const proto = await gltfCache.get(url);
+  const size = new THREE.Box3().setFromObject(proto).getSize(new THREE.Vector3());
+  const dims = [size.x, size.y, size.z].map((v) => Math.round(v * 1000) / 1000);
+  return dims[1] >= 0.01 && Math.max(...dims) <= 500 ? dims : null;
+}
+
+// ---------- export: still / GLB ----------
+// 静帧：拍摄机此刻那一框，按工程画幅、指定长边离屏渲一张 PNG。另起一个渲染器，
+// 不动视口的画布尺寸；范围照样只收这一场（programScope），和草片口径一致。
+export async function renderStill({ long = 1920 } = {}) {
+  const d = store.get(), a = aspectRatio();
+  const L = Math.max(256, Math.min(8192, Math.round(Number(long) || 1920)));
+  const W = a >= 1 ? L : Math.max(2, Math.round(L * a)), H = a >= 1 ? Math.max(2, Math.round(L / a)) : L;
+  const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1);
+  r.setSize(W, H, false);
+  r.shadowMap.enabled = renderer.shadowMap.enabled;
+  r.shadowMap.type = renderer.shadowMap.type;
+  r.toneMapping = renderer.toneMapping;
+  r.toneMappingExposure = renderer.toneMappingExposure;
+  r.outputColorSpace = renderer.outputColorSpace;
+  const aspect0 = programCam.aspect;
+  programCam.aspect = W / H;
+  programCam.updateProjectionMatrix();
+  try {
+    renderProgram(d, r);
+    const blob = await new Promise((res) => r.domElement.toBlob(res, "image/png"));
+    return { blob, width: W, height: H };
+  } finally {
+    programCam.aspect = aspect0;
+    programCam.updateProjectionMatrix();
+    r.dispose();
+    r.forceContextLoss();
+  }
+}
+
+// 整个场景导出成 GLB：台面、白模（换过资产的就是资产）、灯，外加每一镜入点那一刻的机位，
+// 按镜头命名 —— 拿到 Blender / UE / C4D 里接着做，机位是对得上的。辅助线、标记、gizmo 不进去。
+export async function exportSceneGlb() {
+  const d = store.get();
+  for (const e of d.entities) { const rec = entityMap.get(e.id); if (rec) rec.obj.name = e.displayName || e.id; }
+  for (const l of d.lights) { const rec = lightMap.get(l.id); if (rec) rec.light.name = l.name || l.id; }
+  const cams = new THREE.Group();
+  cams.name = "cameras";
+  for (const shot of d.shots) {
+    const cam = d.cameras.find((c) => c.id === shot.cameraId);
+    const st = cam ? cameraStateAt(d, shot, shot.range.inFrame) : null;
+    if (!st) continue;
+    const c = new THREE.PerspectiveCamera(50, aspectRatio(), 0.05, 2000);
+    c.filmGauge = programCam.filmGauge;
+    c.setFocalLength(st.focalLength || cam.lens.focalLength);
+    c.position.set(...st.position);
+    if (st.lookAt) c.lookAt(...st.lookAt);
+    if (st.roll) c.rotateZ(st.roll);
+    c.name = `${shot.index || shot.id} ${shot.title || ""}`.trim();
+    cams.add(c);
+  }
+  world.name = d.project.name || "scene";
+  const out = await new GLTFExporter().parseAsync([world, cams], { binary: true, onlyVisible: true });
+  return new Blob([out], { type: "model/gltf-binary" });
 }
 
 export function captureProgramFrame() {
@@ -723,6 +833,11 @@ function buildBlockout(ent) {
   } else if (geo === "cone") {
     if (t === "weapon") g.add(mesh(new THREE.ConeGeometry(w / 2, h, 10), m, [0, 0, 0], [Math.PI / 2, 0, 0]));
     else g.add(mesh(new THREE.ConeGeometry(w / 2, h, 12), m, [0, h / 2, 0]));
+  } else if (geo === "pyramid") {
+    // 四棱锥：底面按 w × d 拉伸，四个面正对前后左右
+    const pm = mesh(new THREE.ConeGeometry(Math.SQRT1_2, h, 4, 1).rotateY(Math.PI / 4), m, [0, h / 2, 0]); // 转 45° 后底面正好是单位正方形
+    pm.scale.set(w, 1, dd);
+    g.add(pm);
   } else if (geo === "plane") g.add(mesh(new THREE.BoxGeometry(w, 0.02, dd), mat(ent.proxy.color, { roughness: 0.3, metalness: 0.2 }), [0, 0.01, 0]));
   else g.add(mesh(new THREE.BoxGeometry(w, h, dd), m, [0, h / 2, 0]));
   // orientation tick so blocking still shows where a person / car is facing
@@ -876,6 +991,7 @@ function buildPads(pads) {
     const tag = label(`${p.index ? p.index + " " : ""}${p.name || ""}`, "pad");
     tag.position.set((p.x || 0) - w / 2 + 1.4, 0.45, (p.z || 0) + dd / 2 - 0.5);
     g.add(tag);
+    for (const o of [floor, edge, tag]) o.traverse((x) => (x.userData.padId = p.id));
   }
   g.traverse((o) => (o.userData.pad = true));
   return g;

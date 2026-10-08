@@ -205,15 +205,90 @@ function placeSubject(sub, index, total) {
 // 按站位摊开：一排最多 5 个，间距 0.9 m，第二排退后 1 m 并错开半个身位；名字带序号。
 // 一场最多 12 个，再多是人群，白模里摆不下也没意义。
 const GROUP_MAX = 12;
-export function expandSubjects(list = []) {
+
+// count 是最容易丢的一个字段：读取器写了「七个伴舞」当名字，count 那一栏却留空 ——
+// 于是一场七个人的戏，白模上站着两个。所以数字先从 count 读，读不到就从名字和外观里抠出来。
+// 抠不到才是 1 —— 那时候画面里本来就是一个人，或者读取器确实没数。
+const CN_DIGIT = { 零: 0, 〇: 0, 一: 1, 两: 2, 俩: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+const EN_DIGIT = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+const UNIT = "个|位|名|人|只|辆|台|条|群|排|队|组|对";
+const EN_UNIT = "people|persons?|dancers?|figures?|men\\b|women\\b|characters?|extras?|performers?|kids?|children";
+
+// 「七」「十」「十二」「二十」都要认：十开头是 10+x，x十 是 x*10(+y)
+function cnNumber(raw) {
+  const t = String(raw || "");
+  if (!/^[零〇一两俩二三四五六七八九十]+$/.test(t)) return null;
+  if (!t.includes("十")) return t.split("").reduce((n, c) => (n == null || CN_DIGIT[c] === undefined ? null : n * 10 + CN_DIGIT[c]), 0);
+  const [a, b] = t.split("十");
+  const tens = a ? CN_DIGIT[a] : 1;
+  const ones = b ? CN_DIGIT[b] : 0;
+  return tens === undefined || ones === undefined ? null : tens * 10 + ones;
+}
+
+// bare=true 才认光秃秃的数字。名字和外观里的数字大多不是人数（「20 岁」「3 号球衣」「35mm」），
+// 只有量词跟着的才算数；count 那一栏本来就该是数字，所以只有它能光写一个数。
+export function countFromText(text, { bare = false } = {}) {
+  const t = String(text || "");
+  if (!t) return null;
+  const num = t.match(new RegExp(`(\\d{1,2})\\s*(?:${UNIT}|${EN_UNIT})`, "i"));
+  if (num) return Number(num[1]);
+  const cn = t.match(new RegExp(`([零〇一两俩二三四五六七八九十]{1,3})\\s*(?:${UNIT})`));
+  if (cn) { const n = cnNumber(cn[1]); if (n) return n; }
+  const en = t.match(new RegExp(`\\b(${Object.keys(EN_DIGIT).join("|")})\\s+(?:${EN_UNIT})`, "i"));
+  if (en) return EN_DIGIT[en[1].toLowerCase()];
+  if (bare) { const only = t.match(/^\s*(\d{1,2})\s*$/); if (only) return Number(only[1]); }
+  return null;
+}
+
+// 一条 subject 到底代表几个。数字来源按可信度排：模型填的 count → 名字 → 外观描述。
+export function countOf(sub = {}) {
+  const raw = Number(sub.count);
+  if (Number.isFinite(raw) && raw >= 1) return Math.round(raw);
+  const fromCount = countFromText(sub.count, { bare: true });
+  if (fromCount) return fromCount;
+  for (const f of [sub.displayName, sub.look, sub.screenPosition]) { const n = countFromText(f); if (n && n > 1) return n; }
+  return 1;
+}
+
+const isPerson = (s) => ["character", "person", "people", "human", "man", "woman", "animal"].includes(String(s.semanticType || "").toLowerCase());
+
+/**
+ * @param list  读取器给的 subjects
+ * @param opts { people }  这一场画面里一共几个人（读取器单报的人数）。
+ *   报了人数但逐条的 count 加起来不够，就把差额补到人最多的那一条上 ——
+ *   「画面里七个人」比「伴舞这一条是七个」好数得多，模型答对前者的次数多得多，
+ *   所以宁可信人数，也不要让白模上少站五个人。
+ */
+export function expandSubjects(list = [], opts = {}) {
+  const counted = list.map((s) => ({ ...s, count: countOf(s) }));
+  const want = Math.max(0, Math.min(GROUP_MAX, Math.round(Number(opts.people) || 0)));
+  if (want) {
+    const people = counted.filter(isPerson);
+    const have = people.reduce((n, s) => n + s.count, 0);
+    if (people.length && have < want) {
+      const grow = people.reduce((a, b) => (b.count >= a.count ? b : a));
+      grow.count += want - have;
+    }
+  }
   const out = [];
-  for (const s of list) {
-    const n = Math.max(1, Math.min(GROUP_MAX, Math.round(Number(s.count) || 1)));
+  for (const s of counted) {
+    const n = Math.max(1, Math.min(GROUP_MAX, s.count));
     if (n === 1) { out.push({ ...s, count: 1 }); continue; }
     for (let i = 0; i < n; i++) out.push({ ...s, count: 1, group: s.displayName || s.semanticType, groupIndex: i, groupSize: n, displayName: `${s.displayName || "人"} ${i + 1}` });
     if (out.length >= GROUP_MAX) break;
   }
   return out.slice(0, GROUP_MAX);
+}
+
+// 这一场画面里有几个人：读取器单报的那一栏优先，没有就从这一场的文字描述里抠
+export function peopleInScene(sg = {}) {
+  const direct = Number(sg.peopleCount ?? sg.people ?? sg.headcount);
+  if (Number.isFinite(direct) && direct >= 1) return Math.round(direct);
+  for (const f of [sg.brief, sg.summary, sg.scene?.mood, sg.scene?.setting]) {
+    const m = String(f || "").match(/([零〇一两俩二三四五六七八九十]{1,3}|\d{1,2})\s*(?:个|位|名)?\s*(?:人|舞者|伴舞|演员|女孩|男孩|学生|观众|群演)/);
+    if (m) { const n = /^\d+$/.test(m[1]) ? Number(m[1]) : cnNumber(m[1]); if (n && n > 1) return n; }
+  }
+  return 0;
 }
 function groupOffset(sub) {
   if (!sub.groupSize || sub.groupSize < 2) return [0, 0];
@@ -277,7 +352,8 @@ export function compileReference(analysis = {}, opts = {}) {
     const cam = sg.camera || {};
     const light = sg.lighting || {};
     const beats = Array.isArray(sg.beats) ? sg.beats.filter((b) => b && Number(b.seconds) > 0) : [];
-    const subjects = expandSubjects(Array.isArray(sg.subjects) ? sg.subjects.slice(0, 8) : []);
+    const wantPeople = peopleInScene(sg);
+    const subjects = expandSubjects(Array.isArray(sg.subjects) ? sg.subjects.slice(0, 8) : [], { people: wantPeople });
     const sid = { pad: pads[k]?.id || null, subjects: [], camera: `${sp}_cam`, shot: `${sp}_shot` };
     const padArg = sid.pad ? { pad: sid.pad } : {};
 
@@ -362,6 +438,13 @@ export function compileReference(analysis = {}, opts = {}) {
         add("shot.update", { id: sid.shot, lightingState: mine }, `第 ${k + 1} 场的光是 ${LIGHT_PRESETS[mine].zh}，记在镜头上`);
         warnings.push(`第 ${k + 1} 场「${sg.name}」读出来的光是 ${LIGHT_PRESETS[mine].zh}，台上只能挂一套灯，现在挂的是第 1 场的 ${LIGHT_PRESETS[globalPreset].zh}。这一镜记了自己的光，生成时会按它来；白模里要看就在灯光面板切`);
       }
+    }
+
+    // 人数对不上要说出来。以前这一步是静默的：读取器把七个人记成两条 subject 且不填 count，
+    // 白模上就站两个人，而画面里有七个 —— 没有任何一处提示导演这一场少了五个人。
+    const built = useList.filter((x) => ["character", "animal", "person", "people"].includes(String(x.semanticType || "").toLowerCase())).length;
+    if (wantPeople && built < wantPeople) {
+      warnings.push(`${multi ? `第 ${k + 1} 场「${sg.name}」` : "参照"}读出来画面里有 ${wantPeople} 个人，白模上只摆了 ${built} 个 —— 读取器给的 subjects 没数清人数。要补就在人物面板加，或者重读一次参照`);
     }
 
     // 只有真的偏了才提醒。参照本来就是居中构图时还弹一句「白模里会在正中」，是句废话。

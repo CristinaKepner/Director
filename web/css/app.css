@@ -507,6 +507,7 @@ body.desktop.blur .topbar input.ghost { color: var(--muted); }
    跟右边两格没法比 —— 对照的前提是两边看起来一样大 */
 .sc-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 62vh; background: #000; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; }
 .sc-v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.sc-err { position: absolute; left: 12px; right: 12px; bottom: 12px; font-size: 12px; color: #ef6a6a; background: rgba(0,0,0,.6); padding: 6px 10px; border-radius: 6px; }
 .sc-none { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 12px; }
 .sc-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px 4px; font-size: 11px; color: var(--dim); }
 .sc-bar b { font-size: 13px; color: var(--text); font-weight: 500; }
@@ -825,3 +826,54 @@ button.model-pill:hover { border-color: var(--accent-line); }
 .tl-track .seg-ref { position: absolute; top: 3px; bottom: 3px; background: rgba(226, 177, 90, .16); border: 1px solid rgba(226, 177, 90, .45); border-radius: 5px; font-size: 11px; color: #e2b15a; padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; }
 .tl-track .seg-ref.cur { background: rgba(226, 177, 90, .32); }
 .tl-side .seqtc { color: var(--dim); font-size: 11px; }
+
+/* 左栏一栏三块：角色库 / 模板库 / 复刻。角色库占剩下的空间，另外两块各自有上限并自己滚，
+   否则模板列表一长就把角色库挤没了。 */
+.panel-head.sub { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.panel-head.sub h2 { font-size: 12px; color: var(--muted); }
+/* 角色库 / 参照 / 模板库各占一个面板，内容区吃满高度、自己滚 */
+#leftLibrary #library { flex: 1 1 auto; min-height: 0; overflow: auto; }
+#leftTemplates .templates { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; }
+.rail-sep { display: block; height: 1px; margin: 4px 6px; background: var(--line); flex: none; }
+/* 参照面板：一列排下来，表格换成两栏的 dl */
+.ref-panel { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+.ref-panel .ref-in { display: flex; flex-direction: column; gap: 6px; }
+.ref-panel .ref-in input { width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--sunken); color: var(--text); font-size: 12px; }
+.ref-panel .ref-in input:focus { outline: none; border-color: var(--accent); }
+.ref-panel .rep-row select { flex: 1; min-width: 0; }
+.ref-panel .ref-drop { margin-top: 0; padding: 10px; }
+.ref-panel .ref-live { margin-top: 2px; }
+.ref-panel .ref-read { padding-top: 10px; }
+.ref-panel .ref-brief { font-size: 12px; margin-bottom: 8px; }
+.ref-kv { display: grid; grid-template-columns: 34px 1fr; gap: 3px 8px; margin: 0 0 8px; font-size: 11px; line-height: 1.5; }
+.ref-kv dt { color: var(--muted); }
+.ref-kv dd { margin: 0; color: var(--text); word-break: break-word; }
+.ref-paths { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.ref-panel .ref-path { padding: 10px; gap: 4px; }
+.ref-panel .ref-path b { font-size: 12px; }
+.ref-panel .ref-path .actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.ref-cov { width: 100%; margin-top: 8px; }
+.ref-panel .ref-plan { margin: 0; padding: 6px 10px; }
+.ref-panel .ref-plan ol { padding-left: 18px; }
+.ref-jobs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.ref-job { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.ref-job > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-job i { color: var(--muted); font-style: normal; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-panel .ref-empty { padding: 6px 0; text-align: left; }
+.tpl-row { display: flex; align-items: baseline; gap: 6px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.tpl-row:hover { background: rgba(255,255,255,.04); }
+.tpl-row.on { border-color: var(--accent); background: rgba(197,184,255,.08); }
+.tpl-row b { font-weight: 500; color: var(--ink); }
+.tpl-row span { color: var(--dim); font-size: 11px; margin-left: auto; white-space: nowrap; }
+.tpl-cat { font-size: 11px; color: var(--dim); margin: 4px 0 2px; }
+.rep-row { display: flex; gap: 4px; }
+.rep-row input { flex: 1; min-width: 0; }
+.rep-note { font-size: 11px; color: var(--dim); line-height: 1.5; }
+.rep-note.warn { color: var(--warn, #e0b060); }
+
+/* + 物体：基本形 / 语义白模 / 模型库 / 导入 GLB */
+.add-menu { position: fixed; width: 300px; max-height: 70vh; overflow: auto; z-index: 40; gap: 10px; }
+.add-menu h4 { margin: 0; font-size: 11px; font-weight: 500; color: var(--dim); letter-spacing: .04em; }
+.add-menu .add-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.add-menu .add-grid button { padding: 6px 4px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.add-menu .add-import { width: 100%; }

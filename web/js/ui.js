@@ -2,14 +2,18 @@
 // Renders from the store; every mutation goes through dispatch() (client.js routes it to the backend or the local replica).
 // What is on screen at rest: the picture, the shot strip, one Agent input, four stage controls. Everything else opens on demand.
 import { store, persistable, historyInfo } from "../../core/store.js";
-import { timecode, getHooks, referencesForShot, padOf, shotPad, padSummary } from "../../core/actions.js";
+import { timecode, getHooks, referencesForShot, padOf, shotPad, shotSourceSpan, padSummary } from "../../core/actions.js";
+import { templateList, templateFor, CATEGORIES as SEEDANCE_CATEGORIES, TEMPLATES as SEEDANCE_TEMPLATES } from "../../core/seedance.js";
 import { DEMOS } from "../../core/demo.js";
 import { REPLICATE_MODES } from "../../core/reference-plan.js";
 import { threadItems } from "./thread.js";
 import { physicalInfo, fmt as pf } from "./phys.js";
 import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
 import { dispatch, client, isOnline } from "./client.js";
-import { focusSelected, resetView, focusPad } from "./viewport.js";
+import { focusSelected, resetView, focusPad, renderStill, exportSceneGlb, measureGlb } from "./viewport.js";
+import { renderSpatial } from "./spatial-panel.js";
+import { renderEval } from "./eval-panel.js";
+import { initStageWorkspace } from "./stage-workspace.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -37,6 +41,8 @@ const GUIDE_KEY = "director-console:guide:v5";
 
 // local UI state (what is open) — persisted per browser, never part of the project
 const ui = Object.assign({ left: null, drawer: false, tab: "shots", settings: false, moreTabs: false, leftW: 300, rightW: 340, drawerH: 250, phys: true }, load(UI_KEY));
+// 「参照」不在底部抽屉里了（并进左栏角色库下面）。上次停在那一页的人，打开时直接把左栏那块给他。
+if (ui.tab === "ref") { ui.tab = "shots"; ui.drawer = false; ui.left = "ref"; }
 // 面板尺寸的上下限。上限不写死像素：屏幕小的时候 560 的右栏会把舞台挤没
 const RZ = {
   left: { key: "leftW", css: "--left-w", def: 300, min: 220, max: () => Math.min(520, window.innerWidth * 0.34), axis: "x", sign: 1 },
@@ -64,6 +70,8 @@ function applyUi() {
   $("leftScene").classList.toggle("on", ui.left === "scene");
   $("leftProps").classList.toggle("on", ui.left === "props");
   $("leftLibrary").classList.toggle("on", ui.left === "library");
+  $("leftRef").classList.toggle("on", ui.left === "ref");
+  $("leftTemplates").classList.toggle("on", ui.left === "templates");
   for (const k of Object.keys(RZ)) app.style.setProperty(RZ[k].css, `${clampRz(k, ui[RZ[k].key] || RZ[k].def)}px`);
   $("drawerBtn").textContent = ui.drawer ? "▾" : "▴";
   $("agentSettings").hidden = !ui.settings;
@@ -144,6 +152,7 @@ function bindTips() {
 }
 
 export function openDrawer(tab) {
+  if (tab === "ref") return openRef(); // 参照搬到左栏角色库下面了；老入口照样能到
   if (tab) ui.tab = tab;
   ui.drawer = tab ? true : !ui.drawer;
   applyUi();
@@ -210,11 +219,11 @@ export function bindUI() {
   };
   // left
   document.querySelectorAll("[data-left]").forEach((b) => (b.onclick = () => openLeft(b.dataset.left)));
-  $("addEntity").onclick = () => {
-    const type = prompt(`语义类型（${Object.keys(SEMANTIC_PROXY).join(" / ")}）`, "character");
-    if (!type) return;
-    report(dispatch("entity.create", { type, displayName: prompt("显示名", SEMANTIC_PROXY[type]?.label?.split(" ")[0] || type) || undefined, position: [rand(-3, 3), 0, rand(-2, 2)] }));
-  };
+
+  $("addEntity").onclick = (e) => { e.stopPropagation(); toggleAddMenu(e.currentTarget); };
+  $("glbFile").onchange = () => { const f = $("glbFile").files[0]; $("glbFile").value = ""; if (f) importGlb(f); };
+  $("stillBtn").onclick = () => exportStill();
+  $("glbBtn").onclick = () => exportGlb();
   $("addCamera").onclick = () => report(dispatch("camera.create", { name: `机位 ${store.get().cameras.length + 1}`, focalLength: 35, position: [rand(-4, 4), 1.5, 6], target: store.get().project.selectedKind === "entity" ? store.get().project.selectedId : store.get().entities.find((e) => e.semanticType === "character")?.id }));
   $("addLight").onclick = () => report(dispatch("light.create", { name: `灯 ${store.get().lights.length + 1}`, type: "spot", color: "#ffd9a8", intensity: 8, position: [rand(-3, 3), 4, rand(1, 3)], group: "practical", castShadow: true }));
   $("deleteSel").onclick = deleteSelected;
@@ -270,6 +279,7 @@ export function bindUI() {
   });
   applyUi();
   render(store.get());
+  initStageWorkspace({ openDrawer, openLeft: (which) => { ui.left = which; applyUi(); render(store.get()); }, mediaHref, showPreview, toast });
 }
 
 // first run: a short guide, then out of the way
@@ -334,6 +344,96 @@ export function toast(msg, err = false) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (t.hidden = true), 2600);
 }
+// ---------- + 物体 ----------
+// 基本形是不带语义的几何体（导演自己知道它代表什么）；语义白模带类型，规划器和检查都认得；
+// 模型库是随包的 glTF；导入 GLB 先传到后端 media，再按地址挂到新实体上，工程里存的是 /media/… 。
+const PRIMITIVES = [
+  { geo: "box", zh: "立方体", dims: [1, 1, 1] },
+  { geo: "sphere", zh: "球", dims: [1, 1, 1] },
+  { geo: "pyramid", zh: "四棱锥", dims: [1, 1, 1] },
+  { geo: "cylinder", zh: "圆柱", dims: [0.8, 1.2, 0.8] },
+  { geo: "cone", zh: "圆锥", dims: [0.8, 1.2, 0.8] },
+  { geo: "capsule", zh: "胶囊", dims: [0.5, 1.6, 0.5] },
+];
+function toggleAddMenu(anchor) {
+  const m = $("addMenu");
+  if (!m.hidden) { m.hidden = true; return; }
+  const sem = Object.entries(SEMANTIC_PROXY).filter(([k]) => k !== "environment");
+  m.innerHTML = `<h4>基本形</h4><div class="add-grid">${PRIMITIVES.map((p) => `<button data-prim="${p.geo}">${p.zh}</button>`).join("")}</div>
+    <h4>语义白模</h4><div class="add-grid">${sem.map(([k, v]) => `<button data-sem="${k}" title="${esc(v.label || k)}">${esc((v.label || k).split(" ")[0])}</button>`).join("")}</div>
+    <h4>模型库</h4><div class="add-grid">${Object.entries(MODEL_LIBRARY).map(([k, v]) => `<button data-model="${k}">${esc(v.zh || v.name || k)}</button>`).join("")}</div>
+    <button class="add-import" data-import>导入 GLB…</button>`;
+  const r = anchor.getBoundingClientRect();
+  m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 308))}px`;
+  m.style.top = `${r.bottom + 6}px`;
+  m.hidden = false;
+  const at = () => [rand(-3, 3), 0, rand(-2, 2)];
+  const done = (res) => { m.hidden = true; report(res); };
+  m.querySelectorAll("[data-prim]").forEach((b) => (b.onclick = () => { const p = PRIMITIVES.find((x) => x.geo === b.dataset.prim); done(dispatch("entity.create", { type: "prop", proxy: p.geo, dimensions: p.dims, displayName: p.zh, position: at() })); }));
+  m.querySelectorAll("[data-sem]").forEach((b) => (b.onclick = () => done(dispatch("entity.create", { type: b.dataset.sem, position: at() }))));
+  m.querySelectorAll("[data-model]").forEach((b) => (b.onclick = () => done(dispatch("entity.create", { model: b.dataset.model, position: at() }))));
+  m.querySelector("[data-import]").onclick = () => { m.hidden = true; $("glbFile").click(); };
+}
+document.addEventListener("pointerdown", (e) => { const m = $("addMenu"); if (m && !m.hidden && !e.target.closest("#addMenu") && !e.target.closest("#addEntity")) m.hidden = true; });
+
+async function importGlb(f) {
+  if (!/\.glb$/i.test(f.name)) return toast("只认 .glb（二进制 glTF）。.gltf 带外部贴图，先在 Blender 里另存为 .glb。", true);
+  if (!isOnline()) return toast("导入 GLB 要连着后端：文件要存进 media 目录，工程里才能记住它。", true);
+  try {
+    const r = await fetch(new URL("upload?label=model", client.base), { method: "POST", headers: { "content-type": "model/gltf-binary" }, body: f });
+    const up = await r.json();
+    if (!up.ok) throw new Error(up.error || `HTTP ${r.status}`);
+    const name = f.name.replace(/\.glb$/i, "").slice(0, 40) || "模型";
+    const dims = await measureGlb(mediaHref(up.url)).catch((err) => { throw new Error(`文件读不出来（${err.message || err}）`); });
+    const sel = store.get().project.selectedKind === "entity" ? store.get().entities.find((e) => e.id === store.get().project.selectedId) : null;
+    // 选中了一个白模就替换它（ID、位置、镜头引用都保留）；没选就新建一个
+    const res = sel && !sel.assetRef && confirm(`把「${sel.displayName}」换成「${name}」？\n取消则新建一个物体。`)
+      ? await dispatch("entity.replace-proxy", { id: sel.id, asset: up.url })
+      : await dispatch("entity.create", { type: "prop", displayName: name, assetRef: up.url, dimensions: dims || [1, 1, 1], position: [rand(-3, 3), 0, rand(-2, 2)] });
+    report(res);
+  } catch (err) {
+    toast(`导入失败：${err.message || err}`, true);
+  }
+}
+
+// ---------- 导出静帧 / GLB ----------
+async function saveBlob(name, blob) {
+  if (window.director?.saveFile) {
+    const ext = name.split(".").pop();
+    const r = await window.director.saveFile(name, new Uint8Array(await blob.arrayBuffer()), [{ name: ext.toUpperCase(), extensions: [ext] }]);
+    if (r?.ok) toast(`已保存到 ${r.path}`);
+    else if (r && !r.canceled) toast(r.error || "保存失败", true);
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const fileStem = () => String(store.get().project.name || "director").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 60);
+async function exportStill() {
+  const d = store.get();
+  if (!d.cameras.length) return toast("还没有机位：静帧拍的是拍摄机那一框。", true);
+  $("menu").hidden = true;
+  try {
+    const { blob, width, height } = await renderStill({ long: Number($("stillSize").value) || 1920 });
+    const shot = d.shots.find((s) => s.id === d.project.currentShotId);
+    await saveBlob(`${fileStem()}${shot ? `_${shot.index || shot.id}` : ""}_${width}x${height}.png`, blob);
+  } catch (err) {
+    toast(`静帧导出失败：${err.message || err}`, true);
+  }
+}
+async function exportGlb() {
+  $("menu").hidden = true;
+  try {
+    toast("正在打包场景…");
+    await saveBlob(`${fileStem()}.glb`, await exportSceneGlb());
+  } catch (err) {
+    toast(`GLB 导出失败：${err.message || err}`, true);
+  }
+}
+
 function download(name, content, type = "application/json") {
   if (window.director?.saveFile) return saveNative(name, content); // mac client: native save panel
   const a = document.createElement("a");
@@ -397,6 +497,9 @@ function onKey(e) {
   if (e.key === "Escape") {
     closePreview();
     $("menu").hidden = true;
+    $("addMenu").hidden = true;
+    // 在拍摄机视角里按 Esc 回到自由视角：和预览、菜单一样，Esc 就是「退出当前这层」
+    if (store.get().project.viewMode === "program") dispatch("project.set-view", { mode: "free" });
     return;
   }
   if (e.code === "Space") {
@@ -455,6 +558,8 @@ function render(d) {
   lastFullRender = performance.now();
   renderModels(d);
   renderLibrary(d);
+  renderTemplatePanel(d);
+  renderRefPanel(d);
   if (document.activeElement !== $("projectName")) $("projectName").value = d.project.name;
   $("fidelity").value = d.project.fidelity;
   $("shading").value = d.project.shading || "shaded";
@@ -597,8 +702,8 @@ function renderTabs(d) {
   }
 
   // 「更多」里的七个：没内容的就不摆出来
-  const has = { shots: d.shots.length > 0, board: d.storyboard.length > 0, ref: true, assets: (d.assets || []).length > 0, log: true, health: true };
-  const label = { shots: "镜头清单", board: "故事版", ref: "参照", assets: "资产", log: "事件", health: "状态" };
+  const has = { shots: d.shots.length > 0, board: d.storyboard.length > 0, map: d.shots.length > 0, eval: !!d.project.currentShotId, assets: (d.assets || []).length > 0, log: true, health: true };
+  const label = { shots: "镜头清单", board: "故事版", map: "俯视图", eval: "评测", assets: "资产", log: "事件", health: "状态" };
   const extra = { board: d.storyboard.length, ref: d.jobs.filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind) && ["queued", "running"].includes(j.status)).length, assets: (d.assets || []).filter((a) => !a.approved).length };
   for (const b of $("moreTabs").querySelectorAll("[data-bottom]")) {
     const k = b.dataset.bottom;
@@ -1102,37 +1207,63 @@ function bindSync(el) {
   // 一起播 / 一起停，拖任意一个另一个跟上 —— 对照的意义在于同一时刻的同一构图。
   // 暂停就是停在当下这一帧：以前暂停顺手把 currentTime 归零，草片第 0 帧是录制器起手的黑场，
   // 于是「一按暂停全黑」。回到开头是另一个按钮。按钮的字永远跟着真实状态走（播完、拖动、外部暂停都算）。
+  //
+  // 每一栏有自己的入点。草片和生成都是「这一镜」单独的一段文件，入点就是 0；
+  // 原片是整条片子，这一镜只占中间某几秒 —— 在 07 镜按「一起播」放原片的第一帧，
+  // 对照的就不是同一时刻的同一构图，而是第 07 场对第 01 场。
+  // 所以下面所有时间都按「这一栏自己的第几秒」算：0 秒是这一栏的入点，不是文件的第 0 帧。
   const vs = () => [...el.querySelectorAll("video[data-sync]")];
   const playBtn = el.querySelector("[data-play]");
   const scrub = el.querySelector("[data-scrub]");
   const timeEl = el.querySelector("[data-time]");
-  const longest = () => Math.max(0.1, ...vs().map((v) => (Number.isFinite(v.duration) ? v.duration : 0)));
+  const inOf = (v) => { const x = Number(v.dataset.in); return Number.isFinite(x) && x > 0 ? x : 0; };
+  const outOf = (v) => { const x = Number(v.dataset.out); return Number.isFinite(x) && x > 0 ? x : null; };
+  const fileDur = (v) => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
+  const localDur = (v) => { const o = outOf(v), f = fileDur(v); return Math.max(0, (o != null ? (f ? Math.min(o, f) : o) : f) - inOf(v)); };
+  const localTime = (v) => Math.max(0, v.currentTime - inOf(v));
+  const seekLocal = (v, t) => { const dur = localDur(v); v.currentTime = inOf(v) + Math.max(0, dur ? Math.min(t, dur) : t); };
+  const longest = () => Math.max(0.1, ...vs().map(localDur));
   const syncUi = () => {
     const playing = vs().some((v) => !v.paused && !v.ended);
-    if (playBtn) playBtn.textContent = playing ? "❚❚ 暂停" : vs().some((v) => v.currentTime > 0.05) ? "▶ 继续" : "▶ 一起播";
+    if (playBtn) playBtn.textContent = playing ? "❚❚ 暂停" : vs().some((v) => localTime(v) > 0.05) ? "▶ 继续" : "▶ 一起播";
     const lead = vs().find((v) => !v.paused) || vs()[0];
-    if (scrub && lead && !scrub.matches(":active")) scrub.value = String(Math.round((lead.currentTime / longest()) * 1000));
-    if (timeEl && lead) timeEl.textContent = `${lead.currentTime.toFixed(1)}s / ${longest().toFixed(1)}s`;
+    if (scrub && lead && !scrub.matches(":active")) scrub.value = String(Math.round((localTime(lead) / longest()) * 1000));
+    if (timeEl && lead) timeEl.textContent = `${localTime(lead).toFixed(1)}s / ${longest().toFixed(1)}s`;
   };
   vs().forEach((v) => {
     v.loop = false; // 播完就停在末帧并把按钮换回来，循环会让「暂停」永远追不上状态
     v.preload = "auto";
-    v.onplay = v.onpause = v.onended = v.ontimeupdate = v.onloadedmetadata = syncUi;
-    v.onseeking = () => vs().forEach((o) => { if (o !== v && Math.abs(o.currentTime - v.currentTime) > 0.15) o.currentTime = v.currentTime; });
+    // 元数据一到就落到入点上：原片那一栏的静止画面也该是这一场的第一帧，不是整条片子的第一帧
+    v.onloadedmetadata = () => { if (localTime(v) < 0.01) seekLocal(v, 0); syncUi(); };
+    v.onplay = v.onpause = v.onended = syncUi;
+    v.ontimeupdate = () => {
+      const o = outOf(v);
+      if (o != null && v.currentTime >= o - 0.02 && !v.paused) { v.pause(); v.currentTime = o; } // 出点就是这一栏的末尾
+      syncUi();
+    };
+    v.onseeking = () => { const t = localTime(v); vs().forEach((o) => { if (o !== v && Math.abs(localTime(o) - t) > 0.15) seekLocal(o, t); }); };
   });
+  // 视频加载失败要说出来：一格黑画面看不出是「还没生成」还是「链接过期 / 文件不在」。
+  // 生成结果本该下载到 media 目录；下载失败时留下的是供应商的签名链接，几小时就过期。
+  vs().forEach((v) => (v.onerror = () => {
+    const box = v.parentElement.querySelector(".sc-err");
+    const src = v.currentSrc || v.src, remote = /^https?:\/\/(?!127\.0\.0\.1|localhost)/.test(src);
+    if (box) { box.hidden = false; box.textContent = remote ? "这条视频在供应商的临时链接上，已经打不开了（签名链接会过期）。重新生成这一镜会重新下载到本地。" : `视频加载失败：${src.split("/").pop().split("#")[0]}（文件不在 media 目录里，或格式播不了）`; }
+  }));
   playBtn?.addEventListener("click", () => {
     const playing = vs().some((v) => !v.paused && !v.ended);
     if (playing) vs().forEach((v) => v.pause());
     else {
       // 都播到头了就从头来；否则从各自现在的位置接着播（时间对齐到最靠前的那个）
-      const done = vs().every((v) => v.ended || (v.duration && v.currentTime >= v.duration - 0.05));
-      const t = done ? 0 : Math.min(...vs().map((v) => v.currentTime));
-      vs().forEach((v) => { v.currentTime = t; v.play().catch(() => {}); });
+      const done = vs().every((v) => v.ended || (localDur(v) && localTime(v) >= localDur(v) - 0.05));
+      const t = done ? 0 : Math.min(...vs().map(localTime));
+      vs().forEach((v) => { seekLocal(v, t); v.play().catch(() => {}); });
     }
     syncUi();
   });
-  el.querySelector("[data-restart]")?.addEventListener("click", () => { vs().forEach((v) => { v.pause(); v.currentTime = 0; }); syncUi(); });
-  scrub?.addEventListener("input", () => { const t = (Number(scrub.value) / 1000) * longest(); vs().forEach((v) => { v.currentTime = Math.min(t, v.duration || t); }); syncUi(); });
+  el.querySelector("[data-restart]")?.addEventListener("click", () => { vs().forEach((v) => { v.pause(); seekLocal(v, 0); }); syncUi(); });
+  scrub?.addEventListener("input", () => { const t = (Number(scrub.value) / 1000) * longest(); vs().forEach((v) => seekLocal(v, t)); syncUi(); });
+  vs().forEach((v) => { if (v.readyState >= 1 && localTime(v) < 0.01) seekLocal(v, 0); });
   syncUi();
 }
 
@@ -1162,16 +1293,26 @@ export function renderCompare(d) {
   // 生成那栏一直在，还没生成就写「还没有」—— 空着的一栏也在说事：下一步就是它。
   const origin = d.project.reference?.ref || null;
   const withRef = origin && (showRefCol === null ? true : showRefCol);
-  const key = `${shot.id}|${p.blockout}|${p.blockoutPrev}|${p.generated}|${three ? p.previous : ""}|${withRef ? origin : ""}|${JSON.stringify(p.verdict || null)}`;
+  // 这一镜在原片里是哪几秒。整条复刻时每一场是台面上的一块，块上记着 from / to（读参照时切的场）；
+  // 没分块的工程就退回当初读参照取的那一段。拿不到就还是整条 —— 但那时候原片本来就只有这一镜。
+  const seg = shotSourceSpan(d, shot);
+  const withRefSeg = withRef && seg ? seg : null;
+  const key = `${shot.id}|${p.blockout}|${p.blockoutPrev}|${p.generated}|${three ? p.previous : ""}|${withRef ? origin : ""}|${seg ? `${seg.from}-${seg.to}` : ""}|${JSON.stringify(p.verdict || null)}`;
   if (el.dataset.key === key) return; // 别在播放时被每帧重绘打断
   el.dataset.key = key;
 
-  const cell = (tag, url, cls = "") => `<div class="sc-cell ${cls}"><div class="sc-tag">${tag}</div><div class="sc-frame">${
-    url ? `<video class="sc-v" data-sync src="${esc(mediaHref(url))}" muted loop playsinline preload="metadata"></video>` : `<div class="sc-none">还没有</div>`
-  }</div></div>`;
+  // data-in / data-out 是这一栏自己的入点出点（秒）；#t= 只是让首帧和预加载也落在这一段上，
+  // blob: / data: 地址不认这个片段标识，就不加。真正管播放的是 bindSync 里的 seekLocal。
+  const cell = (tag, url, cls = "", range = null) => {
+    const href = mediaHref(url || "");
+    const frag = range && !/^(blob:|data:)/.test(String(href)) ? `#t=${range.from}${range.to != null ? `,${range.to}` : ""}` : "";
+    return `<div class="sc-cell ${cls}"><div class="sc-tag">${tag}</div><div class="sc-frame">${
+      url ? `<video class="sc-v" data-sync${range ? ` data-in="${range.from}"${range.to != null ? ` data-out="${range.to}"` : ""}` : ""} src="${esc(href)}${frag}" muted loop playsinline preload="metadata"></video><div class="sc-err" hidden></div>` : `<div class="sc-none">还没有</div>`
+    }</div></div>`;
+  };
 
   const cells = [
-    withRef ? cell("原片 · 你要复刻的那条", origin, "origin") : "",
+    withRef ? cell(`原片 · ${withRefSeg ? `${withRefSeg.from.toFixed(1)}–${withRefSeg.to.toFixed(1)}s · ` : ""}你要复刻的那条`, origin, "origin", withRefSeg) : "",
     p.blockoutPrev ? cell("草片 · 改之前", p.blockoutPrev, "prev") : "",
     cell(p.blockoutPrev ? "草片 · 改完后 · 免费" : "草片 · 免费 · 你改的是这边", p.blockout),
     three ? cell("生成 · 上一版", p.previous) : "",
@@ -1504,73 +1645,92 @@ function hideGuide() {
 // 上次选的复刻模式。不进工程状态：这是「这台机器上的这个人这次想干什么」，不是作品的一部分。
 let refMode = "motion";
 
-function renderRef(el, d) {
+// ---------- 参照（左栏自己的面板，轨道上紧挨着角色库） ----------
+// 进料口和详情合成一个面板：贴链接 / 拖文件 → 读出来的参数 → 两条路（先走草片 / 直接照原片生成）→ 怎么建出来的。
+// 窄栏里排成一列。只在这一块关心的东西变了才重画：每帧整块重写的话，输入框里打到一半的字会被冲掉。
+let refKey = "";
+export function openRef() {
+  ui.left = "ref";
+  saveUi();
+  applyUi();
+  render(store.get());
+}
+function renderRefPanel(d) {
+  const el = $("refPanel");
   const jobs = (d.jobs || []).filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind)).slice().reverse();
-  // 编译出来的计划是一份能读的中间产物：这一场到底是怎么建出来的，每一步为什么。
-  // 以前这里是一段发给模型的散文，看不见也对不上；现在摆出来，翻错了一眼就能指出来。
-  const plan = jobs.find((j) => j.kind === "replicate" && j.result?.steps?.length)?.result;
-  const cur = d.project.reference;
-  const a = cur?.analysis;
   const running = jobs.find((j) => ["queued", "running"].includes(j.status));
-
-  el.innerHTML = `<div class="ref-pane">
+  const cur = d.project.reference, a = cur?.analysis;
+  const shot = d.shots.find((s) => s.id === d.project.currentShotId);
+  const seg = shot ? shotSourceSpan(d, shot) : null;
+  if ($("refState")) $("refState").textContent = running ? `${running.progress || 0}%` : cur ? "已读" : "";
+  // 面板没开的时候，轨道上的图标替它报进度：读参照要一两分钟，人不会一直开着这一栏
+  const rb = $("refBadge");
+  if (rb) { rb.textContent = running ? `${running.progress || 0}` : ""; rb.classList.toggle("on", !!running); }
+  if (!el || ui.left !== "ref") { refKey = ""; return; }
+  const plan = jobs.find((j) => j.kind === "replicate" && j.result?.steps?.length)?.result;
+  const key = JSON.stringify([jobs.slice(0, 8).map((j) => [j.id, j.status, j.progress, j.note, (j.phases || []).map((p) => p.state + (p.note || ""))]), cur?.ref, cur?.model, a?.brief || a?.summary, d.shots.length, shot?.id, seg, d.scene.pads?.length, refMode, plan?.summary]);
+  if (key === refKey && el.firstChild) return;
+  refKey = key;
+  const keep = { url: $("refUrl")?.value || "", hint: $("refHint")?.value || "", focus: el.contains(document.activeElement) ? document.activeElement.id : null, open: [...el.querySelectorAll("details[data-k]")].filter((x) => x.open).map((x) => x.dataset.k) };
+  const dis = running ? "disabled" : "";
+  const rows = a ? [["景别", `${a.camera?.shotSize || "—"} · ${a.camera?.angle || "—"}`],
+    ["机位", `${a.camera?.heightMeters ?? "—"} m · ${a.camera?.focalMm ?? "—"} mm · f/${a.camera?.aperture ?? "—"}`],
+    ["构图", a.camera?.framing || "—"],
+    ["光", `${a.lighting?.keyDirection || "—"} · ${a.lighting?.ratio || "—"} · ${a.lighting?.colorTemp || "—"}`],
+    ["运镜", `${a.motion?.type || "—"}${a.motion?.description ? " · " + a.motion.description : ""}`],
+    ["主体", (a.subjects || []).map((x) => x.displayName).join("、") || "—"],
+    ["拍", (a.beats || []).map((b, i) => `${i + 1}) ${b.seconds}s ${b.text}`).join("　") || "—"]] : [];
+  el.innerHTML = `
     <div class="ref-in">
-      <div class="ref-row">
-        <input id="refUrl" type="url" placeholder="贴一条视频链接：抖音 / B站 / YouTube…" spellcheck="false" ${running ? "disabled" : ""}>
-        <select id="refMode" title="复刻它的哪一部分" ${running ? "disabled" : ""}>${Object.entries(REPLICATE_MODES).map(([k, v]) => `<option value="${k}"${k === refMode ? " selected" : ""}>${esc(v.zh)}</option>`).join("")}<option value=""${refMode ? "" : " selected"}>先问我</option></select>
-        <input id="refHint" type="text" placeholder="另外补充（可留空，例：主体换成一罐冷萃咖啡）" spellcheck="false" ${running ? "disabled" : ""}>
-        <button id="refGo" class="primary" ${running ? "disabled" : ""}>复刻</button>
+      <input id="refUrl" type="url" placeholder="贴一条视频链接：抖音 / B站 / YouTube…" spellcheck="false" ${dis}>
+      <div class="rep-row">
+        <select id="refMode" title="复刻它的哪一部分" ${dis}>${Object.entries(REPLICATE_MODES).map(([k, v]) => `<option value="${k}"${k === refMode ? " selected" : ""}>${esc(v.zh)}</option>`).join("")}<option value=""${refMode ? "" : " selected"}>先问我</option></select>
+        <button id="refGo" class="primary" ${dis}>复刻</button>
       </div>
-      <div class="ref-drop" id="refDrop"><input type="file" id="refFile" accept="image/*,video/*" hidden><span>或把本地图片 / 视频拖到这里</span></div>
+      <input id="refHint" type="text" placeholder="另外补充（可留空，例：主体换成一罐冷萃咖啡）" spellcheck="false" ${dis}>
+      <div class="ref-drop" id="refDrop"><input type="file" id="refFile" accept="image/*,video/*" hidden><span>或把本地图片 / 视频拖进来</span></div>
       ${running ? `<div class="ref-live">${(running.phases || []).map((ph) => `<div class="fr-step ${ph.state === "run" ? "run" : ph.state}"><span>${ph.state === "done" ? "✓" : ph.state === "run" ? "◠" : ph.state === "fail" ? "✗" : "·"}</span><b>${esc(ph.label)}</b><i>${esc(ph.note || (ph.state === "run" ? (running.progress || 0) + "%" : ""))}</i></div>`).join("") || `<div class="fr-step run"><span>◠</span><b>${esc(running.note || "处理中")}</b><i>${running.progress || 0}%</i></div>`}</div>` : ""}
     </div>
-
     ${a ? `<div class="ref-read">
-      <div class="ref-head"><b>最近读到的参照</b><span>${esc(cur.model || "")} · ${cur.frames || 1} 帧${cur.from != null ? ` · ${cur.from}s–${cur.to ?? "末"}s` : ""}</span></div>
+      <div class="ref-head"><b>读到的参照</b><span>${esc(cur.model || "")} · ${cur.frames || 1} 帧${cur.from != null ? ` · ${cur.from}s–${cur.to ?? "末"}s` : ""}${d.scene.pads?.length ? ` · ${d.scene.pads.length} 场` : ""}</span></div>
       <p class="ref-brief">${esc(a.brief || a.summary || "")}</p>
-      <table class="grid ref-grid"><tbody>
-        ${[["景别 / 视角", `${a.camera?.shotSize || "—"} · ${a.camera?.angle || "—"}`],
-           ["机位高度 / 焦段", `${a.camera?.heightMeters ?? "—"} m · ${a.camera?.focalMm ?? "—"} mm · f/${a.camera?.aperture ?? "—"}`],
-           ["构图", a.camera?.framing || "—"],
-           ["光", `${a.lighting?.keyDirection || "—"} · ${a.lighting?.ratio || "—"} · ${a.lighting?.colorTemp || "—"}`],
-           ["运镜", `${a.motion?.type || "—"}${a.motion?.description ? " · " + a.motion.description : ""}`],
-           ["主体", (a.subjects || []).map((x) => x.displayName).join("、") || "—"],
-           ["拍", (a.beats || []).map((b, i) => `${i + 1}) ${b.seconds}s ${b.text}`).join("　") || "—"]]
-          .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}
-      </tbody></table>
-      <div class="ref-two">
+      <dl class="ref-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      ${seg ? `<div class="rep-note">这一镜取原片 ${seg.from}–${seg.to}s</div>` : ""}
+      <div class="ref-paths">
         <div class="ref-path">
-          <b>先走草片</b><span>在 3D 里把机位走位搭出来，和原片并排对齐，改到满意再花钱生成。慢一点，但运镜是你的，改哪一镜都只重做那一镜。</span>
-          <div class="actions"><button id="refRebuild" class="primary">按这份参数建场</button>${d.shots.length ? `<button id="refCompare">和原片并排看</button>` : ""}</div>
+          <b>先走草片</b><span>在 3D 里把机位走位搭出来，和原片并排对齐，改到满意再花钱生成。</span>
+          <div class="actions"><button id="refRebuild" class="primary">按这份参数建场</button>${d.shots.length ? `<button id="refCompare">和原片并排</button>` : ""}</div>
         </div>
         <div class="ref-path">
-          <b>直接照着原片生成</b><span>把原片整条当参考视频交给 Seedance，运动和构图跟它走，主体换成你已批准的参考图。快，也计费；运镜是原片的，想改就得回到草片那条路。</span>
-          <div class="actions"><button id="refDirect" ${d.shots.length ? "" : "disabled title='先建场，才有镜头可生成'"}>用原片直接生成这一镜</button>${cur.ref ? `<button data-preview="${esc(cur.ref)}" data-kind="video">看原片</button>` : ""}</div>
+          <b>直接照着原片生成</b><span>整条原片当参考视频交给 Seedance，主体换成已批准的定妆照。快，计费；运镜是原片的。</span>
+          <div class="actions"><button id="refDirect" ${d.shots.length ? "" : "disabled title='先建场，才有镜头可生成'"}>用原片生成这一镜</button>${cur.ref ? `<button data-preview="${esc(cur.ref)}" data-kind="video">看原片</button>` : ""}</div>
         </div>
       </div>
-    </div>` : `<div class="ref-empty">还没读过参照。贴一条链接，或者拖一个本地文件进来。</div>`}
-
-    ${plan ? `<details class="ref-plan"><summary>这一场是怎么建出来的 · ${esc(plan.summary || "")}</summary>
+      ${shot ? `<button id="refCov" class="ref-cov" data-tip="多机位覆盖" data-tip-sub="一条素材，同一瞬间换 N 个机位再拍一遍，原声不动">多机位覆盖这一镜</button>` : ""}
+    </div>` : `<div class="ref-empty">还没读过参照。贴条链接或拖个文件进来，它会读出机位、光和节奏，再把场建出来。</div>`}
+    ${plan ? `<details class="ref-plan" data-k="plan"><summary>这一场是怎么建出来的 · ${esc(plan.summary || "")}</summary>
       <ol>${plan.steps.map((st) => `<li><code>${esc(st.action)}</code><span>${esc(st.why || "")}</span></li>`).join("")}</ol>
       ${(plan.warnings || []).length ? `<div class="ref-warn">${plan.warnings.map((w) => `<div>⚠ ${esc(w)}</div>`).join("")}</div>` : ""}
       ${plan.refined ? `<div class="ref-warn"><div>${plan.refined.ok ? `按你的补充又调了 ${plan.refined.steps} 步` : `补充那句没调动：${esc(plan.refined.reply || "")}`}</div></div>` : ""}
     </details>` : ""}
-
-    ${jobs.length ? `<table class="grid"><thead><tr><th>来源</th><th>阶段</th><th>结果</th><th></th></tr></thead><tbody>
-      ${jobs.slice(0, 8).map((j) => `<tr class="row"><td title="${esc(j.prompt || "")}">${esc((j.inputs?.title || j.prompt || j.id).slice(0, 60))}</td><td>${badge(j.status)}${j.status === "running" ? ` ${j.progress || 0}%` : ""}</td><td>${esc(j.result?.shots ? j.result.shots + " 个镜头" : j.result?.url ? "素材已就位" : j.hint || j.error || j.note || "")}</td><td>${j.result?.ref || j.result?.url ? `<button data-preview="${esc(j.result.ref || j.result.url)}" data-kind="video">看</button>` : ""}</td></tr>`).join("")}
-    </tbody></table>` : ""}
-  </div>`;
+    ${jobs.length ? `<details class="ref-plan" data-k="jobs"><summary>最近 ${Math.min(8, jobs.length)} 次读参照</summary>
+      <div class="ref-jobs">${jobs.slice(0, 8).map((j) => `<div class="ref-job"><span title="${esc(j.prompt || "")}">${esc((j.inputs?.title || j.prompt || j.id).slice(0, 40))}</span>${badge(j.status)}${j.status === "running" ? ` ${j.progress || 0}%` : ""}<i>${esc(j.result?.shots ? j.result.shots + " 个镜头" : j.result?.url ? "素材已就位" : j.hint || j.error || j.note || "")}</i>${j.result?.ref || j.result?.url ? `<button data-preview="${esc(j.result.ref || j.result.url)}" data-kind="video">看</button>` : ""}</div>`).join("")}</div>
+    </details>` : ""}`;
 
   const urlIn = $("refUrl"), hintIn = $("refHint");
+  urlIn.value = keep.url;
+  hintIn.value = keep.hint;
+  for (const k of keep.open) el.querySelector(`details[data-k="${k}"]`)?.setAttribute("open", "");
+  if (keep.focus && $(keep.focus) && !$(keep.focus).disabled) $(keep.focus).focus();
   $("refMode").onchange = (ev) => { refMode = ev.target.value; };
   const go = () => {
     const u = urlIn.value.trim();
     if (!u) return toast("先贴一条链接", true);
+    urlIn.value = "";
     report(dispatch("reference.replicate", { url: u, mode: refMode || undefined, hint: hintIn.value.trim() || undefined }));
   };
   $("refGo").onclick = go;
   urlIn.onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); go(); } };
-
   const drop = $("refDrop"), file = $("refFile");
   drop.onclick = () => file.click();
   file.onchange = () => file.files[0] && uploadRef(file.files[0], hintIn.value.trim(), refMode);
@@ -1584,13 +1744,15 @@ function renderRef(el, d) {
     if (f) return uploadRef(f, hintIn.value.trim(), refMode);
     if (t && /^https?:\/\//i.test(t.trim())) { urlIn.value = t.trim(); go(); }
   };
-
-  const rb = $("refRebuild");
-  if (rb) rb.onclick = () => report(dispatch("reference.replicate", { ref: cur.ref, from: cur.from ?? undefined, to: cur.to ?? undefined, mode: refMode || undefined, hint: hintIn.value.trim() || undefined }));
-  const rc = $("refCompare");
-  if (rc) rc.onclick = () => dispatch("project.set-view", { mode: "compare" });
-  const rd = $("refDirect");
-  if (rd) rd.onclick = () => report(dispatch("generation.submit", { mode: "v2v", provider: "seedance-2.5", reference: "origin" }));
+  $("refRebuild")?.addEventListener("click", () => report(dispatch("reference.replicate", { ref: cur.ref, from: cur.from ?? undefined, to: cur.to ?? undefined, mode: refMode || undefined, hint: hintIn.value.trim() || undefined })));
+  $("refCompare")?.addEventListener("click", () => dispatch("project.set-view", { mode: "compare" }));
+  $("refDirect")?.addEventListener("click", () => report(dispatch("generation.submit", { mode: "v2v", provider: "seedance-2.5", reference: "origin" })));
+  $("refCov")?.addEventListener("click", async () => {
+    const r = await dispatch("shot.coverage", { shotId: shot.id });
+    report(r);
+    if (r.ok) { await dispatch("generation.prompt", { shotId: shot.id }); toast(`排了 ${r.count} 个机位，在生成面板里看`); openDrawer("gen"); }
+  });
+  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "参照")));
 }
 
 async function uploadRef(f, hint, mode) {
@@ -1705,9 +1867,10 @@ function renderBottom(d) {
   const tab = ui.tab || "shots";
   if (tab === "shots") return renderShots(el, d);
   if (tab === "timeline") return renderTimeline(el, d);
+  if (tab === "map") return renderSpatial(el, d);
+  if (tab === "eval") return renderEval(el, d);
   if (tab === "takes") return renderTakes(el, d);
   if (tab === "board") return renderBoard(el, d);
-  if (tab === "ref") return renderRef(el, d);
   if (tab === "check") return renderCheck(el, d);
   if (tab === "gen") return renderGen(el, d);
   if (tab === "film") return renderFilm(el, d);
@@ -2062,6 +2225,26 @@ function chainView(j) {
   </div>`;
 }
 
+// 提示词用的是哪个结构。空间参数是导演台自己编译的，块序和句式来自 awesome-seedance
+// 那 460 多条验证过的案例（MIT）。自动挑的时候把「为什么是它」一起写出来 ——
+// 看不见理由的自动选择，用的人只会当它是随机的。
+function promptTemplateRow(shot, d) {
+  const cur = templateFor(shot, d);
+  const fixed = shot.promptTemplate || "";
+  const list = templateList("zh");
+  const notes = shot.prompts?.notes || [];
+  const groups = SEEDANCE_CATEGORIES.map((c) => {
+    const items = list.filter((t) => t.category === c.id);
+    return items.length ? `<optgroup label="${esc(c.title?.zh || c.id)}">${items.map((t) => `<option value="${esc(t.id)}"${t.id === fixed ? " selected" : ""}>${esc(t.title)}</option>`).join("")}</optgroup>` : "";
+  }).join("");
+  return `<div class="gen-row" style="margin-top:6px">
+      <span class="prompt" style="white-space:nowrap">提示词结构</span>
+      <select data-tpl style="flex:1"><option value=""${fixed ? "" : " selected"}>自动挑 · ${esc(cur.template ? (cur.template.title?.zh || cur.template.id) : "")}</option>${groups}</select>
+    </div>
+    <div class="prompt">${esc(cur.why)}${cur.auto ? "" : "（手动指定）"}</div>
+    ${notes.length ? `<div class="prompt">${notes.map((n) => `<div class="${n.level === "warn" ? "warn" : ""}">${n.level === "warn" ? "⚠ " : "· "}${esc(n.text)}</div>`).join("")}</div>` : ""}`;
+}
+
 function renderGen(el, d) {
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
   if (!shot) {
@@ -2069,7 +2252,10 @@ function renderGen(el, d) {
     return;
   }
   const P = shot.prompts;
-  const text = P ? (promptTab.mode === "image" ? P.image[promptTab.lang] : promptTab.mode === "v2v" ? P.v2v[promptTab.lang] : promptTab.mode === "negative" ? P.negative[promptTab.lang] : P.video[promptTab.lang]) : "";
+  const text = P ? (promptTab.mode === "image" ? P.image[promptTab.lang] : promptTab.mode === "v2v" ? P.v2v[promptTab.lang] : promptTab.mode === "negative" ? P.negative[promptTab.lang] : promptTab.mode === "coverage" ? (P.coverage?.[promptTab.lang] || "") : P.video[promptTab.lang]) : "";
+  // 「机位」这一栏只在排过机位表时出现：没排过就摆一个空标签，只会让人点进去看见一片白
+  const modes = ["image", "video", "v2v", "negative", ...(P?.coverage ? ["coverage"] : [])];
+  if (promptTab.mode === "coverage" && !P?.coverage) promptTab.mode = "video";
   const real = isOnline() && client.generation?.name && client.generation.name !== "simulated" ? Object.keys(client.generation.models || {}) : [];
   // v2v 要把白模视频交给供应商抓取，没有公网地址就必然失败 —— 别把它摆成默认项等人踩
   const v2vReady = !!(client.generation?.publicUrl || (client.generation?.publisher && client.generation.publisher !== "none"));
@@ -2084,10 +2270,11 @@ function renderGen(el, d) {
   el.innerHTML = `<div class="gen-layout">
     <div>
       <div class="gen-row"><b>${esc(shot.index)} ${esc(shot.title)}</b>
-        <div class="prompt-tabs">${["image", "video", "v2v", "negative"].map((m) => `<button data-pm="${m}" class="${promptTab.mode === m ? "on" : ""}">${{ image: "图", video: "视频", v2v: "V2V", negative: "负面" }[m]}</button>`).join("")}</div>
+        <div class="prompt-tabs">${modes.map((m) => `<button data-pm="${m}" class="${promptTab.mode === m ? "on" : ""}"${m === "coverage" ? ` data-tip="多机位覆盖" data-tip-sub="${esc(`一条素材换 ${P.coverage.count} 个机位再拍一遍，原声不动`)}"` : ""}>${{ image: "图", video: "视频", v2v: "V2V", negative: "负面", coverage: "机位" }[m]}</button>`).join("")}</div>
         <div class="prompt-tabs">${["en", "zh"].map((l) => `<button data-pl="${l}" class="${promptTab.lang === l ? "on" : ""}">${l.toUpperCase()}</button>`).join("")}</div>
         <button data-act="compile">${P ? "重新编译" : "编译提示词"}</button><button data-act="copy" ${P ? "" : "disabled"}>复制</button></div>
       <div class="prompt-box">${P ? esc(text) : "还没有提示词。点「编译提示词」由镜头生成。"}</div>
+      ${promptTemplateRow(shot, d)}
     </div>
     <div>
       <div class="gen-row">
@@ -2109,6 +2296,12 @@ function renderGen(el, d) {
     renderGen(el, store.get());
   }));
   el.querySelector('[data-act="compile"]').onclick = () => report(dispatch("generation.prompt", { shotId: shot.id }));
+  // 换模板就顺手重编一次：不重编的话界面上换了名字、提示词还是旧的那一版，最容易让人以为没生效
+  el.querySelector("[data-tpl]")?.addEventListener("change", async (ev) => {
+    const id = ev.currentTarget.value;
+    await dispatch("prompt.template", id ? { id, shotId: shot.id } : { shotId: shot.id, clear: true });
+    report(await dispatch("generation.prompt", { shotId: shot.id }));
+  });
   el.querySelector('[data-act="copy"]').onclick = () => navigator.clipboard?.writeText(text).then(() => toast("已复制"));
   el.querySelector('[data-act="submit"]').onclick = async () => {
     const r = await dispatch("generation.submit", { shotId: shot.id, mode: el.querySelector('[data-k="mode"]').value, provider: el.querySelector('[data-k="provider"]').value, lang: promptTab.lang });
@@ -2154,6 +2347,37 @@ function renderModels(d) {
 // 搬到左边和场景并排：场景回答「场里有什么」，角色库回答「它们长什么样」。
 const LIB_GROUPS = [["角色", ["character"]], ["物品", ["prop", "vehicle", "weapon"]]];
 
+// ---------- 左栏第二块：模板库 ----------
+// 提示词的结构从哪来（awesome-seedance，MIT）。摆在角色库下面是因为这两件事是连着用的：
+// 定完谁在演，接着就是这一镜的话怎么写。点一行 = 把当前镜钉在那个模板上，再点一次放开。
+function renderTemplatePanel(d) {
+  const el = $("templates");
+  if (!el || ui.left !== "templates") return;
+  const shot = d.shots.find((s) => s.id === d.project.currentShotId);
+  const cur = shot ? templateFor(shot, d) : null;
+  const fixed = shot?.promptTemplate || "";
+  $("tplCount").textContent = `${SEEDANCE_TEMPLATES.length}`;
+  if (!shot) { el.innerHTML = emptyState("还没有镜头。建一镜之后这里会自动挑一个结构。"); return; }
+  const list = templateList("zh");
+  el.innerHTML = SEEDANCE_CATEGORIES.map((c) => {
+    const items = list.filter((t) => t.category === c.id);
+    if (!items.length) return "";
+    return `<div class="tpl-cat">${esc(c.title?.zh || c.id)}</div>` + items.map((t) => {
+      const on = fixed ? t.id === fixed : cur?.template?.id === t.id;
+      return `<div class="tpl-row${on ? " on" : ""}" data-tpl-pick="${esc(t.id)}" data-tip="${esc(t.title)}" data-tip-sub="${esc(t.useWhen.slice(0, 120))}">
+        <b>${esc(t.title)}</b><span>${on ? (fixed ? "已钉住" : "自动选中") : ""}</span></div>`;
+    }).join("");
+  }).join("") + (cur ? `<div class="rep-note">${esc(cur.why)}</div>` : "");
+  el.querySelectorAll("[data-tpl-pick]").forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.tplPick;
+    await dispatch("prompt.template", id === fixed ? { shotId: shot.id, clear: true } : { id, shotId: shot.id });
+    report(await dispatch("generation.prompt", { shotId: shot.id }));
+  }));
+}
+
+// ---------- 左栏第三块：复刻 ----------
+// 参照原来在底部「更多」里，和角色库、模板库隔着半个界面 —— 而它们是同一件事的三步：
+// 照着哪条片子、谁在演、话怎么写。这里放进料口和状态，展开的详情仍在底部抽屉。
 function renderLibrary(d) {
   const el = $("library");
   const assets = d.assets || [];

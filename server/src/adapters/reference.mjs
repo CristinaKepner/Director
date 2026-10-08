@@ -10,6 +10,7 @@ const SYS = `你是电影摄影指导。给你一组画面（来自同一个镜�
 只输出一个 JSON 对象：
 {
  "summary":"一句话说这是什么画面",
+ "peopleCount":<画面里一共几个人，数出来的整数；没有人写 0>,
  "brief":"<可以直接拿去建场的一句话，像导演口述：谁在什么场景做什么，什么景别什么光。不要写'这张图片显示'>",
  "scene":{"name":"<场次名>","timeOfDay":"<晨/午/黄昏/夜/室内无自然光>","palette":"<主色调，具体到颜色>","mood":"<氛围>","setting":"<室内外与空间类型>"},
  "subjects":[{"semanticType":"character|vehicle|prop|building|animal|food","displayName":"<中文名>","look":"<外观：服装/材质/颜色，越具体越好>","screenPosition":"<在画面里的位置，如 中央偏左/前景右下>","sizeInFrame":"<占画幅比例，如 约1/3>","count":<同类有几个，一个人是 1，七个伴舞写 7>}],
@@ -23,6 +24,7 @@ const SYS = `你是电影摄影指导。给你一组画面（来自同一个镜�
 - 只给一帧时，motion 填 static、beats 给空数组。多帧时才判断运镜：主体在画面里横移而背景透视跟着变是 truck；主体不动而背景横扫是 pan；主体变大变小是 push-in / dolly-out 或变焦。看不准就写 static 并记进 notes。
 - heightMeters / focalMm / aperture 都是估计值，按画面透视和景深给一个合理数字，不要留空。
 - subjects 只列画面里真实存在、且需要在 3D 里摆位的主体，最多 6 个。背景楼群、地面这类不用逐个列。
+- 人要数清楚：同一类的多个人（伴舞、群演、一队人）写成一条并用 count 记人数。peopleCount 是画面里人的总数，必须等于 subjects 里所有人的 count 之和。
 - brief 是给导演台建场用的，要能独立成立：读它的人看不到原图。`;
 
 // 整条片子：先分场景，再逐场读同样的参数。顶层那份仍然要给（兼容旧结果，也是「整条的气质」），
@@ -34,7 +36,7 @@ const SYS_SCENES = `你是电影摄影指导兼剪辑。给你一条片子按时
  "summary":"一句话说这条片子是什么",
  "brief":"<整条的气质，像导演口述：什么调性、什么节奏。不要写'这张图片显示'>",
  "scene":{"name":"<整条的名字>","timeOfDay":"<主要的时段>","palette":"<主色调>","mood":"<氛围>","setting":"<主要的空间类型>"},
- "subjects":[{"semanticType":"character|vehicle|prop|building|animal|food","displayName":"<中文名>","look":"<外观>","screenPosition":"<位置>","sizeInFrame":"<占幅>"}],
+ "subjects":[{"semanticType":"character|vehicle|prop|building|animal|food","displayName":"<中文名>","look":"<外观>","screenPosition":"<位置>","sizeInFrame":"<占幅>","count":<同类有几个>}],
  "camera":{"shotSize":"ECU|CU|MCU|MS|MLS|LS|ELS","angle":"eye|low|high|overhead|dutch","heightMeters":<米>,"focalMm":<mm>,"aperture":<f>,"framing":"<最典型的构图>"},
  "lighting":{"keyDirection":"<主光方向>","ratio":"<明暗比>","colorTemp":"<色温>","practicals":["<画面内光源>"]},
  "motion":{"type":"static|push-in|dolly-out|truck-left|truck-right|pan|tilt|crane|orbit|handheld","description":"<最典型的运镜>","speed":"slow|medium|fast"},
@@ -43,6 +45,7 @@ const SYS_SCENES = `你是电影摄影指导兼剪辑。给你一条片子按时
    "name":"<这一场的名字，如 天台黄昏 / 厨房特写>",
    "from":<起始秒>,"to":<结束秒>,
    "brief":"<这一场像导演口述：谁在什么场景做什么，什么景别什么光>",
+   "peopleCount":<这一场画面里一共几个人，数出来的整数；没有人写 0>,
    "scene":{"name":"<场次名>","timeOfDay":"","palette":"","mood":"","setting":""},
    "subjects":[{"semanticType":"character|vehicle|prop|building|animal|food","displayName":"","look":"","screenPosition":"","sizeInFrame":"","count":<同类有几个；一个人就是 1，七个伴舞就写 7>}],
    "camera":{"shotSize":"ECU|CU|MCU|MS|MLS|LS|ELS","angle":"eye|low|high|overhead|dutch","heightMeters":<米>,"focalMm":<mm>,"aperture":<f>,"framing":""},
@@ -55,12 +58,16 @@ const SYS_SCENES = `你是电影摄影指导兼剪辑。给你一条片子按时
 }
 规则：
 - 「场景段」的判据是空间或主体换了：换了地方、换了人、或者景别从全景跳到特写且明显是另一个镜头。同一个镜头里的推拉摇移不算换场。
-- scenes 按时间顺序、首尾相接、覆盖整条：第一段 from=0，最后一段 to=总时长，相邻段 to 与下一段 from 相等。
+- from / to 用画面上标的那个秒数（就是下面给你的每帧秒数所在的同一条时间轴），不是从这一段自己算起的 0。
+- scenes 按时间顺序、首尾相接、覆盖整条：第一段 from = 第一帧的秒数所属的段首，最后一段 to = 最后一帧的秒数，相邻段 to 与下一段 from 相等。
 - 最多 9 段。超过就把相邻、相似的段合并成一段。整条只有一个镜头就只给 1 段。
 - 每一段的 camera / lighting / motion / subjects 都要填，不要留空对象；写不准就照抄整条的那份。
 - heightMeters / focalMm / aperture 是估计值，给一个合理数字，不要留空。
 - subjects 只列画面里真实存在、且需要在 3D 里摆位的主体。同一类的多个人（伴舞、群演、一队人）写成一条并用 count 记人数，数得清就写准确数字；每段最多 8 条。
-- 人数要数：画面里有 7 个人，count 加起来就该是 7。白模会照这个数摆人。
+- 人数要数，这是这份分析里最容易出错、也最看得出来的一栏。白模会照这两个数摆人：
+  · 每一条 subject 的 count 是这一条代表几个人，一个人就写 1，七个伴舞就写 7。**不要把人数只写在 displayName 里**（写「七个伴舞」而 count 留空，白模上就只会站一个）。
+  · peopleCount 是这一段画面里人的总数，必须等于这一段 subjects 里所有人物条目的 count 之和。两个数对不上就重新数一遍再输出。
+  · 数不准时宁可多数一个，也不要把一群人记成一个 —— 站位可以调，少站五个人没法调。
 - beats 里的 seconds 加起来应等于这一段的 to - from。`;
 
 // 截断的 JSON：去掉最后一个不完整的元素，再按栈把括号补齐
@@ -124,6 +131,9 @@ export function createReferenceReader(opts = {}) {
   return {
     name: "reference",
     ready: !!apiKey && !!getFrames,
+    // 缺哪一样要说得出名字。以前两个条件合成一句「读参照要网关密钥和 ffmpeg」，
+    // 而缺的往往只有一样 —— 人照着那句话去装了一个本来就有的东西，问题还在。
+    missing: [!apiKey && "网关密钥（偏好设置里填）", !getFrames && "ffmpeg（抽帧用）"].filter(Boolean),
     model,
 
     /**
@@ -152,16 +162,29 @@ export function createReferenceReader(opts = {}) {
         // 分段要首尾相接、按时间排好；模型偶尔会给出重叠或倒序，这里收拾一下，别让编译器背锅
         const list = (Array.isArray(data.scenes) ? data.scenes : []).filter((x) => x && typeof x === "object");
         list.sort((x, y) => (Number(x.from) || 0) - (Number(y.from) || 0));
+        // 段的秒数是原片的时间轴上的秒数，不是从 0 起算的。只读中间一段时第一段的起点是那一段的起点 ——
+        // 以前这里写死 0，于是对照那一屏按 from 去原片里找这一场，找到的是片头。
+        const start = Number.isFinite(Number(task.from)) ? Math.max(0, Number(task.from)) : 0;
         const end = frames.at(-1).t + (frames.length > 1 ? frames[1].t - frames[0].t : 0) / 2;
         list.forEach((sg, i) => {
-          sg.from = i === 0 ? 0 : Math.max(Number(sg.from) || 0, Number(list[i - 1].to) || 0);
+          sg.from = i === 0 ? start : Math.max(Number(sg.from) || 0, Number(list[i - 1].to) || 0, start);
           sg.to = i === list.length - 1 ? Math.max(Number(sg.to) || 0, Math.round(end * 10) / 10) : Number(sg.to) || sg.from;
           if (sg.to <= sg.from) sg.to = sg.from + 1;
+          // 人数：模型偶尔把它写成「7 人」这样的字符串，或者填了 count 却漏了合计。
+          // 两个数都收拾一遍再存 —— 建场那一步照着它摆人（见 core/reference-plan.js 的 expandSubjects）。
+          for (const sub of Array.isArray(sg.subjects) ? sg.subjects : []) {
+            const n = Number(String(sub.count ?? "").match(/\d{1,2}/)?.[0]);
+            sub.count = Number.isFinite(n) && n >= 1 ? n : 1;
+          }
+          const head = Number(String(sg.peopleCount ?? "").match(/\d{1,2}/)?.[0]);
+          const summed = (Array.isArray(sg.subjects) ? sg.subjects : []).filter((x) => /character|person|people|animal/i.test(String(x.semanticType || ""))).reduce((n, x) => n + x.count, 0);
+          sg.peopleCount = Number.isFinite(head) ? head : summed;
+          if (sg.peopleCount > summed) sg.notes = [...(sg.notes || []), `这一段说画面里有 ${sg.peopleCount} 个人，但 subjects 的 count 加起来只有 ${summed}`];
         });
         data.scenes = list.slice(0, 9);
         if (!data.beats?.length) data.beats = list.flatMap((sg) => sg.beats || []);
       }
-      log(`reference ${model}: ${frames.length} 帧 → ${split ? `${(data.scenes || []).length} 场、` : ""}${(data.subjects || []).length} 个主体、${(data.beats || []).length} 拍 (${usage?.total_tokens ?? "?"} tokens)`);
+      log(`reference ${model}: ${frames.length} 帧 → ${split ? `${(data.scenes || []).length} 场（人数 ${(data.scenes || []).map((sg) => sg.peopleCount ?? "?").join("/")}）、` : ""}${(data.subjects || []).length} 个主体、${(data.beats || []).length} 拍 (${usage?.total_tokens ?? "?"} tokens)`);
       return { ok: true, model, analysis: data, frames: frames.length, span: frames.length > 1 ? { from: frames[0].t, to: frames.at(-1).t } : null, usage };
     },
   };

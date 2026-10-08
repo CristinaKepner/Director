@@ -131,7 +131,9 @@ export function createArkAdapter(opts = {}) {
       const ref = job.inputs?.video;
       if (!ref) throw Object.assign(new Error("no circled take video for this shot"), { code: "NO_REFERENCE_VIDEO" });
       // Ark 不收 webm：先把白模代理转成 mp4，再把那个文件的公网地址给它
-      const usable = (typeof opts.toMp4 === "function" ? await opts.toMp4(ref) : null) || ref;
+      // 参考来自原片时只送这一镜那一段（videoSpan 由 generation.submit 按台面分块算出来）
+      const span = job.inputs?.videoFrom === "origin" ? job.inputs?.videoSpan || null : null;
+      const usable = (typeof opts.toMp4 === "function" ? await opts.toMp4(ref, span) : null) || ref;
       const m = String(usable).match(/\/media\/([^/?#]+)/);
       let url = null;
       const pub = publicUrl();

@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { mediaDuration } from "../film.mjs";
 import { spawn } from "node:child_process";
 
 const FRAME_TIMES = [0.1, 0.5, 0.9]; // 首 / 中 / 尾，按时长比例
@@ -24,15 +25,6 @@ function run(bin, args) {
   });
 }
 
-async function probeDuration(ffprobe, file) {
-  return new Promise((resolve) => {
-    const c = spawn(ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file], { stdio: ["ignore", "pipe", "ignore"] });
-    let out = "";
-    c.stdout.on("data", (b) => (out += b));
-    c.on("exit", () => resolve(Number(out.trim()) || 0));
-    c.on("error", () => resolve(0));
-  });
-}
 
 /**
  * @param opts { apiKey, baseUrl, model, ffmpeg, mediaDir, resolveLocal, log }
@@ -42,7 +34,6 @@ export function createJudge(opts = {}) {
   const base = (opts.baseUrl || "https://aigw.sotatts.online/v1").replace(/\/$/, "");
   const model = opts.model || "gemini-3.1-pro-preview"; // 需要能看图的模型
   const ffmpeg = opts.ffmpeg;
-  const ffprobe = ffmpeg ? path.join(path.dirname(ffmpeg), "ffprobe") : null;
   const mediaDir = opts.mediaDir;
   const log = opts.log || (() => {});
 
@@ -61,7 +52,7 @@ export function createJudge(opts = {}) {
     if (!file) return [];
     if (/\.(jpg|jpeg|png|webp)$/i.test(file)) return [`data:image/jpeg;base64,${fs.readFileSync(file).toString("base64")}`];
     if (!ffmpeg) return [];
-    const dur = (await probeDuration(ffprobe, file)) || 4;
+    const dur = (await mediaDuration(ffmpeg, file)) || 4;
     const out = [];
     for (const [i, r] of FRAME_TIMES.entries()) {
       const jpg = path.join(work, `${tag}_${i}.jpg`);

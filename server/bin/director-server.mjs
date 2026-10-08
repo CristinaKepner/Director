@@ -3,8 +3,10 @@
 //   node server/bin/director-server.mjs [--port 5175] [--host 0.0.0.0] [--project server/data/project.json]
 //                                       [--media-dir DIR] [--api-only] [--static DIR] [--token SECRET] [--cors ORIGIN] [--demo city-edge|none]
 //                                       [--ark-key-file FILE | ARK_API_KEY=…] [--ark-model seedance-2.5=doubao-seedance-2-5-260628] [--public-url https://host]
-//                                       [--llm-key-file FILE | AIGW_API_KEY=…] [--llm-base URL] [--llm-model ID]
+//                                       [--llm-key-file FILE | AIGW_API_KEY=…] [--llm-base URL] [--llm-model ID] [--ark-base URL]
+//                                       体验网关：两条上游一起指过去 --llm-base https://gw/v1 --ark-base https://gw/ark，密钥换成体验码
 //                                       [--ffmpeg /path/to/ffmpeg]   (成片拼接 film.export；默认自动探测)
+//                                       [--ytdlp /path/to/yt-dlp] [--tools-dir DIR] [--ytdlp-url URL]  (贴链接下素材；探不到就自动装一份到 tools-dir)
 //                                       [--tunnel cloudflared]       (把 /media 只读放到公网，v2v 需要；控制接口不出网)
 //                                       [--publish feishu --feishu-token-file FILE --feishu-parent <docx token>]  (v2v reference videos via your own Feishu Drive)
 // Contract: docs/backend-api.md
@@ -39,6 +41,9 @@ const ARK_KEY = process.env.ARK_API_KEY || (arg("--ark-key-file", null) && fs.re
 // LLM planner for the Agent Director (OpenAI-compatible gateway): AIGW_API_KEY / LLM_API_KEY or --llm-key-file; --llm-base URL; --llm-model ID
 const LLM_KEY = process.env.AIGW_API_KEY || process.env.LLM_API_KEY || (arg("--llm-key-file", null) && fs.readFileSync(arg("--llm-key-file"), "utf8").trim()) || null;
 const LLM_BASE = process.env.LLM_BASE_URL || arg("--llm-base", null);
+// 出片那条上游的地址。以前只认 ARK_BASE_URL 环境变量 —— 而要把客户端指向自己的体验网关，
+// 这两条上游必须一起改，少一条就等于把火山密钥仍然发在客户端里。
+const ARK_BASE = process.env.ARK_BASE_URL || arg("--ark-base", null);
 const LLM_MODEL = process.env.LLM_MODEL || arg("--llm-model", null);
 const LLM_TIMEOUT = Number(process.env.LLM_TIMEOUT || arg("--llm-timeout", 0)) || 0; // 毫秒；大计划需要更长
 const PUBLIC_URL = process.env.DIRECTOR_PUBLIC_URL || arg("--public-url", null); // where Ark can fetch /media/* from (needed for v2v)
@@ -47,11 +52,14 @@ const TUNNEL = process.env.DIRECTOR_TUNNEL || arg("--tunnel", null); // "cloudfl
 const PUBLISH = process.env.DIRECTOR_PUBLISH || arg("--publish", "none");
 const FEISHU_TOKEN_FILE = process.env.FEISHU_TOKEN_FILE || arg("--feishu-token-file", null);
 const FEISHU_PARENT = process.env.FEISHU_PARENT || arg("--feishu-parent", null);
-const FFMPEG = process.env.FFMPEG || arg("--ffmpeg", null); // film.export assembler; auto-detected when omitted
+const FFMPEG = process.env.FFMPEG || arg("--ffmpeg", null); // film.export assembler; auto-detected when omitted. --ffmpeg none = 当作机器上没有（复现新机器）
+const YTDLP = process.env.YT_DLP || arg("--ytdlp", null); // 贴链接用的下载器；不给就自动探测，探不到就自己装一份。--ytdlp none = 当作机器上没有（复现新机器）
+const TOOLS = process.env.DIRECTOR_TOOLS_DIR || arg("--tools-dir", null); // 自己装的下载器放哪；默认媒体目录旁边的 tools/
+const YTDLP_URL = process.env.YT_DLP_URL || arg("--ytdlp-url", null); // 内网/自建镜像：直接指定下载地址
 const ARK_MODELS = Object.fromEntries(args.flatMap((a, i) => (a === "--ark-model" && args[i + 1]?.includes("=") ? [args[i + 1].split("=")] : [])));
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
-const generation = ARK_KEY ? (ctx) => createArkAdapter({ apiKey: ARK_KEY, baseUrl: process.env.ARK_BASE_URL, models: ARK_MODELS, ...ctx }) : null;
+const generation = ARK_KEY ? (ctx) => createArkAdapter({ apiKey: ARK_KEY, baseUrl: ARK_BASE, models: ARK_MODELS, ...ctx }) : null;
 const llm = LLM_KEY ? (ctx) => createLlmPlanner({ apiKey: LLM_KEY, baseUrl: LLM_BASE, model: LLM_MODEL, timeoutMs: LLM_TIMEOUT || undefined, ...ctx }) : null;
 let publicUrl = PUBLIC_URL; // --tunnel fills this in once cloudflared reports its hostname
 // 隧道要一两分钟才建得起来（实测常要换两三条）。这段时间里界面只会说「v2v 需要公网地址」——
@@ -59,7 +67,7 @@ let publicUrl = PUBLIC_URL; // --tunnel fills this in once cloudflared reports i
 let tunnelState = TUNNEL ? "starting" : "off";
 const publisher = createPublisher({ kind: PUBLISH, feishuTokenFile: FEISHU_TOKEN_FILE, feishuParentNode: FEISHU_PARENT, log });
 const JUDGE_MODEL = process.env.JUDGE_MODEL || arg("--judge-model", null); // 验收用的多模态模型，默认 gemini-3.1-pro-preview
-const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: () => publicUrl, tunnelState: () => tunnelState, publisher, ffmpeg: FFMPEG, judgeKey: LLM_KEY, judgeBase: LLM_BASE, judgeModel: JUDGE_MODEL, log });
+const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: () => publicUrl, tunnelState: () => tunnelState, publisher, ffmpeg: FFMPEG, ytdlp: YTDLP, ytdlpUrl: YTDLP_URL, toolsDir: TOOLS, judgeKey: LLM_KEY, judgeBase: LLM_BASE, judgeModel: JUDGE_MODEL, log });
 const { server } = createApp(host, { static: STATIC, token: TOKEN, cors: CORS, log });
 
 server.listen(PORT, HOST, () => {

@@ -257,7 +257,8 @@ export async function exportFilm(opts = {}) {
   const job = await waitFor(() => {
     const j = D().jobs.find((x) => x.id === r.id);
     if (j) onProgress({ phase: "assemble", progress: j.progress, note: j.note, status: j.status });
-    return j && ["done", "failed"].includes(j.status) ? j : null;
+    // done 但还没有 result 的那一瞬不算完成（后端已经压掉了这种帧，这里再兜一层）
+    return j && (j.status === "failed" || (j.status === "done" && j.result?.url)) ? j : null;
   }, { timeout: opts.timeout || 20 * 60 * 1000, every: 800 });
   if (!job) return { ok: false, error: "ASSEMBLE_TIMEOUT", id: r.id };
   if (job.status !== "done") return { ok: false, error: job.error || "ASSEMBLE_FAILED", message: job.message, hint: job.hint, id: r.id };
