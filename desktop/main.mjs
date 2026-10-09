@@ -381,6 +381,7 @@ function buildMenu() {
         {
           label: "更多",
           submenu: [
+            { label: "导出对话 JSON…", click: () => send("export-conversation") },
             { label: "导出工程文件…", accelerator: "Cmd+S", click: () => send("export-project") },
             {
               label: "载入示例",

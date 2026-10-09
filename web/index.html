@@ -79,6 +79,7 @@
           <label>模式<span class="seg" id="buildMode"><button data-build="set" class="on">布景</button><button data-build="blocking">调度</button></span></label>
           <label>示例<select id="demoSelect"><option value="">选择…</option></select></label>
           <label>导出<span class="menu-row" style="gap:6px"><select id="stillSize" title="静帧长边（像素）"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="3840">3840</option></select><button id="stillBtn" data-tip="导出静帧" data-tip-sub="拍摄机此刻这一框，按画幅渲一张 PNG">静帧</button><button id="glbBtn" data-tip="导出场景 GLB" data-tip-sub="台面、白模 / 资产、灯，外加每一镜入点的机位；拿到 Blender / UE 里接着做">GLB</button></span></label>
+          <div class="menu-row"><button id="exportConversationBtn" title="导出当前仍保留的对话、操作步骤与媒体引用（最多 120 条）">导出对话 JSON</button></div>
           <div class="menu-row"><button id="exportBtn">导出工程</button><button id="importBtn">导入工程</button><input id="importFile" type="file" accept="application/json" hidden /></div>
           <div class="menu-row"><a href="../studio/" target="_blank" rel="noopener" style="flex:1"><button style="width:100%" title="可选的伴生应用（需本地构建）">Studio</button></a></div>
           <div class="menu-foot"><span id="saveHint"></span><span id="bridgePill" class="pill"></span></div>

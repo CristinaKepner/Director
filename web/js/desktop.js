@@ -21,6 +21,7 @@ export function initDesktop() {
     switch (cmd) {
       case "undo": return click("undoBtn");
       case "redo": return click("redoBtn");
+      case "export-conversation": return click("exportConversationBtn");
       case "export-project": return click("exportBtn");
       case "new-project":
         if (await confirmNative("新建空工程？", "当前工程会被替换。导出后再新建可以留底。")) report(dispatch?.("project.new", { name: "Untitled" }, { source: "human" }));

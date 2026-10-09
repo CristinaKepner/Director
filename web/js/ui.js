@@ -1,6 +1,7 @@
 // UI binding layer — minimal by default, progressive by use.
 // Renders from the store; every mutation goes through dispatch() (client.js routes it to the backend or the local replica).
 // What is on screen at rest: the picture, the shot strip, one Agent input, four stage controls. Everything else opens on demand.
+import { exportConversation, conversationFilename } from "../../core/conversation-export.js";
 import { store, persistable, historyInfo } from "../../core/store.js";
 import { timecode, getHooks, referencesForShot, padOf, shotPad, shotSourceSpan, padSummary } from "../../core/actions.js";
 import { templateList, templateFor, CATEGORIES as SEEDANCE_CATEGORIES, TEMPLATES as SEEDANCE_TEMPLATES } from "../../core/seedance.js";
@@ -195,6 +196,10 @@ export function bindUI() {
   $("aspect").onchange = (e) => dispatch("project.set-aspect", { aspect: e.target.value });
   $("buildMode").querySelectorAll("[data-build]").forEach((b) => (b.onclick = () => dispatch("project.set-build-mode", { mode: b.dataset.build })));
   $("exportBtn").onclick = () => download(`${store.get().project.name.replace(/\s+/g, "_")}.director.json`, JSON.stringify(persistable(), null, 2));
+  $("exportConversationBtn").onclick = () => {
+    const data = exportConversation(store.get());
+    download(conversationFilename(data.project.name, data.exportedAt), JSON.stringify(data, null, 2));
+  };
   $("importBtn").onclick = async () => {
     if (!window.director?.openProject) return $("importFile").click(); // browser: hidden file input
     const r = await window.director.openProject(); // mac client: native open panel
