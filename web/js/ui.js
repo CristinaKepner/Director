@@ -13,6 +13,7 @@ import { dispatch, client, isOnline } from "./client.js";
 import { focusSelected, resetView, focusPad, renderStill, exportSceneGlb, measureGlb } from "./viewport.js";
 import { renderSpatial } from "./spatial-panel.js";
 import { renderEval } from "./eval-panel.js";
+import { initTaskProgress } from "./task-progress.js";
 import { initStageWorkspace } from "./stage-workspace.js";
 
 const $ = (id) => document.getElementById(id);
@@ -279,6 +280,7 @@ export function bindUI() {
   });
   applyUi();
   render(store.get());
+  initTaskProgress();
   initStageWorkspace({ openDrawer, openLeft: (which) => { ui.left = which; applyUi(); render(store.get()); }, mediaHref, showPreview, toast });
 }
 

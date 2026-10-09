@@ -63,7 +63,7 @@ export function createHost(opts = {}) {
 
   // ---- film assembler (ffmpeg): the cut, blockout or generated, into one file under mediaDir ----
   const film = createFilmAssembler({ ffmpeg: opts.ffmpeg, mediaDir, mediaUrl: (name) => `/media/${name}`, log });
-  R.setHooks({ film });
+  R.setHooks({ film, deferAgentCapture: true });
   log(film.ready ? `film assembler: ffmpeg (${film.bin})` : "film assembler: 没有能跑的 ffmpeg —— 桌面端随包自带一份；单独跑后端用 --ffmpeg 指定，或 brew install ffmpeg");
 
   // ---- 自动验收：抽帧 + 多模态模型对比新旧两版 ----
@@ -286,7 +286,7 @@ export function createHost(opts = {}) {
       R.say("agent", trial ? `${trial}。规划先改用内置规则规划器 —— 它不花额度，但听不懂复杂的话。` : `LLM（${model}）调用失败：${String(err.message).slice(0, 160)}。改用内置规则规划器。`);
       const rp = R.plan(text, store.get());
       const out = R.runPlan({ ...rp, text }, { mode, force: payload.force === true, source: "agent" });
-      return { ok: true, backend: "rules", fallback: true, error_llm: trial || err.message, trial: !!trial, plan: out?.plan?.steps, notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+      return { ok: true, backend: "rules", fallback: true, error_llm: trial || err.message, trial: !!trial, plan: out?.plan?.steps, notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error, captureShotId: r.result.captureShotId })), pending: !!out?.pending };
     }
     emitThinking({ model, phase: "executing", reasoning: p.reasoning ? p.reasoning.slice(-4000) : "", steps: p.steps.map((s) => s.label || s.action), chars: 0 });
     store.patch((x) => (x.agent.busy = false));
@@ -314,7 +314,7 @@ export function createHost(opts = {}) {
     const planObj = { text, steps: p.steps, notes: p.notes, needsConfirm: p.needsConfirm, reply: p.reply, model: p.model };
     const out = R.runPlan(planObj, { mode, force: payload.force === true, source: "agent" });
     emitThinking({ model, phase: "done" });
-    return { ok: true, backend: p.model, ms: Date.now() - t0, usage: p.usage, reasoning: p.reasoning || "", suggest: p.suggest, reply: p.reply, plan: p.steps.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: p.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+    return { ok: true, backend: p.model, ms: Date.now() - t0, usage: p.usage, reasoning: p.reasoning || "", suggest: p.suggest, reply: p.reply, plan: p.steps.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: p.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error, captureShotId: r.result.captureShotId })), pending: !!out?.pending };
   }
 
   async function invokeAsync(msg) {

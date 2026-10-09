@@ -492,7 +492,7 @@ export function plan(text, d = store.get()) {
 // ---------- execution ----------
 function toolCard(step, result) {
   const ok = result.ok;
-  const short = ok ? (result.id ? `ok · ${result.id}` : "ok") : `${result.error}${result.hint ? " · " + result.hint : ""}${result.issues ? " · " + result.issues.join("；") : ""}`;
+  const short = result.captureShotId ? "等待客户端录制视频" : ok ? (result.id ? `ok · ${result.id}` : "ok") : `${result.error}${result.hint ? " · " + result.hint : ""}${result.issues ? " · " + result.issues.join("；") : ""}`;
   say("tool", `${step.label}\n${step.action} ${JSON.stringify(step.payload)}\n→ ${short}`, { action: step.action, payload: step.payload, result, eventId: result.eventId, role: "tool", actor: step.role, targetIds: result.targetIds || [result.id || step.payload.id].filter(Boolean), ok });
 }
 
@@ -604,6 +604,7 @@ function summaryText(p, out) {
   const bits = [`完成 ${out.okCount}/${out.results.length} 步${out.failed ? `（${out.failed} 步失败，见工具卡片）` : ""}。`];
   if (p.steps.some((x) => x.action === "scene.demo")) bits.push(`${s.scene.name} · 物体 ${s.entities.length} · 机位 ${s.cameras.length} · 灯 ${s.lights.length} · 镜头 ${s.shots.length}。镜头条已就绪，可以说「录制 shot_002」「给 03 镜生成 V2V 提示词」「把 A 机降到 0.4m 并 look-at 主角车」。`);
   if (p.notes.length) bits.push(`未处理：${p.notes.join("；")}。`);
+  if (out.results.some(x => x.result.captureShotId)) bits.push("镜头设置已完成，白模视频将由当前客户端录制；录制结束前不代表视频已完成。");
   if (s.project.state === "RECORDING") bits.push("正在录制白模 Take，结束后自动进入 REVIEW。");
   return bits.join("\n");
 }
@@ -630,7 +631,7 @@ register("agent.run", {
   undoable: false,
   handler({ text, mode, force }, meta) {
     const out = runAgent(text, { mode: mode || store.get().agent.mode || "lead", force: force === true, source: "agent" });
-    return { ok: true, plan: out?.plan?.steps?.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })), pending: !!out?.pending };
+    return { ok: true, plan: out?.plan?.steps?.map((s) => ({ action: s.action, payload: s.payload, label: s.label, role: s.role })), notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error, captureShotId: r.result.captureShotId })), pending: !!out?.pending };
   },
 });
 
@@ -641,7 +642,7 @@ register("agent.confirm", {
   handler: ({ skip } = {}) => {
     const out = confirmPlan(skip);
     if (!out) return { ok: false, error: "NO_PENDING_PLAN" };
-    return { ok: true, okCount: out.okCount, failed: out.failed, skipped: out.skipped || 0, results: out.results.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error })) };
+    return { ok: true, okCount: out.okCount, failed: out.failed, skipped: out.skipped || 0, results: out.results.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error, captureShotId: r.result.captureShotId })) };
   },
 });
 

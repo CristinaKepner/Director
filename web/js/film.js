@@ -67,7 +67,27 @@ export async function applyFixes(opts = {}) {
  * 逐镜录白模 Take。progress({phase, index, total, shotId, title, takeId})
  * @param opts { shotIds?, keyframes = true, circle = true, onProgress }
  */
+export let blockoutProgress = null;
+let blockoutRunning = false;
 export async function runBlockout(opts = {}) {
+  if (blockoutRunning || D().project.recording) return { ok: false, error: "RECORDING_BUSY" };
+  blockoutRunning = true;
+  const startedAt = Date.now();
+  const update = p => {
+    blockoutProgress = { ...p, startedAt, updatedAt: Date.now() };
+    opts.onProgress?.(p);
+  };
+  try {
+    const r = await recordBlockout({ ...opts, onProgress: update });
+    update({ phase: r.ok && r.recorded === r.of ? "done" : "failed", label: r.ok ? `白模已保存 ${r.recorded}/${r.of} 镜` : `白模未完成：${r.hint || r.error}`, result: r });
+    return r;
+  } catch (err) {
+    update({ phase: "failed", label: `白模录制失败：${err.message || err}` });
+    throw err;
+  } finally { blockoutRunning = false; }
+}
+
+async function recordBlockout(opts = {}) {
   const onProgress = opts.onProgress || (() => {});
   const d0 = D();
   const fps = d0.project.fps;
@@ -103,7 +123,10 @@ export async function runBlockout(opts = {}) {
     const secs = secondsOf(shot, fps);
     // the viewport stops the recorder at the out point; take.finish lands after the webm upload
     const take = await waitFor(() => {
-      const t = D().takes.find((x) => x.id === r.id);
+      const state = D();
+      const elapsed = Math.max(0, Math.min(secs, (state.project.playhead-shot.range.inFrame)/fps));
+      onProgress({ phase: "record", index: i+1, total: shots.length, title: label, elapsed, seconds: secs });
+      const t = state.takes.find((x) => x.id === r.id);
       return t && t.status !== "recording" ? t : null;
     }, { timeout: secs * 1000 + 60000 });
     if (!take) {
@@ -113,12 +136,17 @@ export async function runBlockout(opts = {}) {
       out.push({ shotId: shot.id, ok: false, error: "RECORD_TIMEOUT", takeId: r.id, hint: "录不到画面：录制期间窗口要保持可见，别最小化或切走" });
       continue;
     }
+    onProgress({ phase: "save", index: i+1, total: shots.length, title: label });
     // the upload can complete a beat after the status flip
     const withVideo = await waitFor(() => {
       const t = D().takes.find((x) => x.id === r.id);
       return t?.videoUrl ? t : null;
     }, { timeout: 30000 }) || take;
 
+    if (!withVideo.videoUrl) {
+      out.push({ shotId: shot.id, ok: false, error: "NO_RECORDED_VIDEO", hint: "没有录到视频，请保持窗口可见并检查录制器" });
+      continue;
+    }
     if (opts.keyframes !== false) {
       onProgress({ phase: "keyframe", index: i + 1, total: shots.length, shotId: shot.id, title: label });
       const cap = getHooks().capture;

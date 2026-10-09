@@ -57,7 +57,7 @@ export const CARD_STATUSES = ["empty", "blocked", "prompted", "generated", "appr
 const registry = new Map();
 const idempotency = new Map();
 let batchDepth = 0;
-const hooks = { recorder: null, generation: null, capture: null, film: null, judge: null, reference: null, fetcher: null, planner: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
+const hooks = { deferAgentCapture: false, recorder: null, generation: null, capture: null, film: null, judge: null, reference: null, fetcher: null, planner: null, clock: () => (typeof performance !== "undefined" ? performance.now() : Date.now()) };
 
 // Host integrations (browser recorder, generation adapters). Absent in the CLI: actions degrade gracefully.
 export function setHooks(h) {
@@ -1517,6 +1517,9 @@ register("take.record", {
     const d0 = D();
     const s = d0.shots.find((x) => x.id === (shotId || d0.project.currentShotId));
     if (!s) return { ok: false, error: "NO_SHOT" };
+    // Server-side Agent plans cannot render frames. Hand recording back to the requesting page.
+    if (hooks.deferAgentCapture && meta.source === "agent" && !hooks.recorder && !meta.capture)
+      return { ok: true, captureShotId: s.id, hint: "等待客户端录制白模视频" };
     const id = uid("take");
     const n = d0.takes.filter((t) => t.shotId === s.id).length + 1;
     const take = {

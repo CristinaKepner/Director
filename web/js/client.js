@@ -171,6 +171,13 @@ export async function dispatch(name, payload = {}, meta = {}) {
     delete r.snapshot;
   }
   localEffects(name, payload, r);
+  if (name.startsWith("agent.") && r.ok) {
+    const shotIds = [...new Set([...(r.results || []), r.result].filter(Boolean).map(x => x.captureShotId).filter(Boolean))];
+    if (shotIds.length) {
+      // Only the requesting page records; SSE observers never start duplicate captures.
+      import("./film.js").then(m => m.runBlockout({ shotIds })).catch(console.error);
+    }
+  }
   return r;
 }
 

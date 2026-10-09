@@ -692,3 +692,23 @@ test("事件日志不夹带 base64，也不跟着撤销快照复制一遍", () =
   assert.equal(persistable(store.get(), { events: 0 }).events.length, 0);
   assert.ok(persistable(store.get()).events.length > 0);
 });
+
+test("后端 Agent 录白模交给客户端，不创建伪完成 Take；确认方案保留录制请求", () => {
+  dispatch('scene.demo', { name: 'city-edge' });
+  R.setHooks({deferAgentCapture:true, recorder:null});
+  try {
+    const count = store.get().takes.length;
+    const pending = { text:'录制白模', notes:[], steps:[{action:'take.record',payload:{shotId:'shot_01'},label:'录制白模',role:'review'}] };
+    store.patch(d=>{d.agent.pendingPlan=pending;});
+    const r = dispatch('agent.confirm');
+    assert.equal(r.ok,true);
+    assert.equal(r.results[0].captureShotId,'shot_01');
+    assert.equal(store.get().takes.length,count,'等待客户端期间不能假装已录完');
+    assert.equal(store.get().project.recording,null);
+    const actual = dispatch('take.record',{shotId:r.results[0].captureShotId},{source:'human',capture:true});
+    assert.equal(actual.awaiting,'client');
+    assert.equal(store.get().takes.at(-1).status,'recording');
+    dispatch('take.finish',{id:actual.id,videoUrl:'/media/test.webm',frames:144});
+    assert.equal(store.get().takes.at(-1).videoUrl,'/media/test.webm');
+  } finally {R.setHooks({deferAgentCapture:false});}
+});
