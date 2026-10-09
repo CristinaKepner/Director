@@ -140,6 +140,7 @@ export function createLlmPlanner(opts = {}) {
  "ask":[{"question":"<只在必须问时出现>","why":"<不问会怎样>","options":[{"label":"<选项>","detail":"<这么选会发生什么>","recommended":<bool>}]}],
  "suggest":["<做完这一步之后，导演接下来最可能要做的 2-3 件事，写成可以直接执行的一句指令>"]}
 规则：
+- 用户要求恢复 T5 / 某条 Take 的轨迹时，优先使用 shot.restore-motion {id,takeId,duration}，它直接读取 Take 保存的全部关键帧；不要反复只调用 context.shot/review.compare 而停在“待核对”。用户同时要求录白模时，在恢复之后添加 take.arm 和 take.record。恢复轨迹不等于录制完成；检查最后5秒必须以实际运动或视频为据，不能口头保证顺滑。
 - 只能用下面列出的 Action 与参数；id 用 context 里的真实 id（机位 cam_*、物体、灯、镜头 shot_*），不要编造。
 - 单位：米、秒、度、mm；位置是接地点 [x, y, z]，正面朝 +Z；高度用 height。
 - 只有纯粹的提问/闲聊/要建议（"这个镜头为什么闷"、"推荐一个焦段"）才让 steps 为空，把回答写在 reply。

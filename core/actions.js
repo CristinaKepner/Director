@@ -1152,6 +1152,38 @@ register("shot.update", {
   },
 });
 
+register("shot.restore-motion", {
+  doc: "从指定 Take 精确恢复这一镜的相机姿态、焦段、运镜和全部关键帧（覆盖旧轨迹）；不修改人物、灯光或其他镜头，可撤销。duration 可指定恢复后的秒数。之后 take.record 才会录制新视频。",
+  params: { id: "shotId", takeId: "takeId", duration: "seconds (optional, defaults to recorded duration)" },
+  required: ["id", "takeId"],
+  validate: (p,d) => shotExists(p,d) || (p.duration !== undefined && (!Number.isFinite(Number(p.duration)) || Number(p.duration)<=0) ? {error:"BAD_DURATION"} : null),
+  handler({id,takeId,duration}) {
+    const d0=D(), take=d0.takes.find(t=>t.id===takeId);
+    if (!take || take.shotId!==id) return {ok:false,error:"TAKE_NOT_IN_SHOT"};
+    const saved=take.trajectory;
+    const cam=take.snapshot?.cameras?.find(c=>c.id===take.snapshot.cameraId);
+    if ((!saved && !cam) || !take.range || !take.motion) return {ok:false,error:"NO_MOTION_SNAPSHOT"};
+    const source=saved || {cameraPose:cam.pose,lens:cam.lens,motion:take.motion,keyframes:take.keyframes || [],range:take.range};
+    const seconds=duration===undefined ? (source.range.outFrame-source.range.inFrame)/(take.fps||d0.project.fps) : Number(duration);
+    const start=d0.shots.find(x=>x.id===id).range.inFrame;
+    const frames=Math.max(1,Math.round(seconds*d0.project.fps));
+    const scale=(frames-1)/Math.max(1,source.range.outFrame-source.range.inFrame-1);
+    const keys=(source.keyframes || []).map(k=>({...structuredClone(k),frame:start+Math.round((k.frame-source.range.inFrame)*scale)}));
+    if (new Set(keys.map(k=>k.frame)).size!==keys.length) return {ok:false,error:"KEYFRAME_COLLISION",hint:"时长太短，多个关键帧会重叠"};
+    store.patch(d=>{
+      const shot=d.shots.find(x=>x.id===id);
+      Object.assign(shot,{cameraPose:structuredClone(source.cameraPose),lens:structuredClone(source.lens),motion:structuredClone(source.motion),keyframes:keys,range:{inFrame:start,outFrame:start+frames}});
+      if (source.title) shot.title=source.title;
+      if (source.description!==undefined) shot.description=source.description;
+      delete shot.lastMove;
+      shot.restoredFromTake={id:take.id,at:new Date().toISOString()};
+      shot.version=(shot.version||0)+1;
+      if(d.project.currentShotId===id){d.project.playing=false;d.project.playhead=start;}
+    });
+    return {ok:true,id,takeId,seconds:frames/d0.project.fps,keyframes:keys.length,hint:"轨迹已恢复；尚未录制新视频"};
+  },
+});
+
 register("shot.select", {
   doc: "打开镜头：设为当前镜头，Program 切到它的机位，播放头回到入点",
   params: { id: "string" },
@@ -1531,6 +1563,7 @@ register("take.record", {
       frames: s.range.outFrame - s.range.inFrame,
       range: { ...s.range },
       fps: d0.project.fps,
+      trajectory: structuredClone({title:s.title,description:s.description,cameraPose:s.cameraPose,lens:s.lens,motion:s.motion,keyframes:s.keyframes||[],range:s.range}),
       motion: structuredClone(s.motion),
       keyframes: structuredClone(s.keyframes || []),
       snapshot: snapshotScene(d0),
@@ -3054,7 +3087,9 @@ register("review.compare", {
       const dp = camA.pose.position.map((v, i) => Math.abs(v - camB.pose.position[i]));
       if (Math.max(...dp) > 0.01) diff.push({ field: "camera.position", a: camA.pose.position, b: camB.pose.position });
     }
-    if (A.motion.type !== B.motion.type) diff.push({ field: "motion", a: A.motion.type, b: B.motion.type });
+    for (const [field,a,b] of [["motion",A.motion,B.motion],["keyframes",A.keyframes||[],B.keyframes||[]],["range",A.range,B.range],["fps",A.fps,B.fps],["shot.cameraPose",A.trajectory?.cameraPose,B.trajectory?.cameraPose],["shot.lens",A.trajectory?.lens,B.trajectory?.lens]]) {
+      if (JSON.stringify(a)!==JSON.stringify(b)) diff.push({field,a,b});
+    }
     for (const ea of A.snapshot.entities) {
       const eb = B.snapshot.entities.find((e) => e.id === ea.id);
       if (!eb) diff.push({ field: `entity.${ea.id}`, a: "present", b: "missing" });

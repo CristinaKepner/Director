@@ -712,3 +712,29 @@ test("后端 Agent 录白模交给客户端，不创建伪完成 Take；确认�
     assert.equal(store.get().takes.at(-1).videoUrl,'/media/test.webm');
   } finally {R.setHooks({deferAgentCapture:false});}
 });
+
+test('Take 恢复完整轨迹并隔离其他镜头；比较不能漏掉关键帧', () => {
+  dispatch('scene.demo',{name:'city-edge'});
+  const sid='shot_01';
+  dispatch('motion.keyframe',{shotId:sid,frame:0,position:[1,2,3],lookAt:[0,1,0],focalLength:40});
+  dispatch('motion.keyframe',{shotId:sid,frame:143,position:[4,5,6],lookAt:[0,1,0],focalLength:40});
+  const first=dispatch('take.record',{shotId:sid},{source:'cli'});
+  const take=structuredClone(store.get().takes.find(t=>t.id===first.id));
+  dispatch('motion.keyframe',{shotId:sid,frame:143,position:[-9,10,20]});
+  const second=dispatch('take.record',{shotId:sid},{source:'cli'});
+  assert.ok(dispatch('review.compare',{a:first.id,b:second.id}).diff.some(x=>x.field==='keyframes'));
+  const others=structuredClone(store.get().shots.filter(s=>s.id!==sid));
+  const cameras=structuredClone(store.get().cameras);
+  const r=dispatch('shot.restore-motion',{id:sid,takeId:first.id});
+  assert.equal(r.ok,true);
+  assert.deepEqual(store.get().shots.find(s=>s.id===sid).keyframes,take.keyframes);
+  assert.deepEqual(store.get().shots.filter(s=>s.id!==sid),others);
+  assert.deepEqual(store.get().cameras,cameras);
+  assert.equal(dispatch('shot.restore-motion',{id:'shot_02',takeId:first.id}).error,'TAKE_NOT_IN_SHOT');
+  dispatch('project.undo');
+  assert.deepEqual(store.get().shots.find(s=>s.id===sid).keyframes,store.get().takes.find(t=>t.id===second.id).keyframes);
+  // Old Takes lack the new trajectory object, but still contain exact keyframes and camera snapshots.
+  store.patch(d=>{delete d.takes.find(t=>t.id===first.id).trajectory;});
+  assert.equal(dispatch('shot.restore-motion',{id:sid,takeId:first.id,duration:20}).ok,true);
+  assert.equal(store.get().shots.find(s=>s.id===sid).keyframes.at(-1).frame,479);
+});

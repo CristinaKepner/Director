@@ -2139,11 +2139,19 @@ function renderTakes(el, d) {
         <td class="mono">${esc(s ? `${s.index} ${s.title}` : t.shotId)}</td>
         <td class="mono">${t.capturedFrames ?? t.frames}${t.status === "recording" ? " · 录制中" : ""}</td>
         <td>${badge(t.status)}</td>
-        <td><div class="actions"><button data-circle="${t.id}">Circle</button><button data-reject="${t.id}">Reject</button><button data-board="${t.shotId}">进故事版</button><button data-restore="${t.id}" title="把机位 / 物体 / 灯光恢复到这个 Take">恢复快照</button></div></td></tr>`;
+        <td><div class="actions"><button data-circle="${t.id}">Circle</button><button data-reject="${t.id}">Reject</button><button data-board="${t.shotId}">进故事版</button><button data-restore-motion="${t.id}" title="恢复这个 Take 的运镜关键帧、镜头与时长，保留人物和灯光">恢复轨迹</button><button data-restore="${t.id}" title="把机位 / 物体 / 灯光恢复到这个 Take">恢复快照</button></div></td></tr>`;
     }).join("")}</tbody></table>`;
   el.querySelectorAll("[data-circle]").forEach((b) => (b.onclick = () => dispatch("take.review", { id: b.dataset.circle, status: "circle" })));
   el.querySelectorAll("[data-reject]").forEach((b) => (b.onclick = () => dispatch("take.review", { id: b.dataset.reject, status: "reject" })));
   el.querySelectorAll("[data-board]").forEach((b) => (b.onclick = () => addToBoard(b.dataset.board)));
+  el.querySelectorAll("[data-restore-motion]").forEach((b) => (b.onclick = async () => {
+    const t = d.takes.find((x) => x.id === b.dataset.restoreMotion);
+    if (!t) return;
+    const r = await dispatch("shot.restore-motion", { id: t.shotId, takeId: t.id });
+    if (!r.ok) return report(r);
+    await dispatch("shot.select", { id: t.shotId });
+    toast(`已恢复 ${t.name} 的轨迹，可撤销；点击录制生成新白模`);
+  }));
   el.querySelectorAll("[data-restore]").forEach((b) => (b.onclick = () => restoreTake(b.dataset.restore)));
   el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "Take")));
   el.querySelectorAll("tr[data-take]").forEach((tr) => (tr.onclick = (ev) => {

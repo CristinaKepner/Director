@@ -172,6 +172,9 @@ export async function dispatch(name, payload = {}, meta = {}) {
   }
   localEffects(name, payload, r);
   if (name.startsWith("agent.") && r.ok) {
+    for (const result of r.results || []) {
+      if (result.action === "shot.restore-motion" && result.ok) localEffects(result.action, { id: result.id }, result);
+    }
     const shotIds = [...new Set([...(r.results || []), r.result].filter(Boolean).map(x => x.captureShotId).filter(Boolean))];
     if (shotIds.length) {
       // Only the requesting page records; SSE observers never start duplicate captures.
@@ -201,6 +204,9 @@ function localEffects(name, payload, r) {
     store.light((x) => (x.project.playing = false));
   } else if (name === "take.finish") {
     store.light((x) => (x.project.playing = false));
+  } else if (name === "shot.restore-motion" && payload.id === d.project.currentShotId) {
+    const s = shotOf(payload.id);
+    store.light((x) => Object.assign(x.project, { playhead: s.range.inFrame, playing: false, playSequence: false, viewMode: "program" }));
   } else if (name === "shot.select" || name === "shot.preview") {
     const s = shotOf(payload.id);
     store.light((x) => Object.assign(x.project, { playhead: s ? s.range.inFrame : 0, playing: name === "shot.preview", loop: name === "shot.preview" ? !!payload.loop : x.project.loop, playSequence: false, ...(name === "shot.preview" ? { viewMode: "program" } : {}) }));
