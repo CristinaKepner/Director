@@ -396,7 +396,7 @@ export function createHost(opts = {}) {
       // 贴链接这条路能不能走：ffmpeg 有没有、下载器在哪（自己装的那一份也算），装在哪个目录
       tools: { ffmpeg: film.bin || null, ytdlp: fetcher.bin || null, ytdlpManaged: !!fetcher.bin && fetcher.bin === (toolsDir ? path.join(toolsDir, "yt-dlp") : null), toolsDir },
       reference: { ready: reference.ready, model: reference.model, missing: reference.missing },
-      generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated", publisher: opts.publisher?.kind || "none", publicUrl: (typeof opts.publicUrl === "function" ? opts.publicUrl() : opts.publicUrl) || null, tunnel: (typeof opts.tunnelState === "function" ? opts.tunnelState() : opts.tunnelState) || "off" } : { name: "simulated", models: {} },
+      generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated", publisher: opts.publisher?.kind || "none", publicUrl: (typeof opts.publicUrl === "function" ? opts.publicUrl() : opts.publicUrl) || null, tunnelError: (typeof opts.tunnelError === "function" ? opts.tunnelError() : opts.tunnelError) || null, tunnel: (typeof opts.tunnelState === "function" ? opts.tunnelState() : opts.tunnelState) || "off" } : { name: "simulated", models: {} },
       llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models, current: d.agent.backend } : { name: "rules", models: [], current: "rules" },
       recording: d.project.recording || null,
       ...extra,

@@ -47,3 +47,32 @@ test("没装 cloudflared 时当场说清楚，而不是 spawn 出一个 ENOENT",
     if (realEnv === undefined) delete process.env.CLOUDFLARED; else process.env.CLOUDFLARED = realEnv;
   }
 });
+
+test("连接失败后用 HTTP/2 重试，并验证公网探针", async (t) => {
+  const os = await import('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'director-tunnel-test-'));
+  const bin = path.join(dir, 'cloudflared');
+  const calls = path.join(dir, 'calls.jsonl');
+  fs.writeFileSync(bin, `#!${process.execPath}
+const fs = require('node:fs');
+const calls = ${JSON.stringify(calls)};
+const first = !fs.existsSync(calls);
+fs.appendFileSync(calls, JSON.stringify(process.argv.slice(2))+'\\n');
+if (first) process.exit(1);
+console.log('Registered tunnel connection');
+console.log('https://director-test.trycloudflare.com');
+setInterval(()=>{},1000);
+`, { mode: 0o755 });
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    assert.match(url, /^https:\/\/director-test\.trycloudflare\.com\/.+\/media\/tunnel-probe-.+\.png$/);
+    return new Response('probe', { status: 200 });
+  });
+  const tunnel = createMediaTunnel({mediaDir: dir, bin});
+  try {
+    await tunnel.start({attempts:2});
+    assert.equal(tunnel.verified, true);
+    const args = fs.readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);
+    assert.deepEqual(args.map(a => a[a.indexOf('--protocol')+1]), ['auto','http2']);
+    assert.equal(fs.readdirSync(dir).filter(n=>n.startsWith('tunnel-probe-')).length,0);
+  } finally { tunnel.stop(); fs.rmSync(dir,{recursive:true,force:true}); }
+});
