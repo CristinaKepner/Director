@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import * as R from "../../core/index.js";
+import { PROVIDERS } from "../../core/schema.js";
 import { createFilmAssembler } from "./film.mjs";
 import { createJudge } from "./adapters/judge.mjs";
 import { createReferenceReader } from "./adapters/reference.mjs";
@@ -105,6 +106,7 @@ export function createHost(opts = {}) {
           name: planner.name,
           ready: true,
           model: planner.model,
+          models: planner.models,
           build: (brief, meta = {}) => runAgentLlm({ text: brief, mode: "lead", force: true }, normalizeMeta(meta, { source: "agent", actorId: "replicate" })),
         },
       });
@@ -126,6 +128,16 @@ export function createHost(opts = {}) {
     const demo = opts.demo === undefined ? "city-edge" : opts.demo;
     if (demo) dispatch("scene.demo", { name: demo }, { source: "system", actorId: "scene-builder" });
   }
+
+  // Model configuration belongs to this host, not to a loaded project's obsolete selector state.
+  store.patch(d => {
+    if (planner) d.agent.backend = planner.model;
+    for (const kind of ["video", "image"]) {
+      const ids = Object.keys(generation?.models || {}).filter(id=>PROVIDERS[id]?.modes.some(m=>m.endsWith(kind === "video" ? "2v" : "2i")));
+      const field = kind + "Provider";
+      if (ids.length && !ids.includes(d.project[field])) d.project[field] = ids.includes(kind === "video" ? "seedance-2.5" : "mosshub-seedream-pro") ? (kind === "video" ? "seedance-2.5" : "mosshub-seedream-pro") : ids[0];
+    }
+  });
 
   // ---- snapshot / broadcast ----
   function snapshot(eventsLimit = 120) {

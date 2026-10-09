@@ -2320,10 +2320,22 @@ register("generation.prompt", {
 
 const VIDEO_MODES = ["t2v", "i2v", "v2v"];
 
+register("generation.select-provider", {
+  doc: "选择默认视频或图像生成模型；顶部与生成面板共用，不提交生成任务。",
+  params: {provider:"providerId"}, required:["provider"],
+  validate:({provider}) => PROVIDERS[provider] ? null : {error:"BAD_PROVIDER"},
+  handler({provider}) {
+    const kind = PROVIDERS[provider].modes.some(m=>m.endsWith("2v")) ? "videoProvider" : "imageProvider";
+    store.patch(d=>{ d.project[kind]=provider; });
+    return {ok:true,provider,kind};
+  },
+});
+
 register("generation.submit", {
   doc: `提交生成任务。mode: ${Object.keys(GEN_MODES).join("/")}；provider: ${Object.keys(PROVIDERS).join("/")}；v2v 自动使用圈选 Take 的白模视频`,
   params: { shotId: "string", mode: "t2i|i2i|t2v|i2v|v2v", provider: "providerId", prompt: "string (override)", lang: "en|zh", reference: "take|origin（v2v 拿谁当参考视频：白模 Take，还是复刻的原片。默认 take）" },
-  validate: ({ shotId, mode = "t2v", provider = "seedance-2" }, state) => {
+  validate: ({ shotId, mode = "t2v", provider }, state) => {
+    provider ||= state.project[mode.endsWith("2i") ? "imageProvider" : "videoProvider"] || (mode.endsWith("2i") ? "seedream-5" : "seedance-2");
     if (!PROVIDERS[provider]) return { error: "BAD_PROVIDER", allowed: Object.keys(PROVIDERS) };
     if (!PROVIDERS[provider].modes.includes(mode)) return { error: "MODE_NOT_SUPPORTED", provider, supported: PROVIDERS[provider].modes };
     // 供应商说这个模式现在做不了，就别把用户的点击变成一个注定失败的排队任务
@@ -2354,8 +2366,9 @@ register("generation.submit", {
     }
     return null;
   },
-  handler({ shotId, mode = "t2v", provider = "seedance-2", prompt, lang = "en", reference = "take" }, meta) {
+  handler({ shotId, mode = "t2v", provider, prompt, lang = "en", reference = "take" }, meta) {
     const d0 = D();
+    provider ||= d0.project[mode.endsWith("2i") ? "imageProvider" : "videoProvider"] || (mode.endsWith("2i") ? "seedream-5" : "seedance-2");
     const sid = shotId || d0.project.currentShotId;
     let s = d0.shots.find((x) => x.id === sid);
     if (!s) return { ok: false, error: "NO_SHOT" };
@@ -3118,6 +3131,7 @@ export function summarize(d = D()) {
     pads: pads.length ? { activePadId: active, list: pads.map((p) => ({ id: p.id, index: p.index, name: p.name, characters: p.characters, props: p.propCount, shots: p.shotCount, seconds: p.seconds })), note: active ? "下面的 entities / cameras / lights / shots 只列了当前这块台；要改别的场先 scene.pad-select" : "没切到某一块，下面列的是整台" } : null,
     runtime: RUNTIME_VERSION,
     project: { id: d.project.id, name: d.project.name, fps: d.project.fps, aspect: d.project.aspect, version: d.project.version, state: d.project.currentState, fidelity: d.project.fidelity, buildMode: d.project.buildMode || "set", playhead: d.project.playhead, timecode: tc(d.project.playhead, d.project.fps) },
+    generation: { videoProvider: d.project.videoProvider, imageProvider: d.project.imageProvider },
     reference: d.project.reference ? { ref: d.project.reference.ref, from: d.project.reference.from, to: d.project.reference.to, summary: d.project.reference.analysis?.summary, shotSize: d.project.reference.analysis?.camera?.shotSize, motion: d.project.reference.analysis?.motion?.type, subjects: (d.project.reference.analysis?.subjects || []).map((x) => x.displayName) } : null,
     assets,
     scene: { id: d.scene.id, name: d.scene.name, environment: d.scene.environment },

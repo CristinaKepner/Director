@@ -889,3 +889,14 @@ button.model-pill:hover { border-color: var(--accent-line); }
 .model-picker select { appearance: auto; border: 0; background: transparent; color: inherit; font: 11px var(--mono); width: auto; max-width: 320px; padding: 0; margin: 0; cursor: pointer; }
 .model-picker select option { background: var(--surface); color: var(--text); }
 .model-picker:focus-within { border-color: var(--accent); }
+
+.model-role { font-size: 10px; color: var(--dim); }
+.model-picker select { max-width: 210px; }
+.models { flex-wrap: wrap; }
+/* Model controls remain visible on laptop windows instead of overflowing the title bar. */
+#app { grid-template-rows: minmax(52px, auto) minmax(0, 1fr) auto; }
+@media (max-width: 1400px) {
+  .topbar { flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; }
+  .topbar .models { order: 10; flex: 1 0 100%; justify-content: flex-start; margin-right: 0; }
+  .model-picker select { max-width: 160px; }
+}

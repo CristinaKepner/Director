@@ -4,7 +4,7 @@
 export const LLM_DEFAULTS = {
   baseUrl: "https://aigw.sotatts.online/v1",
   model: "gpt-5.6-sol",
-  models: ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4", "gpt-6-astra", "claude-opus-5", "claude-sonnet-4-6", "gemini-3.1-pro-preview", "deepseek-v4-flash", "deepseek-v4-chat", "deepseek-v4-pro", "glm-5.2", "MiniMax-H3"],
+  models: ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4", "gpt-6-astra", "claude-opus-5", "claude-sonnet-4-6", "gemini-3.1-pro-preview", "deepseek-v4-flash", "deepseek-v4-chat", "deepseek-v4-pro", "glm-5.2"],
   // 建一整条片子（几十个 Action + 拆拍）推理模型要一两分钟；90 s 会把正常规划掐掉，
   // 然后回退到规则规划器输出一堆"没听懂" —— 那比多等一会儿糟得多。
   timeoutMs: 300_000,

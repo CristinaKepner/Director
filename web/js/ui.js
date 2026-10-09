@@ -1350,7 +1350,7 @@ export function renderCompare(d) {
   el.querySelector("[data-close]").onclick = () => dispatch("project.set-view", { mode: "program" });
   el.querySelector("[data-prev]")?.addEventListener("click", () => { showPrevGen = !showPrevGen; el.dataset.key = ""; renderCompare(store.get()); });
   el.querySelector("[data-origin]")?.addEventListener("click", () => { showRefCol = !withRef; el.dataset.key = ""; renderCompare(store.get()); });
-  el.querySelector("[data-origin-gen]")?.addEventListener("click", (ev) => report(dispatch("generation.submit", { shotId: ev.currentTarget.dataset.originGen, mode: "v2v", provider: "seedance-2.5", reference: "origin" })));
+  el.querySelector("[data-origin-gen]")?.addEventListener("click", (ev) => report(dispatch("generation.submit", { shotId: ev.currentTarget.dataset.originGen, mode: "v2v", provider: selectedGeneration(store.get(), "video"), reference: "origin" })));
 }
 
 function pairFor(d, s) {
@@ -1574,7 +1574,7 @@ function renderChips(d) {
   else if (d.entities.some((e) => e.semanticType === "character") && !(d.assets || []).some((a) => a.approved)) list = [chip("给主角定妆", "给主角和产品各生成一张参考图", "出一张定妆照。批准一次，之后每一镜自动带上，人不会变样"), chip("录这一镜", `录制 ${cur}`, "把当前这一镜录成草片，不花钱"), chip("日落逆光", "换成日落逆光")];
   else if (!d.takes.length) list = [chip("录这一镜", `录制 ${cur}`, "把当前这一镜录成草片，不花钱"), chip("机位放低", "把 Program 机位降到 0.4m 并 look-at 主角"), chip("日落逆光", "换成日落逆光")];
   else if (!d.storyboard.length) list = [chip("进故事版", "全部进故事版"), chip("让对手举枪", "让对手举枪"), chip("03 镜环绕", "03 镜改成环绕 120 度")];
-  else if (!d.jobs.length) list = [chip("出这一镜", `提交 ${cur} 视频生视频 seedance-2.5`, "交给模型出真画面，构图跟着草片走。这一步计费"), chip("看提示词", `给 ${cur} 生成提示词`)];
+  else if (!d.jobs.length) list = [chip("出这一镜", `提交 ${cur} 视频生视频 ${selectedGeneration(d, "video")}`, "交给模型出真画面，构图跟着草片走。这一步计费"), chip("看提示词", `给 ${cur} 生成提示词`)];
   else list = [chip("换件红外套", "主角外套换成红色再生成一次"), chip("两人拉开点", "把两个人拉开 1.5m 重新生成"), chip("日落逆光", "换成日落逆光")];
   $("chips").innerHTML = list.slice(0, 3).map((c) => `<button data-chip="${esc(c.say)}" data-tip="${esc(c.label)}" data-tip-sub="${esc(c.tip)}">${esc(c.label)}</button>`).join("");
   $("chips").querySelectorAll("[data-chip]").forEach((b) => (b.onclick = () => {
@@ -1753,7 +1753,7 @@ function renderRefPanel(d) {
   };
   $("refRebuild")?.addEventListener("click", () => report(dispatch("reference.replicate", { ref: cur.ref, from: cur.from ?? undefined, to: cur.to ?? undefined, mode: refMode || undefined, hint: hintIn.value.trim() || undefined })));
   $("refCompare")?.addEventListener("click", () => dispatch("project.set-view", { mode: "compare" }));
-  $("refDirect")?.addEventListener("click", () => report(dispatch("generation.submit", { mode: "v2v", provider: "seedance-2.5", reference: "origin" })));
+  $("refDirect")?.addEventListener("click", () => report(dispatch("generation.submit", { mode: "v2v", provider: selectedGeneration(store.get(), "video"), reference: "origin" })));
   $("refCov")?.addEventListener("click", async () => {
     const r = await dispatch("shot.coverage", { shotId: shot.id });
     report(r);
@@ -1790,7 +1790,7 @@ async function uploadRef(f, hint, mode) {
 let checkData = null;
 
 export async function runCheck(opts = {}) {
-  const r = await dispatch("film.check", { provider: opts.provider || "seedance-2.5" });
+  const r = await dispatch("film.check", { provider: opts.provider || selectedGeneration(store.get(), "video") });
   checkData = r?.ok ? r : null;
   if (r?.ok) { ui.tab = "check"; ui.drawer = true; render(store.get()); }
   return r;
@@ -2260,6 +2260,13 @@ function promptTemplateRow(shot, d) {
     ${notes.length ? `<div class="prompt">${notes.map((n) => `<div class="${n.level === "warn" ? "warn" : ""}">${n.level === "warn" ? "⚠ " : "· "}${esc(n.text)}</div>`).join("")}</div>` : ""}`;
 }
 
+function selectedGeneration(d, kind) {
+  const available = Object.keys(client.generation?.models || {}).filter(k => PROVIDERS[k]?.modes.some(m => m.endsWith(kind === "video" ? "2v" : "2i")));
+  const chosen = d.project[kind + "Provider"];
+  return available.includes(chosen) ? chosen : available.includes(kind === "video" ? "seedance-2.5" : "mosshub-seedream-pro") ? (kind === "video" ? "seedance-2.5" : "mosshub-seedream-pro") : available[0] || chosen || (kind === "video" ? "seedance-2.5" : "seedream-5");
+}
+const generationModeByProvider = {};
+
 function renderGen(el, d) {
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
   if (!shot) {
@@ -2279,7 +2286,9 @@ function renderGen(el, d) {
   const tun = String(client.generation?.tunnel || "off");
   const v2vPending = !v2vReady && tun.startsWith("starting");
   const v2vNote = v2vPending ? `（正在建公网隧道${/:(\d+)/.test(tun) ? ` · 第 ${tun.split(":")[1]} 条` : ""}…）` : "（需要公网地址）";
-  const defaultMode = v2vReady ? "v2v" : "i2v";
+  const provider = selectedGeneration(d, promptTab.mode === "image" ? "image" : "video");
+  const supportedModes = PROVIDERS[provider]?.modes || [];
+  const defaultMode = generationModeByProvider[provider] || (supportedModes.includes("v2v") && v2vReady ? "v2v" : supportedModes.includes("i2v") ? "i2v" : supportedModes[0]);
   const providers = Object.entries(PROVIDERS).sort(([a], [b]) => (real.includes(b) ? 1 : 0) - (real.includes(a) ? 1 : 0));
   const jobs = [...d.jobs].reverse().filter((j) => j.shotId === shot.id).slice(0, 8);
   el.innerHTML = `<div class="gen-layout">
@@ -2293,13 +2302,13 @@ function renderGen(el, d) {
     </div>
     <div>
       <div class="gen-row">
-        <select data-k="provider">${providers.map(([k, v]) => `<option value="${k}">${esc(v.name)}${real.includes(k) ? "" : " · 模拟"}</option>`).join("")}</select>
-        <select data-k="mode">${Object.entries(GEN_MODES).map(([k, v]) => `<option value="${k}"${k === defaultMode ? " selected" : ""}${k === "v2v" && !v2vReady ? " disabled" : ""}>${v}${k === "v2v" && !v2vReady ? v2vNote : ""}</option>`).join("")}</select>
+        <select data-k="provider" aria-label="生成模型">${["video", "image"].map(kind => `<optgroup label="${kind === "video" ? "视频生成" : "图像生成"}">${providers.filter(([,v]) => v.modes.some(m=>m.endsWith(kind === "video" ? "2v" : "2i"))).map(([k,v])=>`<option value="${k}" ${k===provider ? "selected" : ""}>${esc(v.name)}${real.includes(k) ? "" : " · 模拟"}</option>`).join("")}</optgroup>`).join("")}</select>
+        <select data-k="mode" aria-label="生成模式">${Object.entries(GEN_MODES).filter(([k]) => supportedModes.includes(k)).map(([k, v]) => `<option value="${k}"${k === defaultMode ? " selected" : ""}${k === "v2v" && !v2vReady ? " disabled" : ""}>${v}${k === "v2v" && !v2vReady ? v2vNote : ""}</option>`).join("")}</select>
         <button data-act="submit" class="primary">提交</button>
       </div>
       ${!real.length ? `<div class="empty" style="padding:8px 0;justify-content:flex-start">${isOnline() ? "后端未配置生成密钥：任务只是模拟。" : "单机模式：任务只是模拟，不会真的生成。"}</div>` : ""}
-      ${real.length && v2vPending ? `<div class="prompt" style="padding:4px 0">正在建公网隧道，建好了这一项会自己亮起来（实测一到两分钟，常要换两三条）。也可先用 i2v：它参考一张关键帧，不会接收整段草片的运动。</div>` : ""}
-      ${real.length && !v2vReady && !v2vPending ? `<div class="prompt" style="padding:4px 0">${tun === "failed" ? `公网隧道连接失败（开关已开启）。${esc(client.generation?.tunnelError?.message || "请查看运行诊断中的后端日志。")}<br>检查网络后，在偏好设置中保存以重新连接；也可填写可用的公网媒体地址。` : `V2V 需要供应商能读取草片视频。请在偏好设置中开启 v2v 公网开关，或启动时指定 <code>--tunnel cloudflared</code> / <code>--public-url</code>。`}<br>i2v 只参考一张关键帧，不等同于整段视频参考。</div>` : ""}
+      ${real.length && supportedModes.includes("v2v") && v2vPending ? `<div class="prompt" style="padding:4px 0">正在建公网隧道，建好了这一项会自己亮起来（实测一到两分钟，常要换两三条）。也可先用 i2v：它参考一张关键帧，不会接收整段草片的运动。</div>` : ""}
+      ${real.length && supportedModes.includes("v2v") && !v2vReady && !v2vPending ? `<div class="prompt" style="padding:4px 0">${tun === "failed" ? `公网隧道连接失败（开关已开启）。${esc(client.generation?.tunnelError?.message || "请查看运行诊断中的后端日志。")}<br>检查网络后，在偏好设置中保存以重新连接；也可填写可用的公网媒体地址。` : `V2V 需要供应商能读取草片视频。请在偏好设置中开启 v2v 公网开关，或启动时指定 <code>--tunnel cloudflared</code> / <code>--public-url</code>。`}<br>i2v 只参考一张关键帧，不等同于整段视频参考。</div>` : ""}
       ${jobs.length ? `<table class="grid"><thead><tr><th>结果</th><th>供应商</th><th>模式</th><th>进度</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr><td>${j.result?.url ? (j.result.kind === "image" ? `<img class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="image" src="${esc(mediaHref(j.result.url))}" />` : `<video class="thumb clickable" data-preview="${esc(j.result.url)}" data-kind="video" src="${esc(mediaHref(j.result.url))}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`) : `<div class="thumb"></div>`}</td><td>${esc(j.model)}<div class="mono" style="color:var(--dim)">${esc(j.id)}</div></td><td class="mono">${j.mode}${(j.inputs?.references || []).length ? `<div class="prompt">参考 ${j.inputs.references.length}</div>` : ""}</td><td style="min-width:120px">${["queued", "running"].includes(j.status) ? `<div class="progress"><span style="width:${j.progress}%"></span></div>` : badge(j.status)}${j.error ? `<div class="prompt" title="${esc(j.error)}">${esc(String(j.error).slice(0, 70))}</div>` : ""}${j.status === "done" && !j.result?.url ? `<div class="prompt">模拟队列，无输出</div>` : ""}</td><td><div class="actions">${["queued", "running"].includes(j.status) ? `<button data-cancel="${j.id}">取消</button>` : `<button data-retry="${j.id}">重试</button>`}${j.kind === "chain" ? `<button data-chain="${j.id}">查看生成过程</button>` : ""}${j.kind === "chain" && j.resumable ? `<button data-resume="${j.shotId}">接着跑</button>` : ""}</div></td></tr>${j.kind === "chain" && openChain.has(j.id) ? `<tr><td colspan="5">${chainView(j)}</td></tr>` : ""}`).join("")}</tbody></table>` : ""}
     </div></div>`;
   el.querySelectorAll("[data-pm]").forEach((b) => (b.onclick = () => {
@@ -2318,6 +2327,13 @@ function renderGen(el, d) {
     report(await dispatch("generation.prompt", { shotId: shot.id }));
   });
   el.querySelector('[data-act="copy"]').onclick = () => navigator.clipboard?.writeText(text).then(() => toast("已复制"));
+  el.querySelector('[data-k="provider"]').onchange = async ev => {
+    const id = ev.target.value;
+    promptTab.mode = PROVIDERS[id].modes.some(m=>m.endsWith("2i")) ? "image" : "video";
+    report(await dispatch("generation.select-provider", {provider:id}));
+    renderGen(el, store.get());
+  };
+  el.querySelector('[data-k="mode"]').onchange = ev => { generationModeByProvider[provider] = ev.target.value; };
   el.querySelector('[data-act="submit"]').onclick = async () => {
     const r = await dispatch("generation.submit", { shotId: shot.id, mode: el.querySelector('[data-k="mode"]').value, provider: el.querySelector('[data-k="provider"]').value, lang: promptTab.lang });
     report(r);
@@ -2340,26 +2356,23 @@ function renderGen(el, d) {
 function renderModels(d) {
   const el = $("models");
   if (!el) return;
-  const planner = d.agent?.backend && d.agent.backend !== "rules" ? d.agent.backend : null;
-  const real = isOnline() && client.generation?.name && client.generation.name !== "simulated";
-  const genModels = real ? Object.keys(client.generation.models || {}) : [];
-  const video = genModels.find((k) => PROVIDERS[k]?.modes?.some((m) => m.endsWith("2v"))) || null;
-  const busy = !!d.agent?.busy;
-  const running = d.jobs.filter((j) => ["queued", "running"].includes(j.status) && j.kind !== "replicate").length;
-  const modelKey = JSON.stringify([planner, client.llm?.models, video, busy, running]);
-  if (el.dataset.modelKey === modelKey) return;
-  el.dataset.modelKey = modelKey;
-  el.innerHTML = `
-    <label class="model-pill model-picker${planner ? "" : " off"}${busy ? " busy" : ""}" title="选择网关模型；图像/视频模型的调用能力取决于供应商">
-      <svg class="gi"><use href="#i-sparkles"/></svg>
-      <select id="plannerPill" aria-label="选择网关模型" ${busy ? "disabled" : ""}>
-        ${[...new Set([...(client.llm?.models || []), ...(planner ? [planner] : []), "rules"])].map(m => `<option value="${esc(m)}" ${m === (planner || "rules") ? "selected" : ""}>${esc(m === "rules" ? "内置规则" : m)}${/image|seedream/i.test(m) ? " · 图像" : /MiniMax-H3/.test(m) ? " · 视频" : ""}</option>`).join("")}
-      </select>
-    </label>
-    <span class="model-pill gen${video ? "" : " off"}${running ? " busy" : ""}" data-tip="${video ? "谁在出片" : "只是模拟，不会真出片"}" data-tip-sub="${video ? `真画面由 ${esc(PROVIDERS[video].name)} 生成${running ? `，现在有 ${running} 个任务在跑` : ""}。单条 ${PROVIDERS[video].minSeconds || 1}–${PROVIDERS[video].maxSeconds} 秒` : "没配生成密钥：提交的任务只走一遍流程，不出画面。去偏好设置里填火山引擎 Ark 的密钥"}">
-      <svg class="gi"><use href="#i-clapper"/></svg><b>${esc(video ? PROVIDERS[video].name.replace(/\s*\(.*\)$/, "") : "模拟")}</b>
-    </span>`;
-  $("plannerPill").onchange = (e) => report(dispatch("agent.set-backend", { backend: e.target.value }));
+  const planner = d.agent.backend || "rules";
+  const models = ["rules", ...(client.llm?.models || [])];
+  const gen = Object.keys(client.generation?.models || {}).filter(k=>PROVIDERS[k]);
+  const video = gen.filter(k=>PROVIDERS[k].modes.some(m=>m.endsWith("2v")));
+  const image = gen.filter(k=>PROVIDERS[k].modes.some(m=>m.endsWith("2i")));
+  const key = JSON.stringify([planner,models,gen,d.project.videoProvider,d.project.imageProvider,d.agent.busy]);
+  if (el.dataset.modelKey === key) return;
+  el.dataset.modelKey = key;
+  const picker = (id,label,icon,ids,selected,name) => `<label class="model-pill model-picker ${id === "plannerPill" ? "" : "gen"}" title="${label}"><svg class="gi"><use href="#i-${icon}"/></svg><span class="model-role">${label}</span><select id="${id}" aria-label="${label}" ${!ids.length || (id === "plannerPill" && d.agent.busy) ? "disabled" : ""}>${ids.length ? ids.map(m=>`<option value="${esc(m)}" ${m===selected ? "selected" : ""}>${esc(name(m))}</option>`).join("") : '<option>未配置</option>'}</select></label>`;
+  el.innerHTML = picker("plannerPill","Agent 规划","sparkles",models,planner,m=>m === "rules" ? "内置规则" : m)
+    + picker("videoPill","视频生成","clapper",video,selectedGeneration(d,"video"),m=>PROVIDERS[m].name)
+    + picker("imagePill","图像生成","sparkles",image,selectedGeneration(d,"image"),m=>PROVIDERS[m].name);
+  $("plannerPill").onchange = ev => report(dispatch("agent.set-backend",{backend:ev.target.value}));
+  for (const id of ["videoPill","imagePill"]) $(id).onchange = ev => {
+    promptTab.mode = id === "imagePill" ? "image" : "video";
+    report(dispatch("generation.select-provider",{provider:ev.target.value}));
+  };
 }
 
 // ---- 左抽屉：角色库 ----

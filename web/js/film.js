@@ -99,7 +99,7 @@ async function recordBlockout(opts = {}) {
   // 没有理由让人先录十分钟再发现。
   if (opts.check !== false) {
     onProgress({ phase: "check", label: "建场检查：看看每一镜画面里有没有东西" });
-    const chk = await dispatch("film.check", { shotIds: shots.map((s) => s.id), provider: opts.provider || "seedance-2.5" });
+    const chk = await dispatch("film.check", { shotIds: shots.map((s) => s.id), provider: opts.provider || D().project.videoProvider || "seedance-2.5" });
     if (chk?.ok && chk.blocking) {
       onProgress({ phase: "check", label: chk.summary, findings: chk.findings });
       return { ok: false, error: "CHECK_FAILED", check: chk, hint: chk.summary };
@@ -169,7 +169,7 @@ async function recordBlockout(opts = {}) {
  */
 export async function renderShots(opts = {}) {
   const onProgress = opts.onProgress || (() => {});
-  const provider = opts.provider || "seedance-2.5";
+  const provider = opts.provider || D().project.videoProvider || "seedance-2.5";
   const d0 = D();
   const shots = (opts.shotIds ? opts.shotIds.map((id) => d0.shots.find((s) => s.id === id)) : d0.shots).filter(Boolean);
   if (!shots.length) return { ok: false, error: "NO_SHOTS" };
@@ -225,7 +225,7 @@ export async function regenerateShot(opts = {}) {
   const d0 = D();
   const shot = d0.shots.find((s) => s.id === (opts.shotId || d0.project.currentShotId));
   if (!shot) return { ok: false, error: "NO_SHOT" };
-  const provider = opts.provider || "seedance-2.5";
+  const provider = opts.provider || D().project.videoProvider || "seedance-2.5";
 
   // 旧版留着做对照与验收的基准
   const prev = d0.jobs.filter((j) => j.shotId === shot.id && j.status === "done" && j.result?.url && /\.(mp4|webm|mov)$/i.test(j.result.url)).at(-1) || null;

@@ -253,7 +253,10 @@ export const LOCK_ASPECTS = {
 };
 
 export const PROVIDERS = {
-  "minimax-h3": { name: "MiniMax Hailuo 03", modes: ["t2v", "i2v", "v2v"], maxSeconds: 10 },
+  "minimax-h3": { name: "MiniMax-H3 (MossHub)", modes: ["t2v", "i2v", "v2v"], minSeconds: 4, maxSeconds: 15 },
+  "minimax-h3-max": { name: "MiniMax-H3-Max (MossHub)", modes: ["t2v", "i2v", "v2v"], minSeconds: 5, maxSeconds: 15 },
+  "mosshub-seedream-pro": { name: "Seedream 5.0 Pro (MossHub)", modes: ["t2i", "i2i"], maxSeconds: 0 },
+  "mosshub-gemini-image": { name: "Gemini 3 Pro Image (MossHub)", modes: ["t2i", "i2i"], maxSeconds: 0 },
   "seedance-2.5": { name: "Seedance 2.5 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 30, minSeconds: 4 } /* 实测 2026-09：单条 4–30 s */,
   "seedance-2": { name: "Seedance 2.0 (Ark)", modes: ["t2v", "i2v", "v2v"], maxSeconds: 12, minSeconds: 4 },
   "seedream-5": { name: "Seedream 5.0 (Ark)", modes: ["t2i", "i2i"], maxSeconds: 0 },

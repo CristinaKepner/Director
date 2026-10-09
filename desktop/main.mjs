@@ -61,6 +61,7 @@ function parseTrial(raw) {
 const trialOf = () => parseTrial(prefs.trial);
 const ARK_KEY_FILE = path.join(KEYS_DIR, "ark.key");
 const LLM_KEY_FILE = path.join(KEYS_DIR, "aigw.key");
+const MOSSHUB_KEY_FILE = path.join(KEYS_DIR, "mosshub.key");
 
 const DEFAULT_LLM_MODEL = "gpt-6-astra"; // 建白模只用它：没有在偏好设置里选别的模型时，规划器就是它
 
@@ -148,6 +149,8 @@ function keyArgs() {
   pick("--llm-key-file", LLM_KEY_FILE, prefs.llmKeyFile, ".aigw-key");
   if (prefs.llmModel) out.push("--llm-model", prefs.llmModel);
   if (prefs.llmBase) out.push("--llm-base", prefs.llmBase);
+  pick("--mosshub-key-file", MOSSHUB_KEY_FILE, prefs.mosshubKeyFile);
+  if (prefs.mosshubBase) out.push("--mosshub-base", prefs.mosshubBase);
   // v2v 需要 Ark 能取到白模视频。两条路，自有地址优先：给了地址就不用再开隧道。
   if (prefs.publicUrl) out.push("--public-url", prefs.publicUrl);
   else if (prefs.tunnel) out.push("--tunnel", "cloudflared");
@@ -172,7 +175,8 @@ function keyState() {
   const ark = read(ARK_KEY_FILE) || read(prefs.arkKeyFile || "") || read(path.join(os.homedir(), ".ark-key"));
   const llm = read(LLM_KEY_FILE) || read(prefs.llmKeyFile || "") || read(path.join(os.homedir(), ".aigw-key"));
   const trial = trialOf();
-  return { ark: shown(ark), llm: shown(llm), hasArk: !!ark, hasLlm: !!llm, llmModel: prefs.llmModel || "", trial: trial?.raw || "", trialUrl: trial?.url || "" };
+  const moss = read(MOSSHUB_KEY_FILE);
+  return { mosshub: shown(moss), hasMosshub: !!moss, ark: shown(ark), llm: shown(llm), hasArk: !!ark, hasLlm: !!llm, llmModel: prefs.llmModel || "", trial: trial?.raw || "", trialUrl: trial?.url || "" };
 }
 
 function writeKey(file, value) {
@@ -689,11 +693,14 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
 <label>火山引擎 Ark 密钥 <span id="arkState"></span></label>
 <input id="ark" placeholder="ark-… （留空表示不改动）" autocomplete="off" spellcheck="false">
 <div class="hint">给 Seedance 2.5 / 2.0 出视频、Seedream 5.0 出图与参考图。没有它这些供应商走可观察的模拟队列。</div>
-<label>规划网关密钥 <span id="llmState"></span></label>
+<label>Agent 规划密钥（GPT‑6 Astra / AIGW） <span id="llmState"></span></label>
 <input id="llm" placeholder="sk-… （留空表示不改动）" autocomplete="off" spellcheck="false">
 <div class="hint">让 Agent Director 由大模型规划，而不是内置规则规划器。</div>
 <label>规划网关地址</label>
-<input id="llmBase" placeholder="https://api.mosshub.cn/v1" autocomplete="off" spellcheck="false">
+<input id="llmBase" placeholder="留空使用 AIGW 默认地址" autocomplete="off" spellcheck="false">
+<label>MossHub 密钥 <span id="mossState"></span></label>
+<input id="mosshub" placeholder="sk-api-…（留空表示不改动）" autocomplete="off" spellcheck="false">
+<div class="hint">用于 Gemini Pro 规划、MiniMax 视频和 Seedream / Gemini 图像。与 Astra 的规划密钥分别保存。</div>
 <label>规划模型</label>
 <select id="model"></select>
 <label style="margin-top:18px">视频生视频（v2v）</label>
@@ -723,6 +730,7 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
     state = s;
     $("dir").textContent = s.keysDir;
     $("llmBase").value = s.llmBase || "";
+    $("mossState").textContent = s.hasMosshub ? "已配置 " + s.mosshub : "未配置";
     $("trial").value = s.trial || "";
     $("trialState").innerHTML = s.trial ? '<span class="ok">在用</span>' : '<span class="warn">没填</span>';
     if (s.quota) $("trialQuota").innerHTML = s.quota.error
@@ -738,7 +746,7 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
     $("feed").placeholder = s.defaultFeed;
   });
   $("cancel").onclick = () => window.prefsApi.close();
-  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ trial: $("trial").value.trim(), ark: $("ark").value, llm: $("llm").value, llmBase: $("llmBase").value.trim(), llmModel: $("model").value, tunnel: $("tunnel").checked, publicUrl: $("publicUrl").value.trim(), autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
+  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ trial: $("trial").value.trim(), ark: $("ark").value, llm: $("llm").value, mosshub: $("mosshub").value, llmBase: $("llmBase").value.trim(), llmModel: $("model").value, tunnel: $("tunnel").checked, publicUrl: $("publicUrl").value.trim(), autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
   $("clear").onclick = () => window.prefsApi.save({ trial: "", ark: "", llm: "", llmModel: "", clear: true });
 </script>`;
 
@@ -801,6 +809,7 @@ ipcMain.handle("prefs:save", async (_e, v) => {
   if (v.clear) {
     writeKey(ARK_KEY_FILE, "");
     writeKey(LLM_KEY_FILE, "");
+    writeKey(MOSSHUB_KEY_FILE, "");
     writeKey(TRIAL_KEY_FILE, "");
     delete prefs.trial;
     delete prefs.llmModel;
@@ -818,6 +827,7 @@ ipcMain.handle("prefs:save", async (_e, v) => {
     }
     if (v.ark?.trim()) writeKey(ARK_KEY_FILE, v.ark);
     if (v.llm?.trim()) writeKey(LLM_KEY_FILE, v.llm);
+    if (v.mosshub?.trim()) writeKey(MOSSHUB_KEY_FILE, v.mosshub);
     if (v.llmBase !== undefined) {
       const base = String(v.llmBase).trim().replace(/\/+$/, "");
       if (base && !/^https?:\/\//.test(base)) throw new Error("网关地址需要 http(s) URL");

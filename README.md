@@ -91,7 +91,7 @@ npm run dev
 
 ### macOS 客户端
 
-支持 Apple Silicon 与 Intel，当前客户端源码版本为 **0.9.11**。客户端包含本地后端、原生菜单、工程库与偏好设置。
+支持 Apple Silicon 与 Intel，当前客户端源码版本为 **0.9.12**。客户端包含本地后端、原生菜单、工程库与偏好设置。
 
 **目前仓库尚未发布可直接下载的 Release 安装包。** 可以在 Mac 上从源码运行：
 
@@ -124,8 +124,25 @@ npm run dev -- --ark-key-file ~/.ark-key --llm-key-file ~/.aigw-key
 - **LLM 网关**：负责理解复杂创作需求并规划操作；未配置时使用内置规则规划器。
 - **视频参考与导出**：浏览器源码运行时需另行准备 FFmpeg；V2V 参考视频还需提供生成服务可访问的地址。配置方法见[后端与媒体发布文档](docs/backend-api.md)。
 
+## 模型与密钥
+
+顶部可以分别选择 Agent 规划、视频生成和图像生成；生成面板会跟随选择，并只显示模型支持的模式。
+
+| 用途 | 模型 | 本机密钥 |
+| --- | --- | --- |
+| Agent 规划 | GPT‑6 Astra（默认）及已有 AIGW 文本模型 | AIGW 规划密钥 |
+| Agent 规划 | gemini-3.1-pro-preview | MossHub 密钥 |
+| 视频生成 | MiniMax-H3、MiniMax-H3-Max | MossHub 密钥 |
+| 图像生成 | doubao-seedream-5-0-pro-260628、gemini-3-pro-image | MossHub 密钥 |
+| 视频／图像生成 | 原有 Seedance 2.5／2.0、Seedream 5.0 | Ark 密钥 |
+
+两套规划网关分别保存密钥和地址；切换 Gemini 不会将 Astra 的密钥发往 MossHub。MiniMax 使用视频任务接口创建和轮询，图像模型使用图像接口。视频参考仍需供应商可访问的公网媒体地址。
+
+从源码启动时，原规划器继续使用 `AIGW_API_KEY` / `--llm-key-file` 与 `--llm-model gpt-6-astra`；MossHub 单独使用 `MOSSHUB_API_KEY` / `--mosshub-key-file`，可用 `MOSSHUB_BASE_URL` / `--mosshub-base` 指定地址。客户端在偏好设置中分别管理两份密钥。
+
 ## 当前进展
 
+- **v0.9.12**：分开选择 Agent 规划、视频与图像模型；AIGW 旧密钥供 GPT‑6 Astra，MossHub 独立密钥供 Gemini 规划、MiniMax H3/H3 Max 视频、Seedream Pro/Gemini Image 图像。顶部与生成面板同步选择，按模型过滤生成模式。
 - **v0.9.11**：顶部模型角标直接下拉切换，完整展示网关返回的授权模型（含图像和视频模型）；可选择不代表该模型支持对话规划接口。
 - **v0.9.10**：支持 MossHub 网关与 `MOSSHUB_API_KEY` / `MOSSHUB_MODEL` 环境变量；启动时查询此 key 的模型列表，规划选择器排除图像和视频端点模型。
 - **v0.9.9**：Take 支持恢复完整运镜轨迹（含关键帧、镜头与时长）、撤销恢复；比较 Take 时识别关键帧差异，Agent 恢复后可继续实际录制白模。

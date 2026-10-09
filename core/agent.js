@@ -1,6 +1,6 @@
 // Agent Director: natural language → Action plan → dispatch. The agent never touches Three.js or UI state;
 // every step is an Action with source="agent", so it shows up in the Event Log and can be undone.
-import { dispatch, register, summarize, capabilities, batch } from "./actions.js";
+import { dispatch, register, summarize, capabilities, batch, getHooks } from "./actions.js";
 import { store } from "./store.js";
 import { MOTION_TYPES, LIGHT_PRESETS, POSES, SHOT_SIZES, COVERAGE_ANGLES, PROVIDERS, GEN_MODES, LOCK_ASPECTS } from "./schema.js";
 import { DEMOS } from "./demo.js";
@@ -686,6 +686,7 @@ register("agent.set-backend", {
   params: { backend: "rules | <model id>" },
   required: ["backend"],
   undoable: false,
+  validate: ({backend}) => backend === "rules" || !getHooks().planner?.models || getHooks().planner.models.includes(backend) ? null : {error:"PLANNING_MODEL_NOT_AVAILABLE",hint:"视频和图像模型请在生成菜单选择"},
   handler: ({ backend }) => {
     store.patch((x) => (x.agent.backend = String(backend)));
     store.light((x) => (x.health.llm = String(backend)));
