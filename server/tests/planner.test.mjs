@@ -69,7 +69,7 @@ test("彻底不是 JSON 的回复仍然报错，不假装抢救到了东西", as
   } finally { restore(); }
 });
 
-test('MossHub catalog excludes image/video endpoints and handles failed discovery', async () => {
+test('MossHub catalog preserves all authorized model IDs and handles failed discovery', async () => {
   const { planningModels, discoverModels } = await import('../src/adapters/model-catalog.mjs');
   const catalog = {data:[
     {id:'gemini-3.1-pro-preview',supported_endpoint_types:['openai']},
@@ -77,12 +77,12 @@ test('MossHub catalog excludes image/video endpoints and handles failed discover
     {id:'gemini-3-pro-image',supported_endpoint_types:['openai']},
     {id:'doubao-seedream-5',supported_endpoint_types:['image-generation']},
   ]};
-  assert.deepEqual(planningModels(catalog), ['gemini-3.1-pro-preview']);
+  assert.deepEqual(planningModels(catalog), ['gemini-3.1-pro-preview', 'MiniMax-H3', 'gemini-3-pro-image', 'doubao-seedream-5']);
   const models = await discoverModels({baseUrl:'https://example.test/v1/',apiKey:'test-key',fetchImpl:async (url,opts)=>{
     assert.equal(url,'https://example.test/v1/models');
     assert.equal(opts.headers.authorization,'Bearer test-key');
     return {ok:true,json:async()=>catalog};
   }});
-  assert.deepEqual(models,['gemini-3.1-pro-preview']);
+  assert.deepEqual(models,['gemini-3.1-pro-preview', 'MiniMax-H3', 'gemini-3-pro-image', 'doubao-seedream-5']);
   await assert.rejects(discoverModels({baseUrl:'https://example.test',apiKey:'test',fetchImpl:async()=>({ok:false,status:401})}), /401/);
 });

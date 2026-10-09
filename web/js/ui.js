@@ -2346,14 +2346,20 @@ function renderModels(d) {
   const video = genModels.find((k) => PROVIDERS[k]?.modes?.some((m) => m.endsWith("2v"))) || null;
   const busy = !!d.agent?.busy;
   const running = d.jobs.filter((j) => ["queued", "running"].includes(j.status) && j.kind !== "replicate").length;
+  const modelKey = JSON.stringify([planner, client.llm?.models, video, busy, running]);
+  if (el.dataset.modelKey === modelKey) return;
+  el.dataset.modelKey = modelKey;
   el.innerHTML = `
-    <button class="model-pill${planner ? "" : " off"}${busy ? " busy" : ""}" id="plannerPill" data-tip="${planner ? "谁在规划" : "没接大模型"}" data-tip-sub="${planner ? `你说的话由 ${esc(planner)} 翻成一步步操作。点一下换模型` : "现在是内置规则在听，只认固定句式（「03 镜改成环绕」这种）。点一下去接一个"}">
-      <svg class="gi"><use href="#i-sparkles"/></svg><b>${esc(planner || "规则")}</b>
-    </button>
+    <label class="model-pill model-picker${planner ? "" : " off"}${busy ? " busy" : ""}" title="选择网关模型；图像/视频模型的调用能力取决于供应商">
+      <svg class="gi"><use href="#i-sparkles"/></svg>
+      <select id="plannerPill" aria-label="选择网关模型" ${busy ? "disabled" : ""}>
+        ${[...new Set([...(client.llm?.models || []), ...(planner ? [planner] : []), "rules"])].map(m => `<option value="${esc(m)}" ${m === (planner || "rules") ? "selected" : ""}>${esc(m === "rules" ? "内置规则" : m)}${/image|seedream/i.test(m) ? " · 图像" : /MiniMax-H3/.test(m) ? " · 视频" : ""}</option>`).join("")}
+      </select>
+    </label>
     <span class="model-pill gen${video ? "" : " off"}${running ? " busy" : ""}" data-tip="${video ? "谁在出片" : "只是模拟，不会真出片"}" data-tip-sub="${video ? `真画面由 ${esc(PROVIDERS[video].name)} 生成${running ? `，现在有 ${running} 个任务在跑` : ""}。单条 ${PROVIDERS[video].minSeconds || 1}–${PROVIDERS[video].maxSeconds} 秒` : "没配生成密钥：提交的任务只走一遍流程，不出画面。去偏好设置里填火山引擎 Ark 的密钥"}">
       <svg class="gi"><use href="#i-clapper"/></svg><b>${esc(video ? PROVIDERS[video].name.replace(/\s*\(.*\)$/, "") : "模拟")}</b>
     </span>`;
-  $("plannerPill").onclick = () => { ui.settings = true; applyUi(); $("agentBackend")?.focus(); };
+  $("plannerPill").onchange = (e) => report(dispatch("agent.set-backend", { backend: e.target.value }));
 }
 
 // ---- 左抽屉：角色库 ----
