@@ -16,6 +16,7 @@ import fs from "node:fs";
 import { createHost } from "../src/host.mjs";
 import { createApp } from "../src/api.mjs";
 import { createArkAdapter } from "../src/adapters/ark.mjs";
+import { discoverModels } from "../src/adapters/model-catalog.mjs";
 import { createLlmPlanner } from "../src/adapters/llm.mjs";
 import { createPublisher } from "../src/publish.mjs";
 import { createMediaTunnel } from "../src/tunnel.mjs";
@@ -39,12 +40,12 @@ const STATIC = flag("--api-only") ? false : arg("--static", path.resolve(here, "
 // Volcengine Ark (Seedance / Seedream): ARK_API_KEY, or --ark-key-file FILE; ARK_BASE_URL and --ark-model provider=model override defaults
 const ARK_KEY = process.env.ARK_API_KEY || (arg("--ark-key-file", null) && fs.readFileSync(arg("--ark-key-file"), "utf8").trim()) || null;
 // LLM planner for the Agent Director (OpenAI-compatible gateway): AIGW_API_KEY / LLM_API_KEY or --llm-key-file; --llm-base URL; --llm-model ID
-const LLM_KEY = process.env.AIGW_API_KEY || process.env.LLM_API_KEY || (arg("--llm-key-file", null) && fs.readFileSync(arg("--llm-key-file"), "utf8").trim()) || null;
-const LLM_BASE = process.env.LLM_BASE_URL || arg("--llm-base", null);
+const LLM_KEY = process.env.MOSSHUB_API_KEY || process.env.AIGW_API_KEY || process.env.LLM_API_KEY || (arg("--llm-key-file", null) && fs.readFileSync(arg("--llm-key-file"), "utf8").trim()) || null;
+const LLM_BASE = process.env.LLM_BASE_URL || arg("--llm-base", process.env.MOSSHUB_API_KEY ? "https://api.mosshub.cn/v1" : null);
 // 出片那条上游的地址。以前只认 ARK_BASE_URL 环境变量 —— 而要把客户端指向自己的体验网关，
 // 这两条上游必须一起改，少一条就等于把火山密钥仍然发在客户端里。
 const ARK_BASE = process.env.ARK_BASE_URL || arg("--ark-base", null);
-const LLM_MODEL = process.env.LLM_MODEL || arg("--llm-model", null);
+let LLM_MODEL = process.env.MOSSHUB_MODEL || process.env.LLM_MODEL || arg("--llm-model", null);
 const LLM_TIMEOUT = Number(process.env.LLM_TIMEOUT || arg("--llm-timeout", 0)) || 0; // 毫秒；大计划需要更长
 const PUBLIC_URL = process.env.DIRECTOR_PUBLIC_URL || arg("--public-url", null); // where Ark can fetch /media/* from (needed for v2v)
 const TUNNEL = process.env.DIRECTOR_TUNNEL || arg("--tunnel", null); // "cloudflared": 自动开一条只读 /media 的公网隧道
@@ -60,7 +61,17 @@ const ARK_MODELS = Object.fromEntries(args.flatMap((a, i) => (a === "--ark-model
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const generation = ARK_KEY ? (ctx) => createArkAdapter({ apiKey: ARK_KEY, baseUrl: ARK_BASE, models: ARK_MODELS, ...ctx }) : null;
-const llm = LLM_KEY ? (ctx) => createLlmPlanner({ apiKey: LLM_KEY, baseUrl: LLM_BASE, model: LLM_MODEL, timeoutMs: LLM_TIMEOUT || undefined, ...ctx }) : null;
+let availableModels;
+if (LLM_KEY && LLM_BASE && new URL(LLM_BASE).hostname === "api.mosshub.cn") {
+  try {
+    availableModels = await discoverModels({ baseUrl: LLM_BASE, apiKey: LLM_KEY });
+    if (!availableModels.includes(LLM_MODEL)) LLM_MODEL = availableModels.includes("gemini-3.1-pro-preview") ? "gemini-3.1-pro-preview" : availableModels[0];
+  } catch (err) {
+    availableModels = [];
+    log(`MossHub 模型列表不可用：${err.message}；请检查密钥后重启，不使用其他网关的模型列表`);
+  }
+}
+const llm = LLM_KEY && (!availableModels || availableModels.length) ? (ctx) => createLlmPlanner({ apiKey: LLM_KEY, baseUrl: LLM_BASE, model: LLM_MODEL, models: availableModels, timeoutMs: LLM_TIMEOUT || undefined, ...ctx }) : null;
 let publicUrl = PUBLIC_URL; // --tunnel fills this in once cloudflared reports its hostname
 // 隧道要一两分钟才建得起来（实测常要换两三条）。这段时间里界面只会说「v2v 需要公网地址」——
 // 看着和「这台机器做不了」一模一样，而其实再等四十秒就好了。所以把「正在建」也当成一种状态报出去。

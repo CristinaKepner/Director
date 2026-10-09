@@ -147,6 +147,7 @@ function keyArgs() {
   pick("--ark-key-file", ARK_KEY_FILE, prefs.arkKeyFile, ".ark-key");
   pick("--llm-key-file", LLM_KEY_FILE, prefs.llmKeyFile, ".aigw-key");
   if (prefs.llmModel) out.push("--llm-model", prefs.llmModel);
+  if (prefs.llmBase) out.push("--llm-base", prefs.llmBase);
   // v2v 需要 Ark 能取到白模视频。两条路，自有地址优先：给了地址就不用再开隧道。
   if (prefs.publicUrl) out.push("--public-url", prefs.publicUrl);
   else if (prefs.tunnel) out.push("--tunnel", "cloudflared");
@@ -688,9 +689,11 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
 <label>火山引擎 Ark 密钥 <span id="arkState"></span></label>
 <input id="ark" placeholder="ark-… （留空表示不改动）" autocomplete="off" spellcheck="false">
 <div class="hint">给 Seedance 2.5 / 2.0 出视频、Seedream 5.0 出图与参考图。没有它这些供应商走可观察的模拟队列。</div>
-<label>AIGW 网关密钥 <span id="llmState"></span></label>
+<label>规划网关密钥 <span id="llmState"></span></label>
 <input id="llm" placeholder="sk-… （留空表示不改动）" autocomplete="off" spellcheck="false">
 <div class="hint">让 Agent Director 由大模型规划，而不是内置规则规划器。</div>
+<label>规划网关地址</label>
+<input id="llmBase" placeholder="https://api.mosshub.cn/v1" autocomplete="off" spellcheck="false">
 <label>规划模型</label>
 <select id="model"></select>
 <label style="margin-top:18px">视频生视频（v2v）</label>
@@ -719,6 +722,7 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
   window.prefsApi.load().then((s) => {
     state = s;
     $("dir").textContent = s.keysDir;
+    $("llmBase").value = s.llmBase || "";
     $("trial").value = s.trial || "";
     $("trialState").innerHTML = s.trial ? '<span class="ok">在用</span>' : '<span class="warn">没填</span>';
     if (s.quota) $("trialQuota").innerHTML = s.quota.error
@@ -726,7 +730,7 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
       : '还剩 <span class="ok">' + s.quota.tokens.left + '/' + s.quota.tokens.limit + ' token · ' + s.quota.calls.left + '/' + s.quota.calls.limit + ' 次出片</span>';
     $("arkState").innerHTML = s.hasArk ? '<span class="ok">已配置 ' + s.ark + '</span>' : '<span class="warn">未配置</span>';
     $("llmState").innerHTML = s.hasLlm ? '<span class="ok">已配置 ' + s.llm + '</span>' : '<span class="warn">未配置</span>';
-    $("model").innerHTML = ['<option value="">默认（后端决定）</option>', ...s.models.map((m) => '<option value="' + m + '"' + (m === s.llmModel ? " selected" : "") + '>' + m + '</option>')].join("");
+    $("model").replaceChildren(new Option("默认（后端决定）", ""), ...s.models.map(m => new Option(m, m, false, m === s.llmModel)));
     $("tunnel").checked = !!s.tunnel;
     $("publicUrl").value = s.publicUrl || "";
     $("auto").checked = s.autoUpdate !== false;
@@ -734,7 +738,7 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
     $("feed").placeholder = s.defaultFeed;
   });
   $("cancel").onclick = () => window.prefsApi.close();
-  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ trial: $("trial").value.trim(), ark: $("ark").value, llm: $("llm").value, llmModel: $("model").value, tunnel: $("tunnel").checked, publicUrl: $("publicUrl").value.trim(), autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
+  $("save").onclick = () => { $("save").disabled = true; $("save").textContent = "重启后端…"; window.prefsApi.save({ trial: $("trial").value.trim(), ark: $("ark").value, llm: $("llm").value, llmBase: $("llmBase").value.trim(), llmModel: $("model").value, tunnel: $("tunnel").checked, publicUrl: $("publicUrl").value.trim(), autoUpdate: $("auto").checked, updateFeed: $("feed").value.trim() }); };
   $("clear").onclick = () => window.prefsApi.save({ trial: "", ark: "", llm: "", llmModel: "", clear: true });
 </script>`;
 
@@ -790,7 +794,7 @@ async function trialQuota() {
 
 ipcMain.handle("prefs:load", async () => {
   const [h, quota] = await Promise.all([backendHealth(), trialQuota()]);
-  return { ...keyState(), keysDir: KEYS_DIR, models: h?.llm?.models || [], tunnel: !!prefs.tunnel, publicUrl: prefs.publicUrl || "", autoUpdate: prefs.autoUpdate !== false, updateFeed: prefs.updateFeed || "", defaultFeed: DEFAULT_FEED, quota };
+  return { ...keyState(), keysDir: KEYS_DIR, llmBase: prefs.llmBase || "", models: h?.llm?.models || [], tunnel: !!prefs.tunnel, publicUrl: prefs.publicUrl || "", autoUpdate: prefs.autoUpdate !== false, updateFeed: prefs.updateFeed || "", defaultFeed: DEFAULT_FEED, quota };
 });
 ipcMain.handle("prefs:close", () => prefsWin?.close());
 ipcMain.handle("prefs:save", async (_e, v) => {
@@ -814,6 +818,11 @@ ipcMain.handle("prefs:save", async (_e, v) => {
     }
     if (v.ark?.trim()) writeKey(ARK_KEY_FILE, v.ark);
     if (v.llm?.trim()) writeKey(LLM_KEY_FILE, v.llm);
+    if (v.llmBase !== undefined) {
+      const base = String(v.llmBase).trim().replace(/\/+$/, "");
+      if (base && !/^https?:\/\//.test(base)) throw new Error("网关地址需要 http(s) URL");
+      if (base) prefs.llmBase = base; else delete prefs.llmBase;
+    }
     if (v.llmModel !== undefined) { if (v.llmModel) prefs.llmModel = v.llmModel; else delete prefs.llmModel; }
   }
   if (v.tunnel !== undefined) { if (v.tunnel) prefs.tunnel = true; else delete prefs.tunnel; }

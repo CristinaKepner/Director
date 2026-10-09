@@ -226,7 +226,7 @@ ${JSON.stringify(summary).slice(0, 6000)}`;
      * @returns           { steps, notes, reply, needsConfirm, model, usage, ms }
      */
     async plan(text, ctx) {
-      const model = ctx.model && ctx.model !== "rules" ? ctx.model : defaultModel;
+      const model = ctx.model && ctx.model !== "rules" && models.includes(ctx.model) ? ctx.model : defaultModel;
       const known = new Set(ctx.capabilities.map((c) => c.name));
       const messages = [{ role: "system", content: systemPrompt(ctx.capabilities, ctx.summary) }];
       for (const h of (ctx.history || []).slice(-8)) messages.push({ role: h.role === "user" ? "user" : "assistant", content: String(h.text).slice(0, 1200) });

@@ -606,7 +606,7 @@ function render(d) {
   $("agentMode").value = d.agent.mode;
   const be = $("agentBackend");
   const models = ["rules", ...(client.llm?.models || [])];
-  if (be.options.length !== models.length) be.innerHTML = models.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  if (JSON.stringify([...be.options].map(o => o.value)) !== JSON.stringify(models)) be.innerHTML = models.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
   be.value = models.includes(d.agent.backend) ? d.agent.backend : "rules";
   // stage
   renderLight(d);
