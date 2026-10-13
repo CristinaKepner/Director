@@ -4,8 +4,8 @@
 .stage-tools { overflow-x: auto; scrollbar-width: none; }
 .stage-tools button { display: flex; flex-shrink: 0; align-items: center; gap: 5px; background: transparent; border-color: transparent; font-size: 12px; padding: 7px 9px; white-space: nowrap; }
 .stage-tools button:hover { background: #ffffff10; border-color: #ffffff20; }
-.stage-tools .stage-generate { color: #182000; background: #d7fa5b; border-color: #d7fa5b; font-weight: 650; }
-.stage-tools .stage-generate:hover { background: #e7ff8b; }
+.stage-tools .stage-generate { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); font-weight: 650; }
+.stage-tools .stage-generate:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .stage-motion { display: flex; align-items: center; gap: 5px; padding-left: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .stage-motion select { padding: 5px; max-width: 108px; font-size: 12px; background: #25282d; }
 .stage .pads { top: 62px; }
@@ -18,13 +18,13 @@
 .dock-panel header { height: 38px; display: flex; gap: 5px; align-items: center; padding: 0 9px; border-bottom: 1px solid #ffffff12; }
 .dock-panel header b { flex: 1; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .dock-panel header small { font: 9px var(--mono); color: var(--muted); margin-left: 5px; }
-.dock-panel header em { font-style: normal; font: 700 13px var(--display); color: #d7fa5b; margin-right: 5px; }
+.dock-panel header em { font-style: normal; font: 700 13px var(--display); color: var(--accent); margin-right: 5px; }
 .dock-panel header button { padding: 3px; min-width: 24px; background: transparent; border-color: transparent; color: var(--muted); font-size: 17px; }
 .dock-panel header button:hover { color: white; background: #ffffff15; }
 .dock-panel header select { padding: 3px; font-size: 10px; max-width: 90px; }
 .dock-panel footer { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 30px; padding: 6px 8px; color: var(--muted); font-size: 10px; }
 .dock-panel footer button { padding: 5px 7px; font-size: 11px; background: #ffffff08; }
-.dock-panel footer button:first-child { color: #d7fa5b; border-color: #d7fa5b40; }
+.dock-panel footer button:first-child { color: var(--accent); border-color: var(--accent-line); }
 .stage-map { height: min(232px, 26cqh); display: grid; place-items: center; background: #101216; }
 .stage-map svg { display: block; width: 100%; height: 100%; min-height: 0; }
 .map-legend { color: #5fb0ff; white-space: nowrap; }
@@ -32,12 +32,12 @@
 #mapFrame { white-space: nowrap; font-family: var(--mono); }
 .stage-result-frame { position: relative; height: min(180px, 24cqh); background: #0b0d10; display: grid; place-items: center; }
 .stage-result-frame video { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
-.stage-result-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 18px; white-space: pre-line; font-size: 12px; line-height: 1.9; color: #90969e; background: radial-gradient(ellipse at top, #29302660, transparent 80%); }
+.stage-result-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 18px; white-space: pre-line; font-size: 12px; line-height: 1.9; color: var(--muted); background: radial-gradient(ellipse at top, var(--accent-soft), transparent 80%); }
 .stage-result-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 7px 10px 0; font-size: 10px; color: var(--muted); }
 .dock-reopen { background: #17191de8; border-color: #ffffff25; border-radius: 10px; font-size: 12px; box-shadow: 0 5px 18px #0005; }
 .result-dock:has(.dock-panel[hidden]) { width: auto; }
 .map-dock:has(.dock-panel[hidden]) { width: auto; }
-.stage-dock button:focus-visible, .stage-tools button:focus-visible { outline: 2px solid #d7fa5b; outline-offset: -2px; }
+.stage-dock button:focus-visible, .stage-tools button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @container (max-width: 650px) {
   .stage-tools { gap: 0; }
   .stage-tools button { padding: 6px; font-size: 11px; }

@@ -2,7 +2,7 @@
 // Implements the core hook contract: { name, ready, assemble(edit, update) }.
 //   edit   { id, out, width, height, fps, clips: [{ shotId, index, title, seconds, source, path }] }
 //   update (patch) → progress back into the job record
-// Every clip is first normalised (scale + pad to the project frame, constant fps, no audio, yuv420p) so a
+// Every clip is first normalised (scale + pad, constant fps, stereo audio, yuv420p) so a
 // MediaRecorder webm proxy and a 720p Seedance mp4 can sit in the same timeline, then concat-demuxed.
 import fs from "node:fs";
 import os from "node:os";
@@ -56,6 +56,29 @@ function probeDuration(ffprobe, file) {
 // ffmpeg 自己也知道时长：`ffmpeg -i FILE` 把 "Duration: 00:00:12.34" 打在 stderr 上
 // （然后以非零码退出 —— 没有输出文件，这是正常的）。
 const DUR_RE = /Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)/;
+async function hasAudio(bin, file) {
+  return new Promise(resolve => {
+    const c = spawn(bin, ["-hide_banner", "-i", file], { stdio: ["ignore", "ignore", "pipe"] });
+    let info = "";
+    c.stderr.on("data", b => { info += b; });
+    c.on("exit", () => resolve(/Stream #.*Audio:/.test(info)));
+    c.on("error", () => resolve(false));
+  });
+}
+
+export function captionAss(text, width, height, seconds, range = {}, style = {}) {
+  const safe = String(text).replace(/\\/g, "＼").replace(/{/g, "｛").replace(/}/g, "｝").replace(/\r?\n/g, "\\N");
+  // CoreText's Arial fallback in the bundled macOS FFmpeg can produce tofu for
+  // Chinese. Select the installed Unicode face explicitly for CJK captions.
+  const font = /[\u2e80-\u9fff\uf900-\ufaff]/u.test(String(text)) &&
+    process.platform === "darwin" && fs.existsSync("/System/Library/Fonts/Supplemental/Arial Unicode.ttf")
+    ? "Arial Unicode MS" : "Arial";
+  const stamp = t => { const cs = Math.round(t*100); return `${Math.floor(cs/360000)}:${String(Math.floor(cs/6000)%60).padStart(2,'0')}:${String(Math.floor(cs/100)%60).padStart(2,'0')}.${String(cs%100).padStart(2,'0')}`; };
+  const start = stamp(Math.max(0,range.start || 0)), end = stamp(Math.min(seconds,range.end ?? seconds));
+  const color = /^#[\da-f]{6}$/i.test(style.color || '') ? `&H00${style.color.slice(5,7)}${style.color.slice(3,5)}${style.color.slice(1,3)}` : '&H00FFFFFF';
+  const size = height * Math.max(1.5,Math.min(6,style.size || 2.7)) / 100, alignment = {top:8,center:5,bottom:2}[style.position] || 2;
+  return `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,${font},${Math.round(size)},${color},&H00FFFFFF,&H00101010,&H60000000,0,0,0,0,100,100,0,0,1,2,1,${alignment},${Math.round(width * .06)},${Math.round(width * .06)},${Math.round(height * .07)},1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,${start},${end},Default,,0,0,0,,${safe}\n`;
+}
 function durationViaFfmpeg(bin, file) {
   return new Promise((resolve) => {
     const c = spawn(bin, ["-hide_banner", "-i", file], { stdio: ["ignore", "ignore", "pipe"] });
@@ -261,20 +284,42 @@ export function createFilmAssembler(opts = {}) {
         }
         const clips = resolved;
         if (!clips.length) return { ok: false, error: "NO_CLIPS", hint: "素材文件不在后端的 media 目录里" };
+        if (clips.length !== edit.clips.length) return { ok: false, error: "MISSING_MEDIA", hint: "有素材文件缺失，已停止导出，避免成片少一段" };
         const total = clips.reduce((n, c) => n + (c.seconds || 0), 0) || 1;
         let done = 0;
         const parts = [];
         for (const [i, c] of clips.entries()) {
           const out = path.join(work, `part_${String(i).padStart(3, "0")}.mp4`);
+          const seconds = c.seconds || await mediaDuration(bin, c.path);
+          if (!(seconds > 0)) throw new Error("无法确认素材时长");
+          const speed = c.speed ?? 1, sourceIn = c.sourceIn ?? 0, sourceOut = c.sourceOut ?? sourceIn + seconds * speed;
+          if (![speed,sourceIn,sourceOut].every(Number.isFinite) || speed < .25 || speed > 4 || sourceIn < 0 || sourceOut <= sourceIn) throw new Error("剪辑入出点或速度无效");
+          const duration = await mediaDuration(bin,c.path);
+          // Short generated clips retain the established last-frame hold behavior.
+          const seek = Math.max(0,Math.min(sourceIn,Math.max(0,duration-1/fps)));
+          const audio = !c.muted && sourceIn < duration && await hasAudio(bin, c.path);
+          const filters = [];
+          if (c.caption && (c.captionRange?.end ?? seconds) > (c.captionRange?.start ?? 0)) {
+            const ass = path.join(work, `caption_${i}.ass`);
+            fs.writeFileSync(ass, captionAss(c.caption, W, H, seconds, c.captionRange, c.captionStyle));
+            filters.push(`subtitles=filename='${ass.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'")}'`);
+          }
           const vf = [
+            `trim=duration=${sourceOut-sourceIn}`,
+            `setpts=(PTS-STARTPTS)/${speed}`,
             `scale=${W}:${H}:force_original_aspect_ratio=decrease`,
             `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`,
             `fps=${fps}`,
             "format=yuv420p",
+            `tpad=stop_mode=clone:stop_duration=${seconds}`,
+            ...filters,
           ].join(",");
-          const args = ["-y", "-i", c.path];
-          if (c.seconds > 0) args.push("-t", String(c.seconds));
-          args.push("-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-movflags", "+faststart", out);
+          const args = ["-y", "-ss", String(seek), "-i", c.path];
+          if (!audio) args.push("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo");
+          const tempo = speed < .5 ? `atempo=0.5,atempo=${speed*2}` : speed > 2 ? `atempo=2,atempo=${speed/2}` : `atempo=${speed}`;
+          const af = audio ? `atrim=duration=${sourceOut-sourceIn},asetpts=PTS-STARTPTS,${tempo},volume=${Math.max(0,Math.min(1,c.volume ?? 1))},aresample=async=1:first_pts=0,apad` : "aresample=async=1:first_pts=0,apad";
+          args.push("-t", String(seconds), "-map", "0:v:0", "-map", audio ? "0:a:0" : "1:a:0", "-af", af, "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "192k");
+          args.push("-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-movflags", "+faststart", out);
           update({ status: "running", progress: Math.round((done / total) * 90), note: `规范化 ${c.index != null ? String(c.index).padStart(2, "0") : i + 1} ${c.title || c.shotId}` });
           await run(bin, args, {
             onLine: (line) => {
@@ -292,7 +337,29 @@ export function createFilmAssembler(opts = {}) {
         fs.mkdirSync(mediaDir, { recursive: true });
         const file = path.join(mediaDir, name);
         update({ status: "running", progress: 92, note: "拼接" });
-        await run(bin, ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", "-movflags", "+faststart", file]);
+        const cues = (edit.audioClips || []).filter(c=>!c.muted && c.start < total);
+        for(const c of cues)if(!c.url || ![c.start,c.duration,c.sourceIn??0,c.volume??1].every(Number.isFinite) || c.start<0 || c.duration<=0 || (c.sourceIn??0)<0 || (c.volume??1)<0 || (c.volume??1)>1)throw new Error('声音片段的时间或音量无效');
+        const joined = edit.music?.url || cues.length ? path.join(work, "joined.mp4") : file;
+        await run(bin, ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-t", String(total), "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", joined]);
+        if (edit.music?.url || cues.length) {
+          const args=['-y','-i',joined],filters=[],labels=['[0:a]'];
+          let input=1;
+          if(edit.music?.url){
+            const music=await localize(edit.music,work,'music');
+            if(!music)throw new Error('配乐素材缺失，未生成缺少配乐的成片');
+            args.push('-stream_loop','-1','-i',music);
+            filters.push(`[${input}:a]volume=${Math.max(0,Math.min(1,edit.music.volume??.12))}[bg]`);labels.push('[bg]');input++;
+          }
+          for(const [i,c] of cues.entries()){
+            const audio=await localize(c,work,`cue-${i}`);if(!audio)throw new Error(`声音素材缺失：${c.label||c.id}`);
+            args.push('-i',audio);
+            filters.push(`[${input}:a]atrim=start=${c.sourceIn??0}:duration=${c.duration},asetpts=PTS-STARTPTS,volume=${c.volume??1},adelay=${Math.round(c.start*1000)}:all=1[cue${i}]`);
+            labels.push(`[cue${i}]`);input++;
+          }
+          filters.push(`${labels.join('')}amix=inputs=${labels.length}:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]`);
+          args.push('-filter_complex',filters.join(';'),'-map','0:v:0','-map','[a]','-t',String(total),'-c:v','copy','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-movflags','+faststart',file);
+          await run(bin,args);
+        }
 
         const bytes = fs.statSync(file).size;
         log(`film assembled: ${name} ${clips.length} clips ${total.toFixed(1)}s ${(bytes / 1e6).toFixed(1)} MB`);

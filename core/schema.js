@@ -8,11 +8,11 @@ export const STATE_RULES = {
   EDIT: { allow: ["*"] },
   BLOCKING: { allow: ["*"] },
   REHEARSAL: { allow: ["*"], deny: ["entity.delete", "scene.create", "shot.delete", "project.load"] },
-  ARMED: { allow: ["take.", "camera.", "shot.select", "shot.preview", "timeline.", "context.", "health.", "project.set-state", "project.undo", "project.redo"] },
-  RECORDING: { allow: ["take.stop", "take.finish", "context.", "health.", "timeline.seek", "project.set-state"] },
+  ARMED: { allow: ["harness.status", "harness.pause", "harness.cancel", "take.", "camera.", "shot.select", "shot.preview", "timeline.", "context.", "health.", "project.set-state", "project.undo", "project.redo"] },
+  RECORDING: { allow: ["harness.status", "harness.pause", "harness.cancel", "take.stop", "take.finish", "context.", "health.", "timeline.seek", "project.set-state"] },
   REVIEW: { allow: ["*"] },
   GENERATING: { allow: ["*"], deny: ["take.record", "shot.delete", "entity.delete", "project.load"] },
-  APPROVED: { allow: ["context.", "health.", "storyboard.export", "project.", "review.", "annotation.", "shot.select", "camera.pilot", "timeline.", "take.review", "generation.status"] },
+  APPROVED: { allow: ["context.", "health.", "storyboard.export", "project.", "review.", "harness.check", "harness.status", "harness.pause", "harness.cancel", "harness.resume", "annotation.", "shot.select", "camera.pilot", "timeline.", "take.review", "generation.status"] },
 };
 
 export const FIDELITY = {

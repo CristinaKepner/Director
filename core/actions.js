@@ -49,6 +49,11 @@ import { compileReference, inferReplicateMode, DEFAULT_REPLICATE_MODE, REPLICATE
 import { cameraStateAt, entityStateAt, sequenceLayout, subjectPoint, fovFor } from "./motion.js";
 import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, topDownMap, mapToSvg, mapToAscii, occluderOf, sizeFromHeightFill } from "./spatial.js";
 import { shotBaseline, verifyShotContract } from "./contract.js";
+import { chosenVideo, videoVersions, cutSignature, cutMedia, cutCaption, cutTimeline, revisionPrompt, KEEP_OPTIONS } from "./cut.js";
+import {activeJourney,journeyPath} from './journey.js';
+import { registerJourneyActions } from './journey-actions.js';
+import { registerHarnessActions } from './harness-actions.js';
+import {harnessSpec,runIsFresh} from './harness.js';
 
 export const RUNTIME_VERSION = "director-runtime/0.4";
 export const SHOT_STATUSES = ["draft", "blocking", "rehearsal", "recorded", "review", "approved"];
@@ -1383,11 +1388,14 @@ register("shot.delete", {
   validate: shotExists,
   handler({ id }) {
     store.patch((d) => {
+      const position = d.shots.findIndex(s => s.id === id);
       d.shots = d.shots.filter((s) => s.id !== id);
+      d.shots.forEach((s,i) => s.index=String(i+1).padStart(2,'0'));
       d.takes = d.takes.filter((t) => t.shotId !== id);
       d.storyboard = d.storyboard.filter((c) => c.shotId !== id);
-      d.jobs = d.jobs.filter((j) => j.shotId !== id);
-      if (d.project.currentShotId === id) d.project.currentShotId = d.shots[0]?.id || null;
+      const shared = new Set(d.shots.flatMap(s => s.cut?.sourceJobIds || []));
+      d.jobs = d.jobs.filter((j) => j.shotId !== id || shared.has(j.id));
+      if (d.project.currentShotId === id) d.project.currentShotId = (d.shots[position] || d.shots.at(-1))?.id || null;
       refreshUsedBy(d);
     });
   },
@@ -1778,6 +1786,7 @@ function updateJob(id, patch) {
     }
     if (!d.jobs.some((x) => ["queued", "running"].includes(x.status)) && d.project.currentState === "GENERATING") d.project.currentState = "REVIEW";
   });
+  if (store.get().jobs.find(j=>j.id===id)?.harnessRunId && (patch.adapter?.taskId || patch.status)) hooks.harness?.checkpoint();
 }
 
 // ============ asset.* — reference assets keep characters / products consistent across generations ============
@@ -2404,14 +2413,21 @@ register("generation.submit", {
       status: "queued",
       progress: 0,
       result: null,
+      ...(meta.harnessRunId ? {harnessRunId:meta.harnessRunId,harnessAttempt:meta.harnessAttempt} : {}),
       source: meta.source || "human",
       createdAt: new Date().toISOString(),
     };
     store.patch((d) => {
+      const shot = d.shots.find((x) => x.id === sid);
+      const previous = chosenVideo(d, shot);
+      if (VIDEO_MODES.includes(mode) && previous && !shot.selectedGenerationId) shot.selectedGenerationId = previous.id;
       d.jobs.push(job);
-      d.shots.find((x) => x.id === sid).generationJobs.push(job.id);
+      const run=d.harness?.runs.find(r=>r.id===meta.harnessRunId);
+      if(run){run.pendingJobId=job.id;run.phase="waiting";run.attempts.push({jobId:job.id,seconds:Math.max(PROVIDERS[provider].minSeconds||0,Math.ceil(job.seconds)),provider,at:job.createdAt});}
+      shot.generationJobs.push(job.id);
       d.project.currentState = "GENERATING";
     });
+    if(meta.harnessRunId)hooks.harness?.checkpoint();
     (hooks.generation || simulatedAdapter).submit(job, updateJob);
     return { ok: true, id: job.id, provider, mode, seconds: job.seconds, adapter: (hooks.generation || simulatedAdapter).name };
   },
@@ -2614,6 +2630,14 @@ register("shot.chain", {
 
 register("generation.status", { doc: "查询任务", params: { id: "string" }, undoable: false, handler: ({ id }) => ({ ok: true, jobs: D().jobs.filter((j) => !id || j.id === id).map((j) => ({ id: j.id, shotId: j.shotId, mode: j.mode, provider: j.provider, status: j.status, progress: j.progress, result: j.result })) }) });
 register("generation.cancel", { doc: "取消任务", params: { id: "string" }, required: ["id"], undoable: false, handler: ({ id }) => { updateJob(id, { status: "cancelled" }); return { ok: true, id }; } });
+register('generation.resume-query',{doc:'恢复已有远端视频任务的查询，不重新创建付费任务',params:{id:'string'},required:['id'],undoable:false,handler({id}){
+  const job=D().jobs.find(j=>j.id===id);
+  if(!job?.adapter?.taskId || !hooks.generation?.resume)return {ok:false,error:'CANNOT_RESUME',hint:'缺少远端任务号，无法确认是否提交成功；请核对服务商任务，不自动重试'};
+  if(['queued','running','done'].includes(job.status))return {ok:true,id,reused:true};
+  if(job.status==='cancelled')return {ok:false,error:'CANCELLED'};
+  updateJob(id,{status:'running',error:null,harnessInterrupted:false});
+  hooks.generation.resume(job,updateJob);return {ok:true,id,reused:true};
+}});
 register("generation.retry", {
   doc: "重试失败/取消的任务",
   params: { id: "string" },
@@ -2621,6 +2645,7 @@ register("generation.retry", {
   undoable: false,
   handler({ id }) {
     const j = D().jobs.find((x) => x.id === id);
+    if(j?.harnessRunId)return {ok:false,error:'HARNESS_RETRY_BLOCKED',hint:'该任务属于检查修复运行，请继续原运行或查询已有任务；新修复从时间线重新发起以记录预算'};
     if (!j) return { ok: false, error: "NOT_FOUND" };
     updateJob(id, { status: "queued", progress: 0, result: null, retries: (j.retries || 0) + 1 });
     store.patch((d) => (d.project.currentState = "GENERATING"));
@@ -2630,13 +2655,107 @@ register("generation.retry", {
 });
 
 // ============ film.* ============
+register("film.set-music", {
+  doc: "设置整片配乐素材和混音音量，不调用生成模型",
+  params: { assetId: "string|null", volume: "number 0..1" },
+  validate: (p, d) => p.volume !== undefined && (!Number.isFinite(p.volume) || p.volume < 0 || p.volume > 1) ? { error: "BAD_VOLUME" } :
+    p.assetId && !d.assets.some(a => a.id === p.assetId && a.mediaKind === "audio" && a.url) ? { error: "AUDIO_ASSET_NOT_FOUND" } : null,
+  handler(p) {
+    store.patch(d => {
+      if (p.assetId === null) { d.project.cutMusic = null; return; }
+      const asset = d.assets.find(a => a.id === (p.assetId || d.project.cutMusic?.assetId));
+      if (asset) d.project.cutMusic = { assetId: asset.id, url: asset.url, label: asset.label || "背景音乐", volume: p.volume ?? d.project.cutMusic?.volume ?? 0.12 };
+    });
+    return { ok: true };
+  },
+});
+
+register("shot.choose-version", {
+  doc: "明确采用一个已完成的视频版本；其他候选保留，可撤销",
+  params: { shotId: "string", jobId: "string" }, required: ["shotId", "jobId"],
+  validate: (p, d) => !d.shots.some(s => s.id === p.shotId) ? { error: "NO_SHOT" } : !videoVersions(d, p.shotId).some(j => j.id === p.jobId) ? { error: "VERSION_NOT_PLAYABLE" } : null,
+  handler({ shotId, jobId }) { store.patch(d => { d.shots.find(s => s.id === shotId).selectedGenerationId = jobId; }); return { ok: true, shotId, jobId }; },
+});
+
+register("shot.cut-update", {
+  doc: "保存剪辑：源素材入出点、变速、字幕时段/样式、原声音量或 AI 修改草稿；不发起生成，保留拍摄预演数据",
+  params: { shotId: "string", instruction: "string", keep: "string[]", provider: "string", caption: "string", muted: "boolean", sourceIn: "number 秒", sourceOut: "number 秒", speed: "number 0.25..4", volume: "number 0..1", captionRange: "{start,end} 剪辑片段内秒数|null", captionStyle: "{size:1.5..6,color:#rrggbb,position:top|center|bottom}" }, required: ["shotId"],
+  validate: (p, d) => {
+    const s = d.shots.find(s => s.id === p.shotId);
+    if (!s) return { error: "NO_SHOT" };
+    if (
+    (p.instruction !== undefined && (typeof p.instruction !== "string" || p.instruction.length > 5000)) ||
+    (p.caption !== undefined && (typeof p.caption !== "string" || p.caption.length > 200)) ||
+    (p.keep !== undefined && (!Array.isArray(p.keep) || p.keep.some(k => !KEEP_OPTIONS[k]))) ||
+    (p.muted !== undefined && typeof p.muted !== "boolean") ||
+    (p.volume !== undefined && (!Number.isFinite(p.volume) || p.volume < 0 || p.volume > 1)) ||
+    (p.provider !== undefined && !PROVIDERS[p.provider]?.modes.includes("t2v"))) return { error: "BAD_CUT_SETTINGS" };
+    const media = cutMedia(d, { ...s, cut: { ...s.cut, ...p } }), job = chosenVideo(d,s);
+    const limit = Math.max((s.range.outFrame-s.range.inFrame)/d.project.fps, Number(job?.result?.seconds || job?.result?.duration || job?.seconds) || 0);
+    if (![media.start,media.end,media.speed].every(Number.isFinite) || media.start < 0 || media.end > limit + .001 || media.speed < .25 || media.speed > 4 || media.seconds < 1/d.project.fps - 1e-6)
+      return { error: "BAD_CUT_RANGE", hint: `入出点需在 0–${limit}s 内，且片段至少保留一帧；速度为 0.25–4 倍` };
+    const range = p.captionRange, style = p.captionStyle;
+    if (range != null && (!Number.isFinite(range.start) || !Number.isFinite(range.end) || range.start < 0 || range.end <= range.start || range.end > media.seconds + .001)) return { error: "BAD_CAPTION_RANGE", hint: "字幕时段须位于当前剪辑片段内" };
+    if (style !== undefined && (!style || !Number.isFinite(style.size) || style.size < 1.5 || style.size > 6 || !/^#[\da-f]{6}$/i.test(style.color) || !['top','center','bottom'].includes(style.position))) return { error: "BAD_CAPTION_STYLE" };
+    return null;
+  },
+  handler(p) { store.patch(d => { const s = d.shots.find(s => s.id === p.shotId); s.cut ||= {}; for (const k of ["instruction", "keep", "provider", "caption", "muted", "sourceIn", "sourceOut", "speed", "volume", "captionRange", "captionStyle"]) if (p[k] !== undefined) s.cut[k] = p[k]; }); return { ok: true }; },
+});
+
+// These operations split the edit, keeping a reusable reference to immutable generated media.
+// Camera animation and reference assets still belong to the same rehearsal scene.
+for (const operation of ['split','duplicate']) register(`shot.cut-${operation}`, {
+  doc: operation === 'split' ? "在剪辑片段内 seconds 处分割，保留源素材连续性和字幕时段" : "紧接当前片段复制一份可独立剪辑的采用版",
+  params: { shotId: "string", seconds: "number（分割点，相对片段开头）" }, required: ['shotId'],
+  handler({shotId, seconds}) {
+    const d0 = D(), src = d0.shots.find(s => s.id === shotId), chosen = src && chosenVideo(d0,src);
+    if (!chosen) return {ok:false,error:'NO_CUT_MEDIA',hint:'先生成并采用这一镜的视频，再分割或复制'};
+    const media = cutMedia(d0,src), caption = cutCaption(d0,src);
+    const at = Math.round(Number(seconds) * d0.project.fps) / d0.project.fps;
+    if (operation === 'split' && (!Number.isFinite(at) || at < 1/d0.project.fps || at > media.seconds - 1/d0.project.fps)) return {ok:false,error:'SPLIT_OUT_OF_RANGE',hint:'将播放头移到当前片段中间再分割'};
+    const id = uid('shot'), copy = structuredClone(src);
+    Object.assign(copy, {id, title:`${src.title} · ${operation === 'split' ? '后段' : '副本'}`, generationJobs:[], selectedGenerationId:chosen.id});
+    copy.cut = {...copy.cut, sourceJobIds:videoVersions(d0,src.id).map(j=>j.id)};
+    store.patch(d => {
+      const head = d.shots.find(s => s.id === shotId); head.selectedGenerationId = chosen.id;
+      if (operation === 'split') {
+        head.cut = {...head.cut, sourceIn:media.start, sourceOut:media.start+at*media.speed};
+        copy.cut.sourceIn = media.start + at*media.speed; copy.cut.sourceOut = media.end;
+        for (const [s, offset, length] of [[head,0,at],[copy,at,media.seconds-at]]) {
+          const start = Math.max(0,caption.start-offset), end = Math.min(length,caption.end-offset);
+          s.cut.caption = end > start ? caption.text : '';
+          s.cut.captionRange = end > start ? {start,end} : null;
+        }
+      }
+      d.shots.splice(d.shots.findIndex(s=>s.id===shotId)+1,0,copy);
+      d.shots.forEach((s,i)=>s.index=String(i+1).padStart(2,'0'));
+      d.project.currentShotId = id; refreshUsedBy(d);
+    });
+    return {ok:true,id,head:shotId};
+  },
+});
+
+register("generation.revise", {
+  doc: "按镜头修改草稿生成候选，保留当前采用版；不重做其他镜头",
+  params: { shotId: "string" }, required: ["shotId"], undoable: false,
+  handler({ shotId }, meta) {
+    const d = D(), s = d.shots.find(s => s.id === shotId);
+    if (!s) return { ok: false, error: "NO_SHOT" };
+    if (!s.cut?.instruction?.trim()) return { ok: false, error: "EMPTY_REVISION", hint: "先写下这一段想改什么" };
+    if (d.jobs.some(j => j.shotId === shotId && ["queued", "running"].includes(j.status))) return { ok: false, error: "REVISION_BUSY", hint: "这一段还有任务在生成，完成后再试" };
+    const before = chosenVideo(d, s);
+    const revision = { instruction: s.cut.instruction, keep: s.cut.keep || Object.keys(KEEP_OPTIONS), baselineJobId: before?.id || null };
+    const r = dispatch("generation.submit", { shotId, provider: s.cut.provider || (PROVIDERS[before?.provider] ? before.provider : null) || d.project.videoProvider || "seedance-2.5", mode: "t2v", prompt: revisionPrompt(d, s, revision, before) }, meta);
+    if (r.ok) store.patch(x => { x.jobs.find(j => j.id === r.id).revision = revision; });
+    return r;
+  },
+});
+
 // The cut: one clip per shot, in shot order, assembled into a single film. A shot's clip is either the
 // blockout proxy (the Take the browser recorded) or the generated video (a done generation job) — same edit,
 // two fidelities, so a half-generated film still plays end to end with blockout standing in for the rest.
 function clipFor(d, shot, source) {
-  const gen = d.jobs
-    .filter((j) => j.shotId === shot.id && j.status === "done" && j.result?.url && (j.result.kind === "video" || /\.(mp4|webm|mov)$/i.test(j.result.url)))
-    .at(-1);
+  const gen = chosenVideo(d, shot);
   const take = d.takes.find((t) => t.id === shot.selectedTake && t.videoUrl) || d.takes.filter((t) => t.shotId === shot.id && t.videoUrl).at(-1);
   const pick =
     source === "generated" ? (gen ? { kind: "generated", url: gen.result.url, jobId: gen.id, model: gen.model, mode: gen.mode } : null)
@@ -2648,18 +2767,23 @@ function clipFor(d, shot, source) {
 }
 
 function editFor(d, source = "auto") {
-  const fps = d.project.fps;
-  return sequenceLayout(d.shots).map((seg) => {
-    const shot = d.shots.find((x) => x.id === seg.shotId);
+  return cutTimeline(d).map((seg) => {
+    const shot = seg.shot;
     const clip = clipFor(d, shot, source);
+    const media = cutMedia(d,shot), caption = cutCaption(d,shot);
     return {
       shotId: shot.id,
       index: shot.index,
       title: shot.title,
-      seconds: Math.round(((shot.range.outFrame - shot.range.inFrame) / fps) * 100) / 100,
-      startTc: tc(seg.start),
-      endTc: tc(seg.end),
+      seconds: seg.seconds,
+      startTc: tc(seg.start * d.project.fps),
+      endTc: tc(seg.end * d.project.fps),
       ...(clip || {}),
+      caption: shot.cut?.caption || "",
+      captionRange: { start:caption.start, end:caption.end },
+      captionStyle: { size:caption.size, color:caption.color, position:caption.position },
+      sourceIn: media.start, sourceOut: media.end, speed: media.speed, volume: shot.cut?.volume ?? 1,
+      muted: !!shot.cut?.muted,
       kind: clip?.kind || null,
       missing: !clip,
     };
@@ -3053,7 +3177,10 @@ register("film.export", {
       status: "queued",
       progress: 0,
       result: null,
-      clips: usable.map((c) => ({ shotId: c.shotId, index: c.index, title: c.title, seconds: c.seconds, kind: c.kind, url: c.url })),
+      cutSignature: cutSignature(d),
+      music: d.project.cutMusic ? structuredClone(d.project.cutMusic) : null,
+      audioClips: structuredClone(d.project.audioClips || []),
+      clips: usable.map(({ missing, startTc, endTc, ...c }) => c),
       source: meta.source || "human",
       createdAt: new Date().toISOString(),
     };
@@ -3064,11 +3191,11 @@ register("film.export", {
       // 组装器最后一次回调会先报 status:done、progress:100，而 result 要等它返回才有。中间那一瞬被 SSE 推出去，
       // 页面看到「done 但没有 result」就当完成去读 url —— 首次流程实测就卡死在「拼成一条能播的片子 100%」。
       // 所以回调里的 done 一律压成 running，done 只由下面带 result 的那一次写。（shot.chain 早就这么做了）
-      .then(() => hooks.film.assemble({ id: name ? String(name).replace(/\.mp4$/i, "").replace(/[^\w.-]+/g, "_") : id, width: res.width, height: res.height, fps: d.project.fps, clips: job.clips }, (patch) => updateJob(id, { ...patch, status: patch.status === "done" ? "running" : patch.status })))
+      .then(() => hooks.film.assemble({ id: name ? String(name).replace(/\.mp4$/i, "").replace(/[^\w.-]+/g, "_") : id, width: res.width, height: res.height, fps: d.project.fps, clips: job.clips, music: job.music, audioClips: job.audioClips }, (patch) => updateJob(id, { ...patch, status: patch.status === "done" ? "running" : patch.status })))
       .then((out) => {
         if (!out.ok) return updateJob(id, { status: "failed", error: out.error, message: out.message, hint: out.hint, progress: 0 });
         updateJob(id, { status: "done", progress: 100, result: { kind: "video", url: out.url, bytes: out.bytes, seconds: out.seconds, clips: out.clips } });
-        store.patch((x) => (x.project.filmUrl = out.url));
+        if (store.get().project.id === d.project.id && cutSignature(store.get()) === job.cutSignature) store.patch((x) => (x.project.filmUrl = out.url));
       })
       .catch((err) => updateJob(id, { status: "failed", error: "ASSEMBLE_FAILED", message: String(err?.message || err) }));
 
@@ -3130,6 +3257,8 @@ export function summarize(d = D()) {
   return {
     pads: pads.length ? { activePadId: active, list: pads.map((p) => ({ id: p.id, index: p.index, name: p.name, characters: p.characters, props: p.propCount, shots: p.shotCount, seconds: p.seconds })), note: active ? "下面的 entities / cameras / lights / shots 只列了当前这块台；要改别的场先 scene.pad-select" : "没切到某一块，下面列的是整台" } : null,
     runtime: RUNTIME_VERSION,
+    creativePath: activeJourney(d) ? {head:d.journey.head,brief:activeJourney(d).brief,stage:activeJourney(d).stage,choices:activeJourney(d).choices,path:journeyPath(d).map(n=>({id:n.id,label:n.label})),note:"当前分支为准；恢复检查点会保留当前修改，视频生成只作用当前镜头。"} : null,
+    harness: {ready:!!hooks.harness,visualReady:!!hooks.harness?.visualReady,spec:harnessSpec(d),runs:(d.harness?.runs||[]).slice(-2).map(r=>({id:r.id,kind:r.kind,status:r.status,fresh:runIsFresh(d,r),note:r.note,used:r.used,candidateJobId:r.candidateJobId,candidateChecked:r.candidateChecked,issues:r.reports.filter(i=>i.status!=='pass').slice(0,6).map(i=>({id:i.id,shotId:i.shotId,status:i.status,start:i.start,end:i.end,summary:i.summary,fix:i.fix}))}))},
     project: { id: d.project.id, name: d.project.name, fps: d.project.fps, aspect: d.project.aspect, version: d.project.version, state: d.project.currentState, fidelity: d.project.fidelity, buildMode: d.project.buildMode || "set", playhead: d.project.playhead, timecode: tc(d.project.playhead, d.project.fps) },
     generation: { videoProvider: d.project.videoProvider, imageProvider: d.project.imageProvider },
     reference: d.project.reference ? { ref: d.project.reference.ref, from: d.project.reference.from, to: d.project.reference.to, summary: d.project.reference.analysis?.summary, shotSize: d.project.reference.analysis?.camera?.shotSize, motion: d.project.reference.analysis?.motion?.type, subjects: (d.project.reference.analysis?.subjects || []).map((x) => x.displayName) } : null,
@@ -3320,3 +3449,6 @@ export function capabilities() {
 }
 
 export { registry, compileShot, snapshotScene, refreshUsedBy, simulatedAdapter };
+
+registerHarnessActions({register,store,hooks,dispatch,uid});
+registerJourneyActions({register,store,hooks,dispatch,uid,clearHistory});

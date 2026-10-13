@@ -47,6 +47,8 @@ export async function connect() {
     client.service = h.service;
     client.generation = h.generation || null;
     client.llm = h.llm || null;
+    client.harness = h.harness || null;
+    client.journey = h.journey || null;
   } catch (err) {
     client.lastError = String(err?.message || err);
     setMode("standalone");
@@ -70,6 +72,8 @@ function scheduleReprobe() {
         client.service = h.service;
         client.generation = h.generation || null;
         client.llm = h.llm || null;
+    client.harness = h.harness || null;
+    client.journey = h.journey || null;
         await openStream();
       }
     } catch {}
@@ -109,6 +113,7 @@ function openStream() {
         client.service = msg.health.service || client.service;
         client.generation = msg.health.generation || null;
         client.llm = msg.health.llm || client.llm;
+        client.harness = msg.health.harness || null;
         return refreshCapabilities();
       }
       applyRemote(msg.snapshot, msg.version, { event: msg.event });

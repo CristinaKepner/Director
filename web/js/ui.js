@@ -15,7 +15,10 @@ import { focusSelected, resetView, focusPad, renderStill, exportSceneGlb, measur
 import { renderSpatial } from "./spatial-panel.js";
 import { renderEval } from "./eval-panel.js";
 import { initTaskProgress } from "./task-progress.js";
-import { initStageWorkspace } from "./stage-workspace.js";
+import { initStageWorkspace, stagePlayback } from "./stage-workspace.js";
+import { initJourneyWorkspace } from "./journey-workspace.js";
+import { createTimelineEditor } from "./timeline-editor.js";
+import { chosenVideo, cutTimeline } from "../../core/cut.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -40,6 +43,8 @@ const lastJobStatus = new Map();
 const STORAGE_KEY = "director-console:project:v4";
 const UI_KEY = "director-console:ui:v5";
 const GUIDE_KEY = "director-console:guide:v5";
+let timelineEditor;
+let timelineMode = "media";
 
 // local UI state (what is open) — persisted per browser, never part of the project
 const ui = Object.assign({ left: null, drawer: false, tab: "shots", settings: false, moreTabs: false, leftW: 300, rightW: 340, drawerH: 250, phys: true }, load(UI_KEY));
@@ -68,6 +73,7 @@ function applyUi() {
   const app = $("app");
   app.classList.toggle("left-closed", !ui.left);
   app.classList.toggle("drawer-closed", !ui.drawer);
+  $("stageDocks").classList.toggle("editing", ui.drawer && ui.tab === "timeline" && timelineMode === "media");
   document.querySelectorAll("[data-left]").forEach((b) => b.classList.toggle("on", b.dataset.left === ui.left));
   $("leftScene").classList.toggle("on", ui.left === "scene");
   $("leftProps").classList.toggle("on", ui.left === "props");
@@ -286,6 +292,7 @@ export function bindUI() {
   applyUi();
   render(store.get());
   initTaskProgress();
+  initJourneyWorkspace({toast,openEditingTimeline,mediaHref,openDrawer,openQuality:()=>{openEditingTimeline();timelineEditor?.openHarness();},openLeft:(which)=>{ui.left=which;applyUi();render(store.get());}});
   initStageWorkspace({ openDrawer, openLeft: (which) => { ui.left = which; applyUi(); render(store.get()); }, mediaHref, showPreview, toast });
 }
 
@@ -492,9 +499,17 @@ function deleteSelected() {
   const action = { entity: "entity.delete", camera: "camera.delete", light: "light.delete", shot: "shot.delete" }[k];
   if (action && confirm(`删除 ${id}？可撤销。`)) report(dispatch(action, { id }));
 }
+export function openEditingTimeline() {
+  timelineMode = "media";
+  ui.drawerH = Math.max(ui.drawerH, 280);
+  openDrawer("timeline");
+  stagePlayback.preview?.({});
+}
+
 function onKey(e) {
   const tag = document.activeElement?.tagName;
   const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  if (typing && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
     e.preventDefault();
     report(dispatch(e.shiftKey ? "project.redo" : "project.undo"));
@@ -687,10 +702,10 @@ function renderTabs(d) {
   const films = filmJobs(d);
   const busy = d.jobs.filter((j) => ["queued", "running"].includes(j.status));
   const recorded = d.shots.filter((s) => d.takes.some((t) => t.shotId === s.id && t.videoUrl)).length;
-  const generated = d.shots.filter((s) => d.jobs.some((j) => j.shotId === s.id && j.status === "done" && j.result?.url)).length;
+  const generated = d.shots.filter((s) => chosenVideo(d,s)).length;
   const errors = checkData?.errors || 0;
 
-  const totalFrames = d.shots.reduce((n, s) => n + (s.range.outFrame - s.range.inFrame), 0);
+  const totalFrames = Math.round((cutTimeline(d).at(-1)?.end || 0) * d.project.fps);
   const num = { timeline: d.shots.length ? `${d.shots.length} 镜 · ${timecode(totalFrames, d.project.fps).slice(3, 8)}` : "—", check: !d.shots.length ? "—" : !checkData ? "还没查" : errors ? `${errors} 处要看` : "都过了", takes: d.shots.length ? `${recorded}/${d.shots.length}` : "—", gen: d.shots.length ? `${generated}/${d.shots.length}` : "—", film: films.at(-1)?.result?.seconds ? timecode(Math.round(films.at(-1).result.seconds * d.project.fps), d.project.fps).slice(3, 8) : "—" };
   const badge = { timeline: 0, check: errors || 0, takes: 0, gen: busy.filter((j) => j.kind !== "replicate").length, film: films.filter((j) => ["queued", "running"].includes(j.status)).length };
   const kind = { timeline: "ok", check: "bad", takes: "ok", gen: "busy", film: "busy" };
@@ -1105,7 +1120,18 @@ let showPrevGen = false; // 对照默认两栏；上一版是可选的第三栏
 
 function renderFilm(el, d) {
   const jobs = filmJobs(d);
-  if (!jobs.length) return void (el.innerHTML = emptyState("还没有成片。镜头有素材后，「成片 → 导出成片」拼一条。"));
+  const rows = cutTimeline(d), missing = rows.filter(r => !chosenVideo(d, r.shot)).length;
+  const pending = jobs.find(j => j.kind === "film" && ["queued", "running"].includes(j.status));
+  const exportBar = `<div class="tl-mode-bar"><button data-return-timeline>← 返回时间线</button><b>当前剪辑 · ${Math.round(rows.at(-1)?.end || 0)}s</b><span>${rows.length} 镜 · ${d.shots.filter(s => s.cut?.caption).length} 段字幕${d.project.cutMusic ? ` · ${esc(d.project.cutMusic.label)}` : ""}${missing ? ` · 缺 ${missing} 镜视频` : ""}</span><span class="spacer"></span><button data-export-cut ${pending || missing || !rows.length ? "disabled" : ""}>${pending ? `导出中 ${pending.progress || 0}%` : "导出当前剪辑"}</button></div>`;
+  const bindExport = () => {
+    el.querySelector("[data-return-timeline]").onclick = openEditingTimeline;
+    el.querySelector("[data-export-cut]").onclick = async () => {
+      const r = await dispatch("film.export", { source: "generated", allowPartial: false });
+      if (r.ok) { filmPick = r.id; toast("开始导出当前采用版、字幕与配乐"); renderFilm(el, store.get()); }
+      else toast(r.hint || r.message || r.error, true);
+    };
+  };
+  if (!jobs.length) { el.innerHTML = exportBar + emptyState("导出后，完整成片和历史版本会显示在这里。"); bindExport(); return; }
   const cur = jobs.find((j) => j.id === filmPick) || jobs.find((j) => j.result?.url) || jobs[0];
   const src = cur.result?.url;
   const shotOf = (j) => (j.shotId ? d.shots.find((s) => s.id === j.shotId) : null);
@@ -1116,7 +1142,7 @@ function renderFilm(el, d) {
   // "同一个构图、同一个运动、换一次生成人还是同一个人"。说一百遍不如并排播一次。
   const pairs = comparePairs(d);
 
-  el.innerHTML = `<div class="film-layout">
+  el.innerHTML = exportBar + `<div class="film-layout">
     <div class="film-main">
       ${src
         ? `<video class="film-player" src="${esc(mediaHref(src))}" controls playsinline preload="metadata"></video>`
@@ -1144,6 +1170,7 @@ function renderFilm(el, d) {
       </div>`).join("")}
     </div></div>`;
 
+  bindExport();
   el.querySelectorAll("[data-film-mode]").forEach((b) => (b.onclick = () => dispatch("project.set-view", { mode: "compare" })));
   el.querySelectorAll("[data-film]").forEach((n) => (n.onclick = () => { filmPick = n.dataset.film; renderFilm(el, store.get()); }));
   el.querySelectorAll("[data-save-film]").forEach((b) => (b.onclick = async () => {
@@ -1595,6 +1622,7 @@ function locate(id) {
 // generation results: a toast when they land (the backend also posts them into the thread)
 function watchJobs(d) {
   for (const j of d.jobs) {
+    if(j.kind?.startsWith("journey-")||j.kind==="animatic")continue;
     const prev = lastJobStatus.get(j.id);
     if (prev && prev !== j.status && (j.status === "done" || j.status === "failed")) {
       if (j.status === "done" && j.result?.url) toast(`${j.model} 生成完成`);
@@ -1872,6 +1900,8 @@ function renderCheck(el, d) {
 function renderBottom(d) {
   const el = $("bottomBody");
   const tab = ui.tab || "shots";
+  el.classList.toggle("editing-timeline", tab === "timeline" && timelineMode === "media");
+  $("stageDocks").classList.toggle("editing", tab === "timeline" && timelineMode === "media");
   if (tab === "shots") return renderShots(el, d);
   if (tab === "timeline") return renderTimeline(el, d);
   if (tab === "map") return renderSpatial(el, d);
@@ -1930,6 +1960,19 @@ function renderShots(el, d) {
 }
 
 function renderTimeline(el, d) {
+  timelineEditor ||= createTimelineEditor({ mediaHref, toast, openDrawer,
+    onHarnessOpen: () => { ui.drawerH = clampRz("drawer",Math.max(ui.drawerH,400)); applyUi(); },
+    onMotion: () => { timelineMode = "motion"; renderBottom(store.get()); } });
+  if (timelineMode === "media") return timelineEditor.mount(el, d);
+  renderMotionTimeline(el, d);
+  const tools = document.createElement("div");
+  tools.className = "tl-mode-bar";
+  tools.innerHTML = '<button>← 画面 · 字幕 · 配乐</button><b>机位与走位</b><span>编辑当前镜头的运镜与关键帧</span>';
+  tools.querySelector("button").onclick = () => { timelineMode = "media"; renderBottom(store.get()); };
+  el.prepend(tools);
+}
+
+function renderMotionTimeline(el, d) {
   const shot = d.shots.find((s) => s.id === d.project.currentShotId);
   if (!shot) {
     el.innerHTML = emptyState("选一个镜头。");
@@ -2290,7 +2333,7 @@ function renderGen(el, d) {
   const supportedModes = PROVIDERS[provider]?.modes || [];
   const defaultMode = generationModeByProvider[provider] || (supportedModes.includes("v2v") && v2vReady ? "v2v" : supportedModes.includes("i2v") ? "i2v" : supportedModes[0]);
   const providers = Object.entries(PROVIDERS).sort(([a], [b]) => (real.includes(b) ? 1 : 0) - (real.includes(a) ? 1 : 0));
-  const jobs = [...d.jobs].reverse().filter((j) => j.shotId === shot.id).slice(0, 8);
+  const jobs = [...d.jobs].reverse().filter((j) => j.shotId === shot.id && j.kind !== "animatic").slice(0, 8);
   el.innerHTML = `<div class="gen-layout">
     <div>
       <div class="gen-row"><b>${esc(shot.index)} ${esc(shot.title)}</b>

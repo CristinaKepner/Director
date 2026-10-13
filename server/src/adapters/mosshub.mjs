@@ -70,6 +70,9 @@ export function createMosshubAdapter(opts) {
     const id = created.task_id || created.task?.task_id || created.id;
     if (!id) throw new Error('MossHub did not return task_id');
     update(job.id, {progress:10, adapter:{name:'mosshub',model,taskId:id,duration,resolution}});
+    return pollVideo(job,update,{taskId:id,model,duration});
+  }
+  async function pollVideo(job,update,{taskId:id,model,duration}) {
     const started = Date.now();
     while (Date.now()-started < (opts.maxWaitMs || 30*60*1000)) {
       if (cancelled(job.id)) return;
@@ -113,6 +116,10 @@ export function createMosshubAdapter(opts) {
   }
   return {name:'mosshub',models,supports:id=>!!models[id],
     modeReady(mode) { return mode !== 'v2v' || publicBase() || opts.publisher?.enabled ? {ok:true} : {ok:false,error:'V2V_NEEDS_PUBLIC_MEDIA',hint:'MiniMax 视频参考需要公网媒体地址；i2v 仅使用首帧。'}; },
+    resume(job,update) {
+      if(!job.adapter?.taskId)return update(job.id,{status:'failed',error:'NO_REMOTE_TASK'});
+      pollVideo(job,update,job.adapter).catch(e=>{if(!cancelled(job.id))update(job.id,{status:'failed',error:e.message});});
+    },
     submit(job,update) {
       const model = models[job.provider];
       if (!model) return update(job.id,{status:'failed',error:'MossHub model not authorized'});

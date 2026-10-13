@@ -5,7 +5,7 @@ import "../../core/index.js"; // registers scene.demo / agent.* actions on the l
 import { store } from "../../core/store.js";
 import { dispatch as localDispatch } from "../../core/actions.js";
 import { initViewport } from "./viewport.js";
-import { bindUI, loadSaved, toast, maybeShowGuide } from "./ui.js";
+import { bindUI, loadSaved, toast, maybeShowGuide, openEditingTimeline } from "./ui.js";
 import { connect, dispatch, client, onMode } from "./client.js";
 import { say } from "../../core/agent.js";
 import { initDesktop } from "./desktop.js";
@@ -42,6 +42,8 @@ window.__dc.client = client;
 window.__dc.desktop = isDesktop;
 window.__dc.film = film; // 草片逐镜录制 · 逐镜生成 · ffmpeg 拼片（桌面端菜单与自动化都走这里）
 window.__dc.ready = true;
+// Existing generated projects open their editable tracks in the same rehearsal workspace.
+if (store.get().shots.some(s => s.selectedGenerationId) || store.get().project.workspace === "cut") openEditingTimeline();
 window.__dc.firstRun = showFirstRun; // 顶栏「?」之外的入口：随时能再来一次
 // 空工程 → 一句话出片；已经有工程的老用户走原来的四步引导
 if (!new URLSearchParams(location.search).has("noguide")) {

@@ -86,3 +86,12 @@ test('MossHub classifies authorized models and excludes video/image from plannin
   assert.deepEqual(models,['gemini-3.1-pro-preview']);
   await assert.rejects(discoverModels({baseUrl:'https://example.test',apiKey:'test',fetchImpl:async()=>({ok:false,status:401})}), /401/);
 });
+
+test('harness actions are available to the planner with real run context and async/cost boundaries',async()=>{
+ const real=globalThis.fetch;let system;
+ globalThis.fetch=async(url,opts)=>{system=JSON.parse(opts.body).messages[0].content;return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({reply:'已开始检查',steps:[{action:'harness.check',payload:{shotId:'paris_04'}}]})}}]}));};
+ try{
+  const p=await createLlmPlanner({apiKey:'fixture'}).plan('检查这一镜',{capabilities:[{name:'harness.check',doc:'验收',params:{shotId:'string'}}],summary:{harness:{ready:true,runs:[]}},history:[]});
+  assert.equal(p.steps[0].action,'harness.check');assert.match(system,/检查是异步任务/);assert.match(system,/不主动提高/);assert.match(system,/不自动采用/);
+ }finally{globalThis.fetch=real;}
+});

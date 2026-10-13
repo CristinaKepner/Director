@@ -55,6 +55,8 @@ export function createEmptyProject() {
     jobs: [],
     annotations: [],
     assets: [], // reference / generated assets bound to entities → consistency across generations
+    harness: {runs:[]},
+    journey: {head:null,nodes:[]},
     events: [],
     agent: {
       mode: "collaborative",
@@ -173,6 +175,12 @@ function restoreSnapshot(snap) {
   next.events = keep.events;
   next.agent = keep.agent;
   next.health = keep.health;
+  // Task ledgers represent external work/charges and must not roll back with an edit.
+  next.harness = store.data.harness || {runs:[]};
+  next.journey = store.data.journey || {head:null,nodes:[]};
+  const external = store.data.jobs.filter(j=>j.harnessRunId || j.kind?.startsWith("journey-") || j.kind === "animatic");
+  next.jobs = next.jobs.filter(j=>!external.some(x=>x.id===j.id)).concat(structuredClone(external));
+  for(const s of next.shots) s.generationJobs = [...new Set([...(s.generationJobs||[]),...external.filter(j=>j.shotId===s.id).map(j=>j.id)])];
   // transient UI flags should not come back from history
   next.project.playing = false;
   next.project.recording = null;
@@ -211,7 +219,10 @@ export function loadProjectData(json) {
   next.scene = { ...base.scene, ...json.scene, environment: { ...base.scene.environment, ...(json.scene?.environment || {}) } };
   for (const k of ["entities", "cameras", "lights", "shots", "takes", "storyboard", "jobs", "annotations", "assets", "events"]) next[k] = Array.isArray(json[k]) ? json[k] : [];
   next.takes.forEach((t) => t.status === "recording" && (t.status = "aborted"));
-  next.jobs.forEach((j) => ["queued", "running"].includes(j.status) && (j.status = "failed"));
+  next.jobs.forEach((j) => {if(["queued", "running"].includes(j.status)){j.status="failed";if(j.harnessRunId){j.harnessInterrupted=true;j.error='HARNESS_INTERRUPTED';}}});
+  next.journey = json.journey && Array.isArray(json.journey.nodes) ? structuredClone(json.journey) : {head:null,nodes:[]};
+  next.harness = {runs:Array.isArray(json.harness?.runs)?structuredClone(json.harness.runs):[]};
+  for(const run of next.harness.runs)if(['queued','running'].includes(run.status)){run.status='paused';run.note='应用中断，点击继续从检查点恢复；已有任务不重复提交';}
   if (["RECORDING", "ARMED", "GENERATING"].includes(next.project.currentState)) next.project.currentState = "REVIEW";
   history = [];
   future = [];

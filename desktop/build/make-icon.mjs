@@ -24,7 +24,7 @@ function polygonSDF(x, y, points) {
   }
   return inside ? -distance : distance;
 }
-const dark = [27, 30, 34], ivory = [243, 242, 229], lime = [210, 242, 103];
+const dark = [27, 30, 34], ivory = [242, 238, 255], violet = [157, 140, 255];
 const play = [[458, 516], [458, 666], [588, 591]];
 const stripes = [350, 520, 690].map(x => [[x,0],[x+76,0],[x+6,120],[x-70,120]]);
 const angle = -12 * Math.PI / 180;
@@ -47,7 +47,7 @@ for (let y = 0; y < S; y++) {
     const u=260+dx*Math.cos(angle)+dy*Math.sin(angle);
     const v=-dx*Math.sin(angle)+dy*Math.cos(angle)+120;
     const lid=cover(roundRectSDF(u,v,512,60,252,60,18));
-    paint(lime,lid);
+    paint(violet,lid);
     for (const stripe of stripes) paint(dark, Math.min(lid,cover(polygonSDF(u,v,stripe))));
     const i=(y*S+x)*4;
     color.forEach((c,j)=>{px[i+j]=Math.round(c);});
@@ -60,7 +60,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
 <rect x="92" y="92" width="840" height="840" rx="190" fill="url(#body)" stroke="#454a50" stroke-width="2"/>
 <rect x="260" y="438" width="504" height="308" rx="38" fill="${rgb(ivory)}"/>
 <path d="M458 516L458 666L588 591Z" fill="${rgb(dark)}" stroke="${rgb(dark)}" stroke-width="18" stroke-linejoin="round"/>
-<g transform="rotate(-12 260 414)"><rect x="260" y="294" width="504" height="120" rx="18" fill="${rgb(lime)}"/><g clip-path="url(#lid)" fill="${rgb(dark)}">${stripes.map(p=>`<polygon points="${p.map(([x,y])=>`${x},${y+294}`).join(" ")}"/>`).join("")}</g></g>
+<g transform="rotate(-12 260 414)"><rect x="260" y="294" width="504" height="120" rx="18" fill="${rgb(violet)}"/><g clip-path="url(#lid)" fill="${rgb(dark)}">${stripes.map(p=>`<polygon points="${p.map(([x,y])=>`${x},${y+294}`).join(" ")}"/>`).join("")}</g></g>
 </svg>
 `;
 fs.writeFileSync(path.resolve(here,"../../web/public/favicon.svg"),svg);

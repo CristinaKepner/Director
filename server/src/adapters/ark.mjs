@@ -154,6 +154,9 @@ export function createArkAdapter(opts = {}) {
     const taskId = created.id;
     log(`ark task ${taskId} ← ${job.id} (${model}, ${seconds}s ${ratio})`);
     update(job.id, { progress: 10, adapter: { name: "ark", model, taskId, seconds, ratio } });
+    return pollVideo(job,update,{taskId,model,seconds,ratio});
+  }
+  async function pollVideo(job,update,{taskId,model,seconds,ratio}) {
     const t0 = Date.now();
     const expected = 60_000 + seconds * 20_000; // rough: Seedance 2.x ≈ 1–4 min for 5–8 s
     while (Date.now() - t0 < (opts.maxWaitMs || ARK_DEFAULTS.maxWaitMs)) {
@@ -193,6 +196,10 @@ export function createArkAdapter(opts = {}) {
     },
     models,
     supports: (provider) => !!models[provider],
+    resume(job,update) {
+      if(!job.adapter?.taskId)return update(job.id,{status:'failed',error:'NO_REMOTE_TASK'});
+      pollVideo(job,update,job.adapter).catch(err=>{if(!cancelled(job.id))update(job.id,{status:'failed',error:err.message});});
+    },
     submit(job, update) {
       const model = models[job.provider];
       if (!model) {

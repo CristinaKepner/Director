@@ -13,8 +13,8 @@ export const LLM_DEFAULTS = {
 };
 
 // actions the model may plan; UI-only / dangerous-in-bulk ones are left to humans
-const PLANNABLE = /^(scene|entity|camera|light|shot|motion|timeline\.set-range|take\.(arm|record|review|delete)|storyboard|annotation|generation|asset|review|context\.(scene|shot|entity|sequence|assets)|project\.(rename|set-state|set-fidelity|set-fps|set-aspect|set-style|set-shading|set-build-mode|undo|redo|undo-to))/;
-const ROLE_OF = (action) => ({ scene: "scene-builder", entity: "continuity", camera: "cinematography", light: "lighting", shot: "cinematography", motion: "motion", timeline: "motion", take: "review", storyboard: "storyboard", annotation: "review", generation: "generation", review: "review", context: "director-planner", project: "director-planner" })[action.split(".")[0]] || "director-planner";
+const PLANNABLE = /^(scene|entity|camera|light|shot|motion|timeline\.set-range|take\.(arm|record|review|delete)|storyboard|journey\.(start|choose|checkpoint|restore|shot-update|refine|adopt-plan)|audio\.cue-|annotation|generation|asset|review|harness|film|context\.(scene|shot|entity|sequence|assets)|project\.(rename|set-state|set-fidelity|set-fps|set-aspect|set-style|set-shading|set-build-mode|undo|redo|undo-to))/;
+const ROLE_OF = (action) => ({ scene: "scene-builder", entity: "continuity", camera: "cinematography", light: "lighting", shot: "cinematography", motion: "motion", timeline: "motion", take: "review", storyboard: "storyboard", annotation: "review", generation: "generation", review: "review", harness: "review", context: "director-planner", project: "director-planner" })[action.split(".")[0]] || "director-planner";
 
 export function createLlmPlanner(opts = {}) {
   const apiKey = opts.apiKey;
@@ -156,7 +156,10 @@ export function createLlmPlanner(opts = {}) {
 - 会大幅改动工程（scene.demo、project.new、删除多个对象、批量生成）时 needsConfirm=true。
 - label 用用户的语言（中文指令就中文）。
 - 一致性：角色 / 产品要跨镜头一致时，先 generation.reference {entityId} 生成参考图（context.assets 可查），导演批准（asset.approve）后再 generation.submit；已批准的参考会自动随该实体出现的镜头一起提交。用户说"人物 / 产品不一致"就走这条路。
-- 用户对生成结果提意见（人物不对、位置不对、想换光、重新摆）时：先用 entity.update（continuity.look / color / role）、entity.transform、entity.pose、scene.preset、camera.* 改场景，再 generation.prompt 重新编译，最后 generation.submit 用同一 provider / mode 再生成一次；把改了什么写进 reply。
+- 成片验收用 harness：检查当前镜头 harness.check {shotId}；检查全片省略 shotId。要求写到 harness.configure 的 targetSeconds / introSeconds / people / brief；预算没有明确要求时沿用现有设置，不主动提高。检查是异步任务，reply 只能说已开始，不声称已经通过。
+- 用户要求按检查结果修复时，从 context.harness.runs 的 fresh=true 且已结束运行中选择真实 runId 和 issueId，调用 harness.repair。它会在预算内生成单镜候选并复查，保留原采用版。不得把 harness.check 和使用臆造问题 ID 的 repair 放在同一计划。报告过期就重新 check；无结论绝不写通过。
+- 用户暂停 / 继续 / 停止验收时用 harness.pause / resume / cancel。已有远端生成任务只恢复查询，不用 generation.retry 重复提交。不因未达标而新建多轮 harness 绕过本次预算。候选经用户明确选择后才 harness.adopt，不自动采用。
+- 用户直接要求修改一镜画面时，用 shot.cut-update 保存 instruction / keep / provider，再 generation.revise 生成候选。字幕、时长、速度、原声音量等直接用剪辑 Action，无需重生成。只有明确要求改拍摄预演的场景或机位时，才改 entity / camera / light。
 
 可用 Action：
 ${tools}
@@ -225,6 +228,16 @@ ${JSON.stringify(summary).slice(0, 6000)}`;
      *                    onDelta({reasoning, content, steps, newSteps}) — 规划过程中节流回调，用来把"模型在想什么"实时推给页面
      * @returns           { steps, notes, reply, needsConfirm, model, usage, ms }
      */
+    async storyboard(input) {
+      const selected=models.includes(input.model)?input.model:defaultModel;
+      const {text:out,usage}=await chat(selected,[
+        {role:'system',content:'你是分镜导演。把用户印象和现有分镜细化为具体可拍的画面与自然中文旁白。只返回 JSON {plan:[{title,description,dialogue,seconds,framing}]}。镜头数量、各镜 seconds 保持输入不变；framing 只能 wide/medium/close。description 写具体的人物、环境、动作和构图，不写抽象建议。旁白每秒不超过 3 个汉字，允许留白，标题不超过 30 字。不虚构产品已实现的能力。'},
+        {role:'user',content:JSON.stringify(input)}
+      ]);
+      const raw=out.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');
+      const parsed=JSON.parse(raw);
+      return {plan:parsed.plan,model:selected,usage};
+    },
     async plan(text, ctx) {
       const model = ctx.model && ctx.model !== "rules" && models.includes(ctx.model) ? ctx.model : defaultModel;
       const known = new Set(ctx.capabilities.map((c) => c.name));

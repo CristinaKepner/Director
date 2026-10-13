@@ -5,6 +5,12 @@ export function routePlanners(planners, preferred) {
   if (!routes.size) return null;
   const model = routes.has(preferred) ? preferred : routes.keys().next().value;
   return { name: 'routed-llm', model, models: [...routes.keys()], baseUrl: routes.get(model).baseUrl,
+    storyboard(input) {
+      const selected = routes.has(input.model) ? input.model : model;
+      const p = routes.get(selected);
+      if (!p.storyboard) throw new Error('STORYBOARD_NOT_AVAILABLE');
+      return p.storyboard({...input, model:selected});
+    },
     plan(text, ctx = {}) {
       const selected = ctx.model && ctx.model !== 'rules' ? ctx.model : model;
       const p = routes.get(selected);
@@ -21,5 +27,6 @@ export function routeGeneration(adapters, fallback) {
     supports: id => !!find(id),
     modeReady: (mode, id) => find(id)?.modeReady?.(mode, id),
     submit(job, update) { return (find(job.provider) || fallback).submit(job, update); },
+    resume(job,update) { const adapter=find(job.provider);if(!adapter?.resume)return update(job.id,{status:'failed',error:'RESUME_NOT_SUPPORTED'});return adapter.resume(job,update); },
   };
 }

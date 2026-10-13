@@ -9,6 +9,9 @@ import { createFilmAssembler } from "./film.mjs";
 import { createJudge } from "./adapters/judge.mjs";
 import { createReferenceReader } from "./adapters/reference.mjs";
 import { createFetcher } from "./fetch.mjs";
+import { createJourneyRenderer } from './journey.mjs';
+import { createHarnessRunner } from './harness.mjs';
+import { createHarnessInspector } from './harness-inspector.mjs';
 
 const { store, dispatch, persistable, loadProjectData, capabilities, historyInfo, RUNTIME_VERSION } = R;
 
@@ -68,8 +71,9 @@ export function createHost(opts = {}) {
   log(film.ready ? `film assembler: ffmpeg (${film.bin})` : "film assembler: 没有能跑的 ffmpeg —— 桌面端随包自带一份；单独跑后端用 --ffmpeg 指定，或 brew install ffmpeg");
 
   // ---- 自动验收：抽帧 + 多模态模型对比新旧两版 ----
+  let judge = null;
   if (opts.judgeKey) {
-    const judge = createJudge({ apiKey: opts.judgeKey, baseUrl: opts.judgeBase, model: opts.judgeModel, ffmpeg: film.bin, mediaDir, log });
+    judge = createJudge({ apiKey: opts.judgeKey, baseUrl: opts.judgeBase, model: opts.judgeModel || opts.inspectionModel, ffmpeg: film.bin, mediaDir, log });
     R.setHooks({ judge });
     log(`verify judge: ${judge.model}${judge.ready ? "" : "（缺密钥或 ffmpeg，review.verify 会提示）"}`);
   }
@@ -113,6 +117,8 @@ export function createHost(opts = {}) {
     }
   }
 
+  R.setHooks({journey:createJourneyRenderer({film,mediaDir,refine:planner?.storyboard ? input=>planner.storyboard({...input,model:store.get().agent.backend}) : null})});
+
   // ---- bootstrap ----
   let loaded = false;
   if (projectFile && fs.existsSync(projectFile)) {
@@ -140,6 +146,8 @@ export function createHost(opts = {}) {
   });
 
   // ---- snapshot / broadcast ----
+  const harness = createHarnessRunner({R,inspector:createHarnessInspector({film,judge,mediaDir}),checkpoint:()=>{if(projectFile)save();}});
+  R.setHooks({harness});
   function snapshot(eventsLimit = 120) {
     // 截断交给 persistable：先拷 200 条再切掉 80 条，等于每次广播白拷一遍
     const s = persistable(store.get(), { events: eventsLimit });
@@ -200,6 +208,7 @@ export function createHost(opts = {}) {
   store.subscribe((d, info) => {
     if (info?.light) return;
     for (const j of d.jobs) {
+      if(j.kind?.startsWith("journey-")||j.kind==="animatic")continue;
       const prev = announced.get(j.id);
       if (prev === undefined) {
         announced.set(j.id, j.status);
@@ -361,7 +370,7 @@ export function createHost(opts = {}) {
   }
 
   // ---- media (proxy videos / thumbnails uploaded by browser clients) ----
-  const MEDIA_EXT = { "model/gltf-binary": ".glb", "video/webm": ".webm", "video/mp4": ".mp4", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
+  const MEDIA_EXT = { "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/ogg": ".ogg", "audio/flac": ".flac", "model/gltf-binary": ".glb", "video/webm": ".webm", "video/mp4": ".mp4", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
   function saveMedia(takeId, buffer, mime = "video/webm") {
     const take = store.get().takes.find((t) => t.id === takeId);
     if (!take) return { ok: false, error: "TAKE_NOT_FOUND" };
@@ -408,6 +417,8 @@ export function createHost(opts = {}) {
       // 贴链接这条路能不能走：ffmpeg 有没有、下载器在哪（自己装的那一份也算），装在哪个目录
       tools: { ffmpeg: film.bin || null, ytdlp: fetcher.bin || null, ytdlpManaged: !!fetcher.bin && fetcher.bin === (toolsDir ? path.join(toolsDir, "yt-dlp") : null), toolsDir },
       reference: { ready: reference.ready, model: reference.model, missing: reference.missing },
+      harness: {ready:harness.ready,visualReady:harness.visualReady},
+      journey:{ready:film.ready,refine:!!planner?.storyboard},
       generation: generation ? { name: generation.name, models: generation.models || {}, fallback: "simulated", publisher: opts.publisher?.kind || "none", publicUrl: (typeof opts.publicUrl === "function" ? opts.publicUrl() : opts.publicUrl) || null, tunnelError: (typeof opts.tunnelError === "function" ? opts.tunnelError() : opts.tunnelError) || null, tunnel: (typeof opts.tunnelState === "function" ? opts.tunnelState() : opts.tunnelState) || "off" } : { name: "simulated", models: {} },
       llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models, current: d.agent.backend } : { name: "rules", models: [], current: "rules" },
       recording: d.project.recording || null,
@@ -440,6 +451,7 @@ export function createHost(opts = {}) {
       return subscribers.size;
     },
     close() {
+      harness.close();
       for (const t of recordingWatch.values()) clearTimeout(t);
       recordingWatch.clear();
       if (dirty && projectFile) save();

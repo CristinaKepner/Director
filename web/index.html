@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="./css/app.css" />
     <link rel="stylesheet" href="./css/spatial.css" />
     <link rel="stylesheet" href="./css/stage-workspace.css" />
+    <link rel="stylesheet" href="./css/timeline-editor.css" />
+    <link rel="stylesheet" href="./css/journey.css" />
     <script type="importmap">
       {
         "imports": {
@@ -145,11 +147,12 @@
               <footer><span class="map-legend">● 机位轨迹 <i>● 主体</i></span><span id="mapFrame"></span></footer>
             </div>
           </section>
-          <section class="stage-dock result-dock" aria-label="R2V 成片浮窗">
+          <section class="stage-dock result-dock" aria-label="成片预览浮窗">
             <button id="resultReopen" class="dock-reopen" aria-controls="resultDockPanel" aria-expanded="true" hidden>▷ 打开成片</button>
             <div id="resultDockPanel" class="dock-panel">
-              <header><b><em>V</em> R2V 成片</b><select id="stageResultScope" aria-label="成片预览范围"><option value="shot">当前镜头</option><option value="film">整条成片</option></select><button id="resultClose" aria-label="关闭成片预览">×</button></header>
-              <div class="stage-result-frame"><video id="stageResultVideo" controls playsinline preload="metadata" hidden></video><div id="stageResultEmpty" class="stage-result-empty"></div></div>
+              <header><b><em>V</em> 成片预览</b><select id="stageResultScope" aria-label="成片预览范围"><option value="shot">当前镜头</option><option value="film">整条成片</option></select><button id="resultClose" aria-label="关闭成片预览">×</button></header>
+              <div class="stage-result-frame"><figure class="stage-result-picture"><video id="stageResultVideo" controls playsinline preload="metadata" aria-label="当前镜头成片预览" hidden></video><span id="stageResultLabel" class="stage-version-label"></span><span id="stageResultCaption" class="stage-caption"></span></figure><figure id="stageResultBefore" class="stage-result-picture" hidden><video id="stageResultBeforeVideo" controls playsinline preload="metadata" muted aria-label="当前采用版对照"></video><span class="stage-version-label">当前采用版</span><span id="stageBeforeCaption" class="stage-caption"></span></figure><div id="stageResultEmpty" class="stage-result-empty"></div></div>
+              <audio id="stageMusicAudio" preload="metadata" loop></audio>
               <div id="stageResultStatus" class="stage-result-status" role="status"></div>
               <footer><button id="stageResultGenerate">生成这一镜</button><button id="stageResultCompare">对照</button><button id="stageResultExpand" disabled>放大</button><button id="stageResultSave" disabled>保存</button></footer>
             </div>

@@ -49,9 +49,13 @@ desktop/dist/
 server/data/media/
 *.director.json
 
+# 本地验证产物、临时工作文件与 Codex 配置
+/output/
+/tmp/
+/.codex/
+
 # 设计画布的成品文件（2.5 MB，由 design/*.dc.html 重新生成即可）
 design/director-console-ux.html
 
 # 打包时取回来的 ffmpeg（tools/fetch-ffmpeg.mjs）。二进制不进仓库，校验和进（ffmpeg.lock.json）
 desktop/build/bin/*/
-

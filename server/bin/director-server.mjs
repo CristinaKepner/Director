@@ -86,7 +86,7 @@ let tunnelState = TUNNEL ? "starting" : "off";
 let tunnelError = null;
 const publisher = createPublisher({ kind: PUBLISH, feishuTokenFile: FEISHU_TOKEN_FILE, feishuParentNode: FEISHU_PARENT, log });
 const JUDGE_MODEL = process.env.JUDGE_MODEL || arg("--judge-model", null); // 验收用的多模态模型，默认 gemini-3.1-pro-preview
-const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: () => publicUrl, tunnelState: () => tunnelState, tunnelError: () => tunnelError, publisher, ffmpeg: FFMPEG, ytdlp: YTDLP, ytdlpUrl: YTDLP_URL, toolsDir: TOOLS, judgeKey: LLM_KEY, judgeBase: LLM_BASE, judgeModel: JUDGE_MODEL, log });
+const host = createHost({ projectFile: PROJECT === "none" ? null : PROJECT, mediaDir: MEDIA, demo: DEMO === "none" ? null : DEMO, generation, llm, publicUrl: () => publicUrl, tunnelState: () => tunnelState, tunnelError: () => tunnelError, publisher, ffmpeg: FFMPEG, ytdlp: YTDLP, ytdlpUrl: YTDLP_URL, toolsDir: TOOLS, judgeKey: LLM_KEY, judgeBase: LLM_BASE, judgeModel: JUDGE_MODEL, inspectionModel: /^(gpt-|claude-|gemini-)/.test(LLM_MODEL || "gpt-6-astra") ? (LLM_MODEL || "gpt-6-astra") : undefined, log });
 const { server } = createApp(host, { static: STATIC, token: TOKEN, cors: CORS, log });
 
 server.listen(PORT, HOST, () => {
