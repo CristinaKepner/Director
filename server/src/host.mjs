@@ -1,3 +1,4 @@
+import {creationContext} from '../../core/creation.js';
 // RuntimeHost — the backend's authoritative Director Runtime.
 // Owns one core runtime instance (Source of Truth), persists it to a project file, stores take media,
 // and broadcasts every state change to subscribers (SSE clients). No HTTP here: see api.mjs.
@@ -281,9 +282,10 @@ export function createHost(opts = {}) {
     const text = String(payload.text || "").trim();
     if (!text) return { ok: false, error: "MISSING_PARAM", missing: ["text"] };
     const d = store.get();
+    const projectId = d.project.id;
     const model = payload.backend || d.agent.backend;
     const mode = payload.mode || d.agent.mode;
-    const history = d.agent.messages.filter((m) => m.role === "user" || m.role === "agent").slice(-8).map((m) => ({ role: m.role, text: m.text }));
+    const history = (d.project.creation || payload.contextMode === "canvas") ? [] : d.agent.messages.filter((m) => m.role === "user" || m.role === "agent").slice(-8).map((m) => ({ role: m.role, text: m.text }));
     R.say("user", text);
     store.patch((x) => (x.agent.busy = true));
     const t0 = Date.now();
@@ -291,12 +293,13 @@ export function createHost(opts = {}) {
     try {
       p = await planner.plan(text, {
         capabilities: capabilities(),
-        summary: R.summarize(),
+        summary: {...R.summarize(),creation:creationContext(d)},
         history,
         model,
-        onDelta: (d) => emitThinking({ model, phase: "planning", reasoning: d.reasoning ? d.reasoning.slice(-4000) : "", steps: d.steps || [], chars: (d.content || "").length }),
+        onDelta: (d) => store.get().project.id === projectId && emitThinking({ model, phase: "planning", reasoning: d.reasoning ? d.reasoning.slice(-4000) : "", steps: d.steps || [], chars: (d.content || "").length }),
       });
     } catch (err) {
+      if (store.get().project.id !== projectId) return {ok:false,error:"PROJECT_CHANGED"};
       // 体验码那一头的失败不是「模型不行」：额度用完、码被停用、码填错了。
       // 包在「LLM 调用失败」里再塞一段 JSON，人看到的就是一句读不懂的话 + 一句「没听懂」，
       // 而真正该做的事（换个码、找发码的人要额度）一个字都没说。
@@ -309,6 +312,7 @@ export function createHost(opts = {}) {
       const out = R.runPlan({ ...rp, text }, { mode, force: payload.force === true, source: "agent" });
       return { ok: true, backend: "rules", fallback: true, error_llm: trial || err.message, trial: !!trial, plan: out?.plan?.steps, notes: out?.plan?.notes, results: out?.results?.map((r) => ({ action: r.step.action, ok: r.result.ok, id: r.result.id, error: r.result.error, captureShotId: r.result.captureShotId })), pending: !!out?.pending };
     }
+    if (store.get().project.id !== projectId) return {ok:false,error:"PROJECT_CHANGED"};
     emitThinking({ model, phase: "executing", reasoning: p.reasoning ? p.reasoning.slice(-4000) : "", steps: p.steps.map((s) => s.label || s.action), chars: 0 });
     store.patch((x) => (x.agent.busy = false));
     // 思考过程作为独立一条消息（role "thinking"）插在计划前面，页面默认折叠，点开随时回看。

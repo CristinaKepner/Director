@@ -1,14 +1,18 @@
 # 主页面画布与节点工作流
 
-## 当前实现（0.9.18）
+## 当前实现（0.9.19）
 
-创作画布默认显示在主页面中央区域。3D 舞台、创作路径与节点工作流共用左侧素材面板、右侧 Director 对话、工程与底部工具栏；不再把整个页面替换成独立画布，也不迁移对话 DOM。打开参考、生成和剪辑面板时可继续保留创作路径。
+删除 0.9.18 的 journey/workflow 独立界面和入口。主页面中央是工程创作区，沿用原产品的左侧素材、右侧 Agent、模型选择、生成抽屉、底部镜头与剪辑工具。镜头预演在同一工作区切换，可返回创作；没有复制 MossCreate 的应用壳、第二份素材状态或第二个 Agent 对话。
 
-节点工作流是可保存的**规划图**，不是自动媒体执行器。支持新增、标题拖动、输出到输入连线、参数编辑、删除节点/连线、适合画布、撤销重做。无需碰撞处理与自动排版。资产节点保存文本、CSV 或媒体 URL；目前没有缩略图与文件上传入口，媒体素材仍可通过现有素材面板管理。
+每个空工程（没有实体、镜头、素材、节点、参考或创作目标）显示内嵌引导：一句话生成 / 依赖参照生成。新建工程重置表单与选择，不使用“只显示一次”的标记。参照可上传图片/视频或填写 HTTP(S) 链接；上传复用现有后端，50 MB 上限。起步选择记录到 `project.creation`，参照同时注册到 `assets`，节点以 `assetId` 关联。题材探索、参考复刻、A/B 内测是规划方向，不代表已经完成评估实验。
 
-节点集：Text、Table、Image、Video、Audio；三视图、光照、运镜；Image Generation、Image Editing、Video / Seedance；Semantic If、Semantic Loop。参考参数暂用可编辑描述表达，避免尚未确定供应商契约时制造无效精细控件。
+基础节点视图由 `creation-ui/` 的 React Flow 实现，经构建输出到 `web/vendor/creation/`。`web/js/creation-*` 是原生页面与操作层的适配；`core/creation*` 管理起步、媒体入库和当前内容摘要。支持节点拖动、端口连接、双击删除连线、编辑参数、媒体预览、保存和撤销。用户选择为蓝色，Agent 最近的工作流操作标记为绿色。没有碰撞处理和自动排版。
 
-人设预处理模板追加 8 个节点：文本与三视图 → 生图 → 面部质量条件；true → 修复 → 妆造，false → 妆造；妆造与运镜 → 视频生成。插入模板不清空现有图，重复插入使用不同 ID。模板中的妆造节点是共性图像编辑节点，可改成配饰、贴画、风格或其他预处理。
+HTML 节点在不含 same-origin 权限的 sandbox iframe 内执行内联 HTML/CSS/JS，CSP 禁止外部网络；时间滑杆调用约定的 `window.film.frame(t)`。这不是任意网页浏览器或成片导出器。
+
+主创作区发起的 Agent 请求只发送当前工程摘要和节点/素材，不携带旧对话；右侧仍显示本工程操作记录。内置规则仅支持原有命令，开放式规划需要配置可用模型。节点图仍是可保存的规划图，不会自行运行 Semantic If/Loop、修复或收费生成。现有生成和剪辑入口继续沿用原产品流程。
+
+旧工程的 Table、Image Generation、Image Editing、Video、Semantic If/Loop 等领域节点和操作保留可读兼容；删掉的是旧界面。人设预处理与语义循环的自动执行继续属于后续迭代。
 
 ## 状态和操作契约
 
@@ -51,4 +55,8 @@ node server/bin/director.mjs workflow.read --remote http://127.0.0.1:5175 --json
 
 `.agents/skills/moss-desktop-development` 完整保留用户提供的开发 skill。133 个 `flova-*` 目录将用户提供的 Markdown 包装为可发现的项目 skill，保留 `reference.md`、作者与封面；清单在 `docs/flova-skills.json`。Flova 的工具名仍是原平台术语，入口说明要求先映射真实可用能力，不伪造调用。skills 也随 DMG 复制到 `Resources/app-src/.agents/skills`。
 
-现有项目是原生 ES modules、Node test runner 和静态 CSS。本次沿用这些工具，不做 React / TypeScript / Vitest 全量迁移。新增模块保持领域与 DOM 分离；现有 `ui.js`、`journey-workspace.js`、`actions.js` 仍有历史大函数，未做全量行数整改。项目没有 TypeScript 类型检查配置，不能把 JavaScript 语法检查称作严格类型检查。
+现有应用保持原生 ES modules / Node tests / 静态 CSS，仅节点视图使用严格 TypeScript 与 React Flow。新增模块通过 `npm run check:creation` 检查函数上限、类型和打包；领域回归通过 `npm run test:all`。新增领域测试在 `tests/creation.test.mjs`；既有 workflow 测试继续保护连线、图校验与撤销。既有 ui.js、host.mjs 和 actions.js 大函数仅做必要接线，未做全仓重构。
+
+## 0.9.19 验证边界
+
+新增起步与参照校验先用失败测试复现，再实现；后端延迟规划跨工程写入同样先复现再修复。`tests/creation-agent.test.mjs` 验证当前工程上下文不含旧对话、切换工程后拒绝旧结果。新模块通过严格类型、格式化后函数行数检查；既有领域/后端 211 项测试通过。真实 Electron 发布包检查主页面引导、节点选择/拖拽/连线、图片上传与预览、镜头预演切换和反复新建；模型生成与语义条件自动执行不属于这次验证范围。DMG 为 Apple Silicon 未签名构建。

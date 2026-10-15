@@ -13,9 +13,9 @@
     "start:api": "node server/bin/director-server.mjs --port 5175 --api-only",
     "build:web": "node tools/build-web.mjs",
     "build:studio": "cd private/studio && bun install && bun run build",
-    "test": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs tests/seedance.test.mjs tests/coverage.test.mjs tests/imports.test.mjs tests/spatial.test.mjs tests/contract.test.mjs tests/stage-workspace.test.mjs tests/cut.test.mjs tests/journey.test.mjs tests/workflow.test.mjs",
+    "test": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs tests/seedance.test.mjs tests/coverage.test.mjs tests/imports.test.mjs tests/spatial.test.mjs tests/contract.test.mjs tests/stage-workspace.test.mjs tests/cut.test.mjs tests/journey.test.mjs tests/workflow.test.mjs tests/creation.test.mjs tests/creation-agent.test.mjs",
     "test:api": "node --test server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/model-routing.test.mjs server/tests/tunnel.test.mjs server/tests/fetch.test.mjs gateway/tests/gateway.test.mjs server/tests/reference-video.test.mjs server/tests/film-edit.test.mjs server/tests/harness.test.mjs server/tests/journey.test.mjs",
-    "test:all": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs tests/seedance.test.mjs tests/coverage.test.mjs tests/imports.test.mjs tests/spatial.test.mjs tests/contract.test.mjs server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/model-routing.test.mjs server/tests/tunnel.test.mjs server/tests/fetch.test.mjs gateway/tests/gateway.test.mjs tests/stage-workspace.test.mjs server/tests/reference-video.test.mjs tests/cut.test.mjs server/tests/film-edit.test.mjs server/tests/harness.test.mjs tests/journey.test.mjs server/tests/journey.test.mjs tests/workflow.test.mjs",
+    "test:all": "node --test tests/runtime.test.mjs tests/shell.test.mjs tests/reference-plan.test.mjs tests/thread.test.mjs tests/phys.test.mjs tests/seedance.test.mjs tests/coverage.test.mjs tests/imports.test.mjs tests/spatial.test.mjs tests/contract.test.mjs server/tests/api.test.mjs server/tests/planner.test.mjs server/tests/model-routing.test.mjs server/tests/tunnel.test.mjs server/tests/fetch.test.mjs gateway/tests/gateway.test.mjs tests/stage-workspace.test.mjs server/tests/reference-video.test.mjs tests/cut.test.mjs server/tests/film-edit.test.mjs server/tests/harness.test.mjs tests/journey.test.mjs server/tests/journey.test.mjs tests/workflow.test.mjs tests/creation.test.mjs tests/creation-agent.test.mjs",
     "smoke": "node tools/smoke.mjs",
     "cli": "node server/bin/director.mjs",
     "test:research": "node --test research/research.test.mjs research/gym.test.mjs research/lab/lab.test.mjs",
@@ -27,7 +27,9 @@
     "test:gateway": "node --test gateway/tests/gateway.test.mjs",
     "gateway": "node gateway/bin/gateway.mjs",
     "sync:seedance": "node tools/sync-seedance.mjs",
-    "test:harness": "node --test server/tests/harness.test.mjs"
+    "test:harness": "node --test server/tests/harness.test.mjs",
+    "build:creation": "npm --prefix creation-ui run build",
+    "check:creation": "creation-ui/node_modules/.bin/eslint -c creation-ui/eslint.config.mjs core/creation*.js web/js/creation-*.js creation-ui/src tests/creation.test.mjs tests/creation-agent.test.mjs && npm run build:creation"
   },
   "engines": {
     "node": ">=18"

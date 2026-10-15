@@ -1,0 +1,365 @@
+/* The project owns assets, nodes and generation; this view owns only its layout. */
+.creation-workspace {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+}
+#app.creation-mode > .stage > :not(#creationWorkspace) {
+  visibility: hidden;
+  pointer-events: none;
+}
+.creation-workspace [hidden],
+.creation-workspace[hidden] {
+  display: none !important;
+}
+.creation-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 70px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.creation-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.creation-heading h2 {
+  font-size: 17px;
+  margin: 0 0 5px;
+}
+.creation-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.creation-start {
+  flex: 1;
+  overflow: auto;
+  padding: clamp(24px, 5vw, 64px);
+  max-width: 850px;
+  width: 100%;
+  margin: auto;
+}
+.creation-welcome > span {
+  font-size: 12px;
+  color: var(--accent);
+}
+.creation-welcome h1 {
+  font-size: clamp(24px, 2.4vw, 34px);
+  line-height: 1.3;
+  margin: 14px 0;
+}
+.creation-welcome p {
+  color: var(--muted);
+  line-height: 1.8;
+  font-size: 13px;
+}
+.creation-routes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 24px 0;
+}
+.creation-routes button {
+  text-align: left;
+  padding: 20px;
+  min-height: 126px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+}
+.creation-routes button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.creation-routes b {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+.creation-routes span {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  display: block;
+}
+.creation-start form > label,
+.creation-start [data-reference-fields] > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  margin: 15px 0;
+}
+.creation-start textarea {
+  min-height: 95px;
+  resize: vertical;
+}
+.creation-start input,
+.creation-start textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.creation-start-footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0;
+}
+.creation-start-footer label {
+  display: grid;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.creation-start-footer button {
+  padding: 12px 22px;
+}
+.creation-upload {
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.creation-tools .creation-upload input {
+  width: 165px;
+  font-size: 10px;
+}
+.creation-work {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.creation-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.creation-tools label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.creation-tools select {
+  max-width: 110px;
+}
+.creation-graph {
+  flex: 1;
+  min-height: 160px;
+  position: relative;
+  background: var(--bg);
+}
+.creation-assets {
+  padding: 10px;
+  display: flex;
+  gap: 6px;
+  overflow: auto;
+  max-height: 85px;
+  border-bottom: 1px solid var(--line);
+}
+.creation-assets small {
+  color: var(--muted);
+  margin-right: 7px;
+}
+.creation-node {
+  width: 250px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  box-shadow: 0 6px 22px #0002;
+  position: relative;
+}
+.creation-node header {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.creation-node header small {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.creation-node header b {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.creation-node p {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  padding: 12px;
+  margin: 0;
+  min-height: 95px;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.creation-node img,
+.creation-node video {
+  width: 100%;
+  height: 160px;
+  object-fit: contain;
+  background: #0002;
+  display: block;
+}
+.creation-node audio {
+  width: 100%;
+  margin: 14px 0;
+}
+.creation-node iframe {
+  width: 100%;
+  height: 155px;
+  border: 0;
+  pointer-events: none;
+}
+.creation-node input[type="range"] {
+  width: 94%;
+  margin: 5px 3%;
+}
+.creation-node.user-selected {
+  outline: 2px solid #6d99d7;
+  outline-offset: 2px;
+}
+.creation-node.agent-selected {
+  border-color: #78a167;
+}
+.creation-agent-cursor {
+  position: absolute;
+  right: -32px;
+  top: -22px;
+  color: #8cb578;
+  background: var(--panel);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 11px;
+  pointer-events: none;
+}
+.creation-graph .react-flow__handle {
+  background: #9dab8f;
+  border: 1px solid var(--panel);
+  width: 9px;
+  height: 9px;
+}
+.creation-graph .react-flow__edge-path {
+  stroke: #8d9984;
+  stroke-width: 1.5;
+}
+.creation-graph .react-flow__controls button {
+  color: #26302c;
+}
+.creation-details {
+  padding: 12px 16px;
+  min-height: 46px;
+  max-height: 170px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 11px;
+  color: var(--muted);
+}
+.creation-details form {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+}
+.creation-details label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 110px;
+}
+.creation-details input,
+.creation-details textarea {
+  width: 100%;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  padding: 8px;
+  border-radius: 6px;
+}
+.creation-details textarea {
+  height: 64px;
+  resize: vertical;
+}
+.creation-details form > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 20px;
+}
+.creation-legend {
+  display: flex;
+  gap: 14px;
+  padding: 8px 16px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.creation-legend span:first-child {
+  color: #6d99d7;
+}
+.creation-legend span:nth-child(2) {
+  color: #8cb578;
+}
+.creation-status {
+  font-size: 12px;
+  color: var(--accent);
+  padding: 0 16px;
+  line-height: 2;
+}
+.creation-status:empty {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .creation-start {
+    padding: 24px;
+  }
+  .creation-routes {
+    gap: 8px;
+  }
+  .creation-routes button {
+    padding: 14px;
+  }
+  .creation-heading {
+    padding: 12px;
+  }
+  .creation-heading button {
+    font-size: 10px;
+  }
+  .creation-tools {
+    gap: 5px;
+  }
+  .creation-tools .creation-upload input {
+    width: 100px;
+  }
+  .creation-legend span:last-child {
+    display: none;
+  }
+}

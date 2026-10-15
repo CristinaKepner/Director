@@ -5,12 +5,11 @@ import "../../core/index.js"; // registers scene.demo / agent.* actions on the l
 import { store } from "../../core/store.js";
 import { dispatch as localDispatch } from "../../core/actions.js";
 import { initViewport } from "./viewport.js";
-import { bindUI, loadSaved, toast, maybeShowGuide, openEditingTimeline } from "./ui.js";
+import { bindUI, loadSaved, toast, openEditingTimeline } from "./ui.js";
 import { connect, dispatch, client, onMode } from "./client.js";
 import { say } from "../../core/agent.js";
 import { initDesktop } from "./desktop.js";
 import { film } from "./film.js";
-import { maybeShowFirstRun, showFirstRun } from "./firstrun.js";
 
 window.__dc = Object.assign(window.__dc || {}, { errors: [], ready: false });
 window.addEventListener("error", (e) => window.__dc.errors.push(String(e.message || e)));
@@ -26,7 +25,7 @@ if (online) {
   toast(`已连接后端 · ${d.project.name}`);
 } else {
   const restored = loadSaved();
-  if (!restored) localDispatch("scene.demo", { name: "city-edge" }, { source: "system", actorId: "scene-builder" });
+  if (!restored) localDispatch("project.new", { name: "Untitled" }, { source: "system" });
   else say("agent", `已从本地恢复工程「${store.get().project.name}」（${store.get().scene.name}，${store.get().shots.length} 个镜头）。可以继续，或从顶栏「示例…」重置。`);
   toast("单机模式：后端不可达", true);
 }
@@ -44,8 +43,3 @@ window.__dc.film = film; // 草片逐镜录制 · 逐镜生成 · ffmpeg 拼片�
 window.__dc.ready = true;
 // Existing generated projects open their editable tracks in the same rehearsal workspace.
 if (store.get().shots.some(s => s.selectedGenerationId) || store.get().project.workspace === "cut") openEditingTimeline();
-window.__dc.firstRun = showFirstRun; // 顶栏「?」之外的入口：随时能再来一次
-// 空工程 → 一句话出片；已经有工程的老用户走原来的四步引导
-if (!new URLSearchParams(location.search).has("noguide")) {
-  if (!maybeShowFirstRun()) maybeShowGuide();
-}

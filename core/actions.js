@@ -51,6 +51,7 @@ import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, to
 import { shotBaseline, verifyShotContract } from "./contract.js";
 import { chosenVideo, videoVersions, cutSignature, cutMedia, cutCaption, cutTimeline, revisionPrompt, KEEP_OPTIONS } from "./cut.js";
 import {activeJourney,journeyPath} from './journey.js';
+import { registerCreationActions } from './creation-actions.js';
 import { registerWorkflowActions } from './workflow-actions.js';
 import { registerJourneyActions } from './journey-actions.js';
 import { registerHarnessActions } from './harness-actions.js';
@@ -3456,3 +3457,4 @@ registerHarnessActions({register,store,hooks,dispatch,uid});
 registerJourneyActions({register,store,hooks,dispatch,uid,clearHistory});
 
 registerWorkflowActions({register,store,uid});
+registerCreationActions({register,store,uid});

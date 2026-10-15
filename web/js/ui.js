@@ -16,8 +16,7 @@ import { renderSpatial } from "./spatial-panel.js";
 import { renderEval } from "./eval-panel.js";
 import { initTaskProgress } from "./task-progress.js";
 import { initStageWorkspace, stagePlayback } from "./stage-workspace.js";
-import { initIntegratedWorkspace } from "./integrated-workspace.js";
-import { initJourneyWorkspace } from "./journey-workspace.js";
+import { initCreationWorkspace } from "./creation-workspace.js";
 import { createTimelineEditor } from "./timeline-editor.js";
 import { chosenVideo, cutTimeline } from "../../core/cut.js";
 
@@ -293,8 +292,7 @@ export function bindUI() {
   applyUi();
   render(store.get());
   initTaskProgress();
-  initJourneyWorkspace({toast,openEditingTimeline,mediaHref,openDrawer,openQuality:()=>{openEditingTimeline();timelineEditor?.openHarness();},openLeft:(which)=>{ui.left=which;applyUi();render(store.get());}});
-  initIntegratedWorkspace(toast);
+  initCreationWorkspace({toast,openDrawer,mediaHref,openLeft:(which)=>{ui.left=which;applyUi();render(store.get());}});
   initStageWorkspace({ openDrawer, openLeft: (which) => { ui.left = which; applyUi(); render(store.get()); }, mediaHref, showPreview, toast });
 }
 
@@ -477,7 +475,7 @@ function sendAgent() {
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
-  report(dispatch("agent.run", { text }, { source: "human", actorId: "console" }));
+  report(dispatch("agent.run", { text, contextMode: document.getElementById("app").classList.contains("creation-mode") ? "canvas" : undefined }, { source: "human", actorId: "console" }));
 }
 function togglePlay() {
   const d = store.get();

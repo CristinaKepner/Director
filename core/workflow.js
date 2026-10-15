@@ -1,6 +1,7 @@
 // Project-owned planning graph. Generation remains an explicit operation in the existing runtime.
 export const NODE_TYPES = {
   text: {label:'Text · 文本', group:'资产', params:{text:''}},
+  html: {label:'HTML 画面',group:'资产',params:{html:'<style>body{background:#e5e9d6;color:#344535;font:24px system-ui;padding:20px}</style><h1>写下你的画面</h1><script>window.film={frame(t){document.body.style.opacity=String(.6+t/15)}};</script>'}},
   table: {label:'Table · 表格', group:'资产', params:{text:'名称,描述\n角色,主角'}},
   image: {label:'Image · 图片', group:'资产', params:{url:''}},
   video: {label:'Video · 视频', group:'资产', params:{url:''}},
