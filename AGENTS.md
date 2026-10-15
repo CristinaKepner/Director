@@ -11,3 +11,5 @@
 
 - `creation-ui/` is the small React Flow view inside the native main workspace, not a second application. Install its exact locked dependencies with `npm --prefix creation-ui ci`; run `npm run check:creation` before changing its tracked `web/vendor/creation` output. Keep authoritative state in core/actions and project.workflow.
 - Empty-project onboarding is derived from current project contents, not a persistent first-run flag. Keep creation media and assets linked; never write stale upload results into a newly opened project.
+
+- Director 0.9.19 and Downloads/MossCreate Base are separate products. Director starts with the native project overview and a modal empty-project guide; node composition is an in-workspace view. Do not copy the Base application shell into Director.

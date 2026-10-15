@@ -363,3 +363,212 @@
     display: none;
   }
 }
+/* Main product: project overview first, node composition as a working view. */
+.creation-heading {
+  min-height: 66px;
+  padding: 12px 22px;
+  gap: 12px;
+}
+.creation-heading > div {
+  flex: 0 0 auto;
+  margin-right: 20px;
+}
+.creation-heading h2 {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+.creation-eyebrow {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+.creation-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.creation-tabs button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.creation-tabs button.active {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--line-2);
+}
+.creation-overview {
+  flex: 1;
+  overflow: auto;
+  padding: 34px clamp(20px, 3vw, 46px);
+}
+.creation-brief {
+  padding: 24px 28px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: linear-gradient(115deg, var(--accent-soft), var(--panel) 80%);
+}
+.creation-brief h1 {
+  max-width: 760px;
+  font-size: 26px;
+  line-height: 1.5;
+  margin: 13px 0 8px;
+  font-weight: 550;
+}
+.creation-brief p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 22px;
+}
+.creation-brief button {
+  background: var(--panel);
+}
+.creation-sections {
+  display: grid;
+  gap: 30px;
+  margin-top: 30px;
+}
+.creation-sections section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.creation-sections h3 {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 6px 0 0;
+}
+.creation-sections h3 small {
+  margin-left: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.creation-media-grid,
+.creation-shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 12px;
+}
+.creation-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  border: 1px dashed var(--line-2);
+  border-radius: 12px;
+  padding: 24px;
+  background: var(--panel);
+}
+.creation-empty > span {
+  display: block;
+  color: var(--muted);
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+.creation-empty b {
+  font-size: 13px;
+  font-weight: 500;
+}
+.creation-empty p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.creation-media-card,
+.creation-shot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+  padding: 20px;
+  min-height: 145px;
+  background: var(--panel);
+  border-radius: 12px;
+}
+.creation-media-card span,
+.creation-shot-card span {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.creation-media-card small,
+.creation-shot-card small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.creation-dialog {
+  width: min(660px, calc(100vw - 48px));
+  max-height: calc(100vh - 60px);
+  padding: 0;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 18px;
+  box-shadow: 0 30px 100px #0008;
+  overflow: auto;
+}
+.creation-dialog::backdrop {
+  background: #05060bb5;
+  backdrop-filter: blur(5px);
+}
+.creation-dialog .creation-start {
+  max-width: none;
+  width: auto;
+  margin: 0;
+  padding: 34px;
+}
+.creation-dialog .creation-welcome h1 {
+  font-size: 25px;
+}
+.creation-dialog .creation-routes {
+  margin: 20px 0;
+}
+.creation-dialog .creation-routes button {
+  min-height: 110px;
+  padding: 16px;
+}
+.creation-dialog .creation-routes b {
+  font-size: 14px;
+}
+.creation-dialog .creation-start-footer {
+  margin-bottom: 0;
+}
+.creation-dismiss {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  border: 0;
+  background: transparent;
+  font-size: 24px;
+  color: var(--muted);
+}
+.creation-modal-status {
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--accent);
+  margin-top: 12px;
+}
+.creation-file-button {
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+.creation-file-button input {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .creation-heading {
+    gap: 5px;
+    padding: 10px;
+  }
+  .creation-heading > div {
+    margin-right: 6px;
+  }
+  .creation-eyebrow {
+    font-size: 8px;
+  }
+  .creation-tabs button {
+    font-size: 10px;
+    padding: 6px;
+  }
+}

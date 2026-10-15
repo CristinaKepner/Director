@@ -18,12 +18,23 @@ function clickCreation(state, event) {
     button = event.target.closest("[data-create]");
   if (route) chooseRoute(state, route.dataset.route);
   if (button) void command(state, button.dataset.create);
+  clickProjectItem(state, event);
+}
+function clickProjectItem(state, event) {
+  const shot = event.target.closest("[data-shot]");
+  if (shot) void openShot(state, shot.dataset.shot);
   const asset = event.target.closest("[data-attach]");
-  if (asset)
-    void state.run("creation.media", { assetId: asset.dataset.attach });
+  if (asset) void attachAsset(state, asset.dataset.attach);
 }
 const commands = {
   new: newProject,
+  overview: (s) => s.view("overview"),
+  nodes: (s) => s.view("nodes"),
+  guide: (s) => s.openGuide(),
+  dismiss: (s) => s.closeGuide(),
+  library: (s) => s.options.openLeft("library"),
+  import: (s) => s.root.querySelector("[data-media-file]").click(),
+  shot: addShot,
   stage: (s) => s.showStage(true),
   assets: showAssets,
   generate: (s) => s.options.openDrawer("gen"),
@@ -97,4 +108,21 @@ export function selectNode(state, id) {
 
 function findNode(id) {
   return store.get().project.workflow?.nodes.find((n) => n.id === id);
+}
+
+async function openShot(state, id) {
+  const result = await state.run("shot.select", { id });
+  if (result.ok) state.showStage(true);
+}
+async function attachAsset(state, assetId) {
+  const result = await state.run("creation.media", { assetId });
+  if (result.ok) state.view("nodes");
+}
+
+async function addShot(state) {
+  if (!store.get().cameras.length) {
+    const camera = await state.run("camera.create", {});
+    if (!camera.ok) return;
+  }
+  await state.run("shot.create", { title: "新镜头", duration: 5 });
 }

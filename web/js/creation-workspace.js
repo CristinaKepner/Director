@@ -1,3 +1,5 @@
+import { renderOverview } from "./creation-overview.js";
+import { bindStartDialog, syncStartDialog } from "./creation-dialog.js";
 import { store } from "../../core/store.js";
 import { creationIsEmpty } from "../../core/creation.js";
 import { dispatch } from "./client.js";
@@ -9,6 +11,7 @@ import { mountCreationGraph } from "../vendor/creation/index.js";
 export function initCreationWorkspace(options) {
   const state = createWorkspace(options);
   bindCreation(state);
+  bindStartDialog(state);
   store.subscribe(() => renderCreation(state));
   renderCreation(state);
 }
@@ -28,13 +31,12 @@ function createRoot() {
   return root;
 }
 function bindWorkspaceActions(state) {
-  state.status = (text) => {
-    state.root.querySelector(".creation-status").textContent = text;
-  };
+  state.status = (text) => showStatus(state.root, text);
   state.run = async (action, payload) =>
     reportResult(state, await dispatch(action, actionPayload(action, payload)));
   state.select = (id) => selectNode(state, id);
   state.showStage = (value) => showStage(state.root, value);
+  state.view = (view) => switchView(state, view);
 }
 function actionPayload(action, payload) {
   return action === "agent.run"
@@ -64,9 +66,9 @@ function resetCreation(state, id) {
   state.unmount?.();
   state.unmount = null;
   state.project = id;
+  resetView(state);
   state.root.querySelector("[data-start-form]").reset();
   chooseRoute(state, "idea");
-  state.status("");
   state.showStage(false);
   selectNode(state, null);
 }
@@ -74,15 +76,12 @@ function renderCreation(state) {
   const d = store.get(),
     empty = creationIsEmpty(d);
   if (state.project !== d.project.id) resetCreation(state, d.project.id);
-  state.root.querySelector(".creation-start").hidden = !empty;
-  state.root.querySelector(".creation-work").hidden = empty;
+  syncStartDialog(state, empty);
+  renderOverview(state, d);
   renderSummary(state, d);
   syncGraph(state, empty);
 }
 function renderSummary(state, d) {
-  state.root.querySelector("[data-creation-summary]").textContent =
-    d.project.creation?.brief ||
-    `${d.assets.length} 份素材 · ${d.shots.length} 个镜头`;
   if (
     state.selected &&
     !d.project.workflow?.nodes.some((n) => n.id === state.selected)
@@ -91,7 +90,7 @@ function renderSummary(state, d) {
 }
 
 function syncGraph(state, empty) {
-  if (empty || state.unmount) return;
+  if (state.tab !== "nodes" || state.unmount) return;
   state.unmount = mountCreationGraph(
     state.root.querySelector(".creation-graph"),
     creationBridge(state),
@@ -105,3 +104,27 @@ const initialState = {
   busy: false,
   unmount: null,
 };
+
+function resetView(state) {
+  state.dismissed = false;
+  state.status("");
+  state.root.querySelector("dialog").close();
+  switchView(state, "overview");
+}
+function switchView(state, tab) {
+  state.tab = tab;
+  state.root.querySelector(".creation-overview").hidden = tab !== "overview";
+  state.root.querySelector(".creation-work").hidden = tab !== "nodes";
+  state.root
+    .querySelectorAll(".creation-tabs [data-create]")
+    .forEach((el) => el.classList.toggle("active", el.dataset.create === tab));
+  syncGraph(state);
+}
+
+function showStatus(root, text) {
+  root
+    .querySelectorAll(".creation-status, .creation-modal-status")
+    .forEach((el) => {
+      el.textContent = text;
+    });
+}
