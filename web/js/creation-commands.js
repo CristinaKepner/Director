@@ -1,3 +1,4 @@
+import { executeNodes, useOutput } from "./creation-execution.js";
 import { store } from "../../core/store.js";
 import { creationIsEmpty } from "../../core/creation.js";
 import { assetMarkup, detailsMarkup } from "./creation-markup.js";
@@ -21,6 +22,7 @@ function clickCreation(state, event) {
   clickProjectItem(state, event);
 }
 function clickProjectItem(state, event) {
+  clickOutput(state, event);
   const shot = event.target.closest("[data-shot]");
   if (shot) void openShot(state, shot.dataset.shot);
   const asset = event.target.closest("[data-attach]");
@@ -40,6 +42,15 @@ const commands = {
   generate: (s) => s.options.openDrawer("gen"),
   plan: (s) =>
     s.run("agent.run", { text: planningPrompt(), mode: "collaborative" }),
+  execute: executeNodes,
+  "cancel-run": (s) => s.run("workflow.cancel", {}),
+  template: (s) => s.run("workflow.template", {}),
+  "node-plan": (s) =>
+    s.run("agent.run", {
+      text: "请读取当前工程的目标、素材和节点，使用 workflow.compose 或 workflow.update 建立完整的资产→参考→生成节点图。需要修复时加入 Semantic If / Loop，并连接 true / false 分支。保留已有节点，先展示计划供我确认。",
+      mode: "collaborative",
+      contextMode: "canvas",
+    }),
   add: (s) =>
     s.run("workflow.add", {
       type: s.root.querySelector("[data-node-type]").value,
@@ -125,4 +136,14 @@ async function addShot(state) {
     if (!camera.ok) return;
   }
   await state.run("shot.create", { title: "新镜头", duration: 5 });
+}
+
+function clickOutput(state, event) {
+  const candidate = event.target.closest("[data-use-output]");
+  if (candidate)
+    void useOutput(
+      state,
+      Number(candidate.dataset.useOutput),
+      store.get().project.workflowRun,
+    );
 }

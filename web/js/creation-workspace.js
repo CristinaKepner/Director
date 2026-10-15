@@ -1,3 +1,4 @@
+import { renderExecution } from "./creation-execution.js";
 import { renderOverview } from "./creation-overview.js";
 import { bindStartDialog, syncStartDialog } from "./creation-dialog.js";
 import { store } from "../../core/store.js";
@@ -79,6 +80,7 @@ function renderCreation(state) {
   syncStartDialog(state, empty);
   renderOverview(state, d);
   renderSummary(state, d);
+  renderExecution(state, d);
   syncGraph(state, empty);
 }
 function renderSummary(state, d) {

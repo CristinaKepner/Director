@@ -1,3 +1,5 @@
+import {createWorkflowService} from './workflow-service.mjs';
+import {createWorkflowJudge} from './workflow-judge.mjs';
 import {creationContext} from '../../core/creation.js';
 // RuntimeHost — the backend's authoritative Director Runtime.
 // Owns one core runtime instance (Source of Truth), persists it to a project file, stores take media,
@@ -149,6 +151,8 @@ export function createHost(opts = {}) {
   // ---- snapshot / broadcast ----
   const harness = createHarnessRunner({R,inspector:createHarnessInspector({film,judge,mediaDir}),checkpoint:()=>{if(projectFile)save();}});
   R.setHooks({harness});
+  const workflow = createWorkflowService({store,adapter:generation,checkpoint:()=>{if(projectFile)save();},judge:createWorkflowJudge({judge,mediaDir,goal:()=>store.get().project.creation?.brief||''})});
+  R.setHooks({workflow});
   function snapshot(eventsLimit = 120) {
     // 截断交给 persistable：先拷 200 条再切掉 80 条，等于每次广播白拷一遍
     const s = persistable(store.get(), { events: eventsLimit });
@@ -455,6 +459,7 @@ export function createHost(opts = {}) {
       return subscribers.size;
     },
     close() {
+      workflow.close();
       harness.close();
       for (const t of recordingWatch.values()) clearTimeout(t);
       recordingWatch.clear();

@@ -10,7 +10,12 @@ export interface Item {
 export interface Snapshot {
   projectId: string;
   nodes: Item[];
-  edges: { id: string; from: string; to: string }[];
+  edges: {
+    id: string;
+    from: string;
+    to: string;
+    branch?: "next" | "true" | "false";
+  }[];
   agentFocus: string | null;
 }
 export interface Bridge {

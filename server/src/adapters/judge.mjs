@@ -1,3 +1,4 @@
+import {assessCondition} from '../workflow-condition.mjs';
 // 自动验收：改完重新生成之后，回答两个问题 ——
 //   1. 要改的改了吗？
 //   2. 说好不动的，动了吗？
@@ -89,6 +90,10 @@ export function createJudge(opts = {}) {
     name: "judge",
     ready: !!apiKey && !!ffmpeg,
     model,
+
+    condition(task) {
+      return assessCondition(task,ask,apiKey,model);
+    },
 
     async inspect(task) {
       const aspects=['action','people','scene',...(task.hasIdentity?['identity']:[]),...(task.hasBaseline?['preservation']:[]),...(task.hasPrevious?['continuity']:[])];

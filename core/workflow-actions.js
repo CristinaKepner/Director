@@ -1,3 +1,4 @@
+import {composeWorkflow} from './workflow-compose.js';
 import {createNode,connectNodes,characterWorkflow,validateNode} from './workflow.js';
 const empty = () => ({version:1,nodes:[],edges:[]});
 function change(store, operation) {
@@ -33,6 +34,7 @@ export function registerWorkflowActions({register,store,uid}) {
   registerWorkflowUtilities({register,store,uid});
 }
 function registerWorkflowUtilities({register,store,uid}) {
+  register('workflow.compose',{doc:'原子追加 Agent 节点计划；nodes 内 id 为本计划临时 ID，edges 可引用临时 ID 或工程已有 ID。失败不改变工程。',params:{nodes:'array<{id,type,label?,params?,x?,y?}>',edges:'array<{from,to,branch?:next|true|false}>'},handler:input=>change(store,g=>composeWorkflow(g,input,uid))});
   register('workflow.remove',{doc:'删除节点与关联连线',params:{id:'string'},handler:({id})=>change(store,g=>removeNode(g,id))});
   register('workflow.disconnect',{doc:'删除连线',params:{id:'string'},handler:({id})=>change(store,g=>{g.edges=g.edges.filter(e=>e.id!==id);})});
   register('workflow.template',{doc:'追加人设预处理工作流，不覆盖已有节点',handler:()=>change(store,g=>appendTemplate(g,uid))});

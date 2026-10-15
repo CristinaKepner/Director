@@ -1,3 +1,4 @@
+import {registerWorkflowRuntime} from './workflow-runtime-actions.js';
 // Action Registry — the single command surface shared by the Web UI, the CLI, the Agent and the HTTP bridge.
 // Nothing here touches the DOM or Three.js. Every mutation of the Source of Truth goes through dispatch().
 import {
@@ -2647,6 +2648,7 @@ register("generation.retry", {
   undoable: false,
   handler({ id }) {
     const j = D().jobs.find((x) => x.id === id);
+    if(j?.workflowRunId)return {ok:false,error:'WORKFLOW_RETRY_BLOCKED',hint:'节点任务不可单独重提；请核对远端任务后，从节点图确认新的次数预算'};
     if(j?.harnessRunId)return {ok:false,error:'HARNESS_RETRY_BLOCKED',hint:'该任务属于检查修复运行，请继续原运行或查询已有任务；新修复从时间线重新发起以记录预算'};
     if (!j) return { ok: false, error: "NOT_FOUND" };
     updateJob(id, { status: "queued", progress: 0, result: null, retries: (j.retries || 0) + 1 });
@@ -3457,4 +3459,5 @@ registerHarnessActions({register,store,hooks,dispatch,uid});
 registerJourneyActions({register,store,hooks,dispatch,uid,clearHistory});
 
 registerWorkflowActions({register,store,uid});
+registerWorkflowRuntime({register,store,hooks});
 registerCreationActions({register,store,uid});

@@ -13,7 +13,7 @@ export const LLM_DEFAULTS = {
 };
 
 // actions the model may plan; UI-only / dangerous-in-bulk ones are left to humans
-const PLANNABLE = /^(scene|entity|camera|light|shot|motion|timeline\.set-range|take\.(arm|record|review|delete)|storyboard|journey\.(start|choose|checkpoint|restore|shot-update|refine|adopt-plan)|audio\.cue-|annotation|generation|asset|review|harness|film|context\.(scene|shot|entity|sequence|assets)|project\.(rename|set-state|set-fidelity|set-fps|set-aspect|set-style|set-shading|set-build-mode|undo|redo|undo-to))/;
+const PLANNABLE = /^(workflow\.(compose|add|update|connect|disconnect|remove|read|template)|creation\.(context|media)|scene|entity|camera|light|shot|motion|timeline\.set-range|take\.(arm|record|review|delete)|storyboard|journey\.(start|choose|checkpoint|restore|shot-update|refine|adopt-plan)|audio\.cue-|annotation|generation|asset|review|harness|film|context\.(scene|shot|entity|sequence|assets)|project\.(rename|set-state|set-fidelity|set-fps|set-aspect|set-style|set-shading|set-build-mode|undo|redo|undo-to))/;
 const ROLE_OF = (action) => ({ scene: "scene-builder", entity: "continuity", camera: "cinematography", light: "lighting", shot: "cinematography", motion: "motion", timeline: "motion", take: "review", storyboard: "storyboard", annotation: "review", generation: "generation", review: "review", harness: "review", context: "director-planner", project: "director-planner" })[action.split(".")[0]] || "director-planner";
 
 export function createLlmPlanner(opts = {}) {
@@ -140,6 +140,10 @@ export function createLlmPlanner(opts = {}) {
  "ask":[{"question":"<只在必须问时出现>","why":"<不问会怎样>","options":[{"label":"<选项>","detail":"<这么选会发生什么>","recommended":<bool>}]}],
  "suggest":["<做完这一步之后，导演接下来最可能要做的 2-3 件事，写成可以直接执行的一句指令>"]}
 规则：
+- 节点编排请求优先使用 workflow.compose 原子建立有连线的图，不用场景/镜头操作替代节点。nodes 内 id 是计划临时 ID，edges 可引用它或 context.creation 中的真实已有 ID；保留用户已有图，用 workflow.update 调整已有节点。
+- 节点集：资产 text/table/image/video/audio；参考 views（三视图）、light（光照）、camera（运镜）；生成 image-generate（Seedream）、image-edit（Seedream 编辑）、video-generate（Seedance）；控制 if（Semantic If）、loop（Semantic Loop）。资产媒体参数 url 或 assetId 来自当前工程，text/table 用 text，参考及生成用 prompt，views 另有 views 参数。
+- Semantic If 用 condition 表达问题是否存在、threshold 表达判断置信度下限；true 到修复，false 绕过修复，再汇合。Loop 用 condition、threshold、maxIterations 表达仍需修复的条件与有限次数；禁止用回边造环。不得伪造视觉分数或假称面部检测已通过；图的规划不触发付费生成。真实执行由用户在画布点运行节点，无法判断时暂停；Loop 内部用 prompt 指定图像修复，条件不成立时沿 false 出口继续，达到上限则暂停。
+- 人设示例：文字/三视图/光照→image-generate→if；true→image-edit→妆造 image-edit，false→妆造 image-edit；妆造与运镜→video-generate。根据具体目标与已有素材调整，不机械套模板。
 - 用户要求恢复 T5 / 某条 Take 的轨迹时，优先使用 shot.restore-motion {id,takeId,duration}，它直接读取 Take 保存的全部关键帧；不要反复只调用 context.shot/review.compare 而停在“待核对”。用户同时要求录白模时，在恢复之后添加 take.arm 和 take.record。恢复轨迹不等于录制完成；检查最后5秒必须以实际运动或视频为据，不能口头保证顺滑。
 - 只能用下面列出的 Action 与参数；id 用 context 里的真实 id（机位 cam_*、物体、灯、镜头 shot_*），不要编造。
 - 单位：米、秒、度、mm；位置是接地点 [x, y, z]，正面朝 +Z；高度用 height。

@@ -17,8 +17,7 @@ function nodesOf(view: Snapshot, bridge: Bridge): MediaNode[] {
 }
 function graphEvents(bridge: Bridge) {
   const onNodeDragStop = dragHandler(bridge);
-  const onConnect: OnConnect = (c) =>
-    void bridge.run("workflow.connect", { from: c.source, to: c.target });
+  const onConnect = connectHandler(bridge);
   const onNodeClick: NodeMouseHandler<MediaNode> = (_, n) =>
     bridge.select(n.id);
   const onEdgeDoubleClick: EdgeMouseHandler = (_, e) =>
@@ -56,6 +55,8 @@ function edgeOf(e: Snapshot["edges"][number]) {
     id: e.id,
     source: e.from,
     target: e.to,
+    sourceHandle: e.branch || "next",
+    label: branchLabel(e.branch),
     type: "smoothstep",
   };
 }
@@ -67,4 +68,20 @@ function dragHandler(bridge: Bridge) {
       patch: { x: n.position.x, y: n.position.y },
     });
   return onNodeDragStop;
+}
+
+function connectHandler(bridge: Bridge): OnConnect {
+  return (c) =>
+    void bridge.run("workflow.connect", {
+      from: c.source,
+      to: c.target,
+      branch: c.sourceHandle || "next",
+    });
+}
+function branchLabel(branch: string | undefined) {
+  return branch === "true"
+    ? "条件成立"
+    : branch === "false"
+      ? "条件不成立"
+      : undefined;
 }

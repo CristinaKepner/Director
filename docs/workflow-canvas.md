@@ -10,9 +10,9 @@
 
 HTML 节点在不含 same-origin 权限的 sandbox iframe 内执行内联 HTML/CSS/JS，CSP 禁止外部网络；时间滑杆调用约定的 `window.film.frame(t)`。这不是任意网页浏览器或成片导出器。
 
-主创作区发起的 Agent 请求只发送当前工程摘要和节点/素材，不携带旧对话；右侧仍显示本工程操作记录。内置规则仅支持原有命令，开放式规划需要配置可用模型。节点图仍是可保存的规划图，不会自行运行 Semantic If/Loop、修复或收费生成。现有生成和剪辑入口继续沿用原产品流程。
+主创作区发起的 Agent 请求只发送当前工程摘要和节点/素材，不携带旧对话；右侧仍显示本工程操作记录。内置规则仅支持原有命令，开放式规划需要配置可用模型。节点图由 Agent 规划，用户确认生成次数预算后可运行；运行与原镜头生成入口并存，候选不自动采用到成片。执行行为见下方“节点运行器”。
 
-旧工程的 Table、Image Generation、Image Editing、Video、Semantic If/Loop 等领域节点和操作保留可读兼容；删掉的是旧界面。人设预处理与语义循环的自动执行继续属于后续迭代。
+旧工程的 Table、Image Generation、Image Editing、Video、Semantic If/Loop 等领域节点和操作保留可读兼容；删掉的是旧界面。人设预处理可在确认后执行；Loop 内部限定为图像修复与复查。
 
 ## 状态和操作契约
 
@@ -20,9 +20,9 @@ HTML 节点在不含 same-origin 权限的 sandbox iframe 内执行内联 HTML/C
 
 所有写操作都通过 `core/actions.js` 注册的 `workflow.*` 操作进入；界面、HTTP 与 CLI 使用同一操作层。校验失败不提交克隆图。删除节点同步删除其所有入边和出边。拒绝不存在的节点、自连、重复连线和图环；Loop 表达节点内部受限重复处理，不通过环形边实现。
 
-`workflow.update` 修改名称、坐标、参数；阈值在 0–1，循环次数为 1–10 整数。`workflow.read` 返回图副本。工作流摘要进入 `context.scene`，Agent 可再读取完整图。图只表达计划，历史回放和撤销不产生模型请求。
+`workflow.update` 修改名称、坐标、参数；阈值在 0–1，循环次数为 1–10 整数。`workflow.read` 返回图副本。工作流摘要进入 `context.scene`，Agent 可再读取完整图。规划与执行分离：历史回放和撤销不产生模型请求。
 
-实现：`core/workflow.js`、`core/workflow-actions.js`；界面：`web/js/workflow-editor.js`、`workflow-markup.js`、`integrated-workspace.js`。领域回归：`tests/workflow.test.mjs`。
+实现：`core/workflow.js`、`core/workflow-actions.js`、`core/workflow-compose.js`；界面：`web/js/creation-*`、`creation-ui/src`。领域回归：`tests/workflow.test.mjs`、`tests/workflow-agent.test.mjs`。
 
 ## Agent Runtime 的最小接入
 
@@ -37,19 +37,27 @@ node server/bin/director.mjs workflow.read --remote http://127.0.0.1:5175 --json
 
 桌面程序的本地端口由宿主分配，连接桌面工程时应使用实际端口和现有 token 配置，不假定固定为 5175。对正在打开的工程使用 HTTP 模式，避免离线 CLI 和应用同时覆盖同一个工程文件。
 
-## Semantic If / Loop：判断与执行分离
+## Agent 节点规划与运行器
 
-当前 UI 支持调整条件、阈值、次数，并输入人工置信度预览 true/false 分支。0.7 表示“自然语言条件成立的置信度”阈值，而不是“脸越好分数越高”。输入缺失、非有限值或超出 0–1 时返回 needs-review，不默认 false。达到 Loop 上限返回 limit。当前没有自动迭代，也没有自动视觉评分。
+Agent 的工具白名单已包含 `workflow.compose/add/update/connect/disconnect/remove/read/template`。此前模型生成的这些操作会被过滤，是节点规划无效的根因。`workflow.compose` 用计划内唯一临时 ID 表达新节点及连线；提交时映射真实 ID，可连到已有节点，完整验证后一次性追加，失败不修改工程。现有节点用 update 调整。Agent 读取当前 `creation` 摘要，不依赖旧对话。图形入口包含五类媒体资产、三视图/光照/运镜、图像生成/编辑、Seedance 视频、If/Loop。Agent 最近操作用事件 targetIds 定位绿色标记，用户选择独立显示蓝色。
 
-后续接入时，判断器应只拿到当前输入媒体、角色身份约束、用户目标与本节点条件；返回结构化结果：conditionSatisfied、confidence、reason、evidenceRefs、judgeVersion。完整对话可以由主 Agent 保管，视觉子任务只读取必要上下文，避免每个判断节点复制整个上下文。
+`workflow.execute {confirm:true,maxGenerations:1..20}` 启动一次运行；界面“运行节点”先确认次数及模型费用。执行操作不在 LLM 规划白名单内，规划不会自动计费。外部 Codex/Claude 可通过已有终端 HTTP 操作集读图和提交规划，无需新建 MCP 或嵌套 shell。尚未实现本地 CLI 自动探测。
 
-确定性问题优先使用明确指标，例如分辨率、时长、文件可读性；脸部质量可以接专用评分模型，但必须校准其分数方向和阈值。主观问题（妆容、表情、身份一致性）需要多模态判断。置信度不足时停在人工确认，不让不确定结果进入自动修复循环。
+运行器位于 `server/src/workflow-service.mjs`、`workflow-runner.mjs`、`workflow-routing.mjs`、`workflow-steps.mjs`；真实生成映射位于 `workflow-generation.mjs`。沿用现有 Ark/MossHub adapter，不声称已有 MOSS Create 共享实现。普通节点输出 next，If 的 true/false 为独立端口；执行前拒绝缺失节点、未知类型、非法分支和图环。未选分支跳过，合流只消费活动分支；不相关的运镜输入不能重新激活被跳过的条件链。
 
-运行器还需：输入/配置/模型版本哈希、候选产物与采用产物区分、执行记录、取消、费用与次数上限、条件分支合流（只等待选中的分支）、错误暂停、变更后下游失效。Loop 应只包住一个明确修复步骤，重复后重新判断，超过上限交还用户。现有 harness 可复用预算、候选与恢复机制，但本版没有把任意规划图接到该执行器。
+Text/Table 和参考节点将文本约束传入下游；三视图是可编辑的提示约束，不是几何重建或 ControlNet。图像生成有参考图时使用 i2i；图像编辑必须有图片；视频节点有视频时用 v2v、有图片时用 i2v、无媒体时用 t2v。i2v 单张关键帧不代表整段视频参考，多张参考图保留为 reference images。多图参考需先导入本地工程；超过五图/一个视频、不支持的模式、音频参考和 HTML 自动导出会明确失败，不丢弃输入后继续。模型、时长及公网可达性沿用供应商配置检查，不做未经确认的模型替换。
 
-## Seedance / MOSS Create 接入边界
+## Semantic If / Loop：真实判断、有限修复
 
-现有 `server/src/adapters/ark.mjs` / `mosshub.mjs` 继续负责真实生成。本版 Video 节点只是计划，不会自动提交任务，也不宣称已有 MOSS Create 共享调用逻辑。对接时需确认参考图/视频/音频格式与数量、上传地址和有效期、模型版本、异步任务查询、取消、幂等和计费；最终图参考应在真实提交前转换为供应商输入。
+视觉任务通过 `workflow-judge.mjs` 和既有 judge adapter 发起独立多模态请求，只包含当前输入图片、创作目标及上游约束，不复制历史聊天。只读取工程 `/media/` 内的 PNG/JPEG/WebP，远端图先导入工程。返回 `conditionSatisfied`、`confidence`、`reason`、`judgeVersion` 与 usage；缺失、非有限或低于 threshold 的判断停在 needs-review。threshold 是判定置信度下限，不是脸部质量分。没有伪造专用人脸评分模型。旧的 `inspectCondition` 人工 score 预览保留兼容，但不参与自动执行。
+
+If 条件成立走 true（例如面部修复），不成立走 false（跳过修复）。Loop 的 condition 描述“仍需修复的问题”，prompt 指定修复动作，最多 1–10 次；每次针对最新候选重新判断，条件不成立沿 false 出口继续，达到上限则 needs-review，不自动放行。修复次数同时占用本次生成上限，判断次数受图节点数与 Loop 上限约束。遇到失败或不确定不进入下游生成。
+
+`project.workflowRun` 保存当前运行状态、图签名、预算占用、证据、节点记录与候选；生成 job 保存在原 jobs 中并标记 workflowRunId。预算在外部提交前预留，即使提交失败仍占本次名额，避免不确定重试超额。输出预览回到节点卡片；运行结束后可手动把候选加入素材与节点，不自动替换成片。每次运行都是新执行，不自动复用缓存或重试旧生成。通用 generation.retry 禁止重提节点任务。
+
+停止、图修改或工程切换中止后续调度；迟到回调不写入新工程。已提交任务可能继续在供应商计费，本机停止不承诺远端取消。应用重启发现 running 记录会标记 needs-review，不自动重提。暂未实现恢复查询、跨运行缓存、自动采用、专用人脸模型和音频生成。先核对远端任务再确认新运行。
+
+验证对应：`tests/workflow-agent.test.mjs` 覆盖工具过滤、原子规划和光标；`tests/workflow-runner.test.mjs` 覆盖分支合流、低置信度、预算、循环与图环；`tests/workflow-service.test.mjs` 覆盖真实适配器输入契约、并发、取消、持久化与跨工程隔离。模型边界使用替身，测试不会产生真实费用。`npm run check:workflow` 包含新增模块/测试函数行数、前端严格类型和打包检查。
 
 ## 项目 skills
 
@@ -66,3 +74,7 @@ node server/bin/director.mjs workflow.read --remote http://127.0.0.1:5175 --json
 ### 主页面重设计的再次验证
 
 弹窗关闭/重开、每次新建重置、两种起步选择、概览镜头创建、进入原预演、节点切换已在源码 Electron 和 0.9.19 发布包中通过。144 项核心测试、严格类型与函数行数检查通过，studio DMG 完整性校验通过。本次全量回归的既有背景音混合测试在 FFmpeg 中持续阻塞；安装版与固定打包二进制均复现，已结束测试子进程。媒体代码未修改，不将本次全量媒体回归记为通过。
+
+### 0.9.19 节点运行修复验证
+
+新增回归先复现 workflow 操作被过滤、缺少原子规划、分支调度和 Agent 光标失效，再修复。核心回归与新增测试通过；全量回归 224 项通过，既有 `film-edit.test.mjs` 的 FFmpeg 背景混音再次阻塞，被结束后记为失败，不声称全量通过。隔离 Electron 检查节点分类、条件端口、分支标签、运行按钮和无模型错误状态；没有调用真实付费模型。生成质量与供应商线上完整链路仍需用户配置后验收。

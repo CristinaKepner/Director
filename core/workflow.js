@@ -13,7 +13,7 @@ export const NODE_TYPES = {
   'image-edit': {label:'Image Editing', group:'生成', params:{prompt:'修复面部瑕疵，保留身份与纹理'}},
   'video-generate': {label:'Video · Seedance', group:'生成', params:{prompt:'根据上游参考生成视频'}},
   if: {label:'Semantic If', group:'控制', params:{condition:'人脸上有明显瑕疵',threshold:0.7}},
-  loop: {label:'Semantic Loop', group:'控制', params:{condition:'仍有面部瑕疵，需要继续修复',threshold:0.7,maxIterations:3}},
+  loop: {label:'Semantic Loop', group:'控制', params:{condition:'仍有面部瑕疵，需要继续修复',threshold:0.7,maxIterations:3,prompt:'修复面部瑕疵，保留身份与纹理'}},
 };
 export function createNode(type, id, index = 0) {
   const definition = NODE_TYPES[type];
