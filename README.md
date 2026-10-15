@@ -38,7 +38,7 @@
 
 ### macOS
 
-在 [Releases](https://github.com/CristinaKepner/Director/releases) 下载 **v0.9.17**，按设备选择 Apple Silicon（arm64）或 Intel（x64）安装包。客户端包含本地后端与 FFmpeg。
+在 [Releases](https://github.com/CristinaKepner/Director/releases) 下载已发布的 **v0.9.17**，按设备选择 Apple Silicon（arm64）或 Intel（x64）安装包。客户端包含本地后端与 FFmpeg。
 
 打开工程，点击舞台工具栏的「创作画布」，输入一个印象，选择时长与画幅，再点击「展开方向」。例如：
 
@@ -196,3 +196,7 @@ npm run test:all               # 完整自动化测试
 - [OpenFilm](https://github.com/openfilm/openfilm)：本 README 的组织方式，以及代码影片与可编辑工作流的参考。
 - [Lemo-Opuscar](https://github.com/lemomo-ai/lemo-opuscar)：项目级代码影片创作 skill；随附其 [MIT 许可](docs/licenses/lemo-opuscar-MIT.txt)。
 - [awesome-seedance](https://github.com/LearnPrompt/awesome-seedance)：提示词模板参考，来源与许可保留在同步生成的模板库中。
+
+### 0.9.18 主页面画布与工作流
+
+创作画布已融入主页面，素材、Director 对话与时间线保持共用。新增可保存的节点规划图、人设预处理模板与语义条件参数；规划图不会自动执行生成或视觉判断。项目包含 133 个 Flova skill 和 Moss 开发 skill。详见 [工作流边界与 Agent 接入](docs/workflow-canvas.md)。

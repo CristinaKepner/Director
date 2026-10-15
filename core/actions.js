@@ -51,6 +51,7 @@ import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, to
 import { shotBaseline, verifyShotContract } from "./contract.js";
 import { chosenVideo, videoVersions, cutSignature, cutMedia, cutCaption, cutTimeline, revisionPrompt, KEEP_OPTIONS } from "./cut.js";
 import {activeJourney,journeyPath} from './journey.js';
+import { registerWorkflowActions } from './workflow-actions.js';
 import { registerJourneyActions } from './journey-actions.js';
 import { registerHarnessActions } from './harness-actions.js';
 import {harnessSpec,runIsFresh} from './harness.js';
@@ -3257,6 +3258,7 @@ export function summarize(d = D()) {
   return {
     pads: pads.length ? { activePadId: active, list: pads.map((p) => ({ id: p.id, index: p.index, name: p.name, characters: p.characters, props: p.propCount, shots: p.shotCount, seconds: p.seconds })), note: active ? "下面的 entities / cameras / lights / shots 只列了当前这块台；要改别的场先 scene.pad-select" : "没切到某一块，下面列的是整台" } : null,
     runtime: RUNTIME_VERSION,
+    workflow: d.project.workflow ? {nodes:d.project.workflow.nodes.length,edges:d.project.workflow.edges.length,readAction:'workflow.read',mode:'planning-only'} : null,
     creativePath: activeJourney(d) ? {head:d.journey.head,brief:activeJourney(d).brief,stage:activeJourney(d).stage,choices:activeJourney(d).choices,path:journeyPath(d).map(n=>({id:n.id,label:n.label})),note:"当前分支为准；恢复检查点会保留当前修改，视频生成只作用当前镜头。"} : null,
     harness: {ready:!!hooks.harness,visualReady:!!hooks.harness?.visualReady,spec:harnessSpec(d),runs:(d.harness?.runs||[]).slice(-2).map(r=>({id:r.id,kind:r.kind,status:r.status,fresh:runIsFresh(d,r),note:r.note,used:r.used,candidateJobId:r.candidateJobId,candidateChecked:r.candidateChecked,issues:r.reports.filter(i=>i.status!=='pass').slice(0,6).map(i=>({id:i.id,shotId:i.shotId,status:i.status,start:i.start,end:i.end,summary:i.summary,fix:i.fix}))}))},
     project: { id: d.project.id, name: d.project.name, fps: d.project.fps, aspect: d.project.aspect, version: d.project.version, state: d.project.currentState, fidelity: d.project.fidelity, buildMode: d.project.buildMode || "set", playhead: d.project.playhead, timecode: tc(d.project.playhead, d.project.fps) },
@@ -3452,3 +3454,5 @@ export { registry, compileShot, snapshotScene, refreshUsedBy, simulatedAdapter }
 
 registerHarnessActions({register,store,hooks,dispatch,uid});
 registerJourneyActions({register,store,hooks,dispatch,uid,clearHistory});
+
+registerWorkflowActions({register,store,uid});

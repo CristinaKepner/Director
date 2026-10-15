@@ -16,6 +16,7 @@ import { renderSpatial } from "./spatial-panel.js";
 import { renderEval } from "./eval-panel.js";
 import { initTaskProgress } from "./task-progress.js";
 import { initStageWorkspace, stagePlayback } from "./stage-workspace.js";
+import { initIntegratedWorkspace } from "./integrated-workspace.js";
 import { initJourneyWorkspace } from "./journey-workspace.js";
 import { createTimelineEditor } from "./timeline-editor.js";
 import { chosenVideo, cutTimeline } from "../../core/cut.js";
@@ -293,6 +294,7 @@ export function bindUI() {
   render(store.get());
   initTaskProgress();
   initJourneyWorkspace({toast,openEditingTimeline,mediaHref,openDrawer,openQuality:()=>{openEditingTimeline();timelineEditor?.openHarness();},openLeft:(which)=>{ui.left=which;applyUi();render(store.get());}});
+  initIntegratedWorkspace(toast);
   initStageWorkspace({ openDrawer, openLeft: (which) => { ui.left = which; applyUi(); render(store.get()); }, mediaHref, showPreview, toast });
 }
 

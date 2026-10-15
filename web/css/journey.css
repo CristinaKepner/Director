@@ -1,7 +1,7 @@
 /* Product canvas: the existing console, with progressive drawers and one audiovisual controller. */
 .journey-toggle{color:#d3bafa!important;border-color:#665080!important;background:#292035!important;white-space:nowrap}
-#app.journey-mode{grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr)}
-#app.journey-mode>.stage,#app.journey-mode>.left,#app.journey-mode>.right,#app.journey-mode>.bottom{display:none}
+
+
 #app.journey-mode .topbar{background:#131019}
 .journey-workspace{grid-row:2;grid-column:1/-1;position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:#141019;color:#e8e1ef;font-size:12px;--jc-muted:#9c90aa;--jc-dim:#756a82;--jc-border:#342b40;--jc-panel:#1c1723;--jc-accent:#b69be8}
 .journey-workspace[hidden],.journey-workspace [hidden]{display:none!important}

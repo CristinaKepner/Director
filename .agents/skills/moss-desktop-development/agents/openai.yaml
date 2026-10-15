@@ -1,0 +1,3 @@
+interface:
+  display_name: "Moss 桌面应用开发"
+  short_description: "参考 VS Code 架构，约束桌面应用封装、严格类型、测试与可迁移性"

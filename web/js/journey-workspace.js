@@ -9,7 +9,7 @@ import {createJourneyPlayer} from './journey-player.js';
 export function initJourneyWorkspace({toast,openEditingTimeline,openLeft,openDrawer,openQuality,mediaHref}){
   const app=document.getElementById('app'),root=document.createElement('section');
   root.id='journeyWorkspace';root.className='journey-workspace';root.hidden=true;root.setAttribute('aria-label','创作路径');app.append(root);
-  const agent=document.querySelector('.right'),composer=agent.querySelector('.composer'),agentMarker=document.createComment('agent home');agent.before(agentMarker);
+  const agent=document.querySelector('.right'),composer=agent.querySelector('.composer');
   const toggle=document.createElement('button');toggle.id='journeyToggle';toggle.className='journey-toggle';toggle.textContent='◇ 创作画布';toggle.setAttribute('aria-expanded','false');document.getElementById('stageTools').prepend(toggle);
   let open=false,busy=false,lastKey='',selectedShot=null,inspector=null,showStart=false,brief='',duration=30,aspect='16:9',useExisting=true,compareIds=[],drafts=new Map(),projectId=null,lastHead=null,lastCurrentShot=null;
   let agentsOpen=false,decisionsOpen=false,summaryOpen=false,libraryOpen=false,grid='dots',zoom=1,pan={x:24,y:58},viewReady=false;
@@ -17,8 +17,7 @@ export function initJourneyWorkspace({toast,openEditingTimeline,openLeft,openDra
   const player=createJourneyPlayer(root,{mediaHref,toast}),thumbs=new Map();
   const report=r=>{if(r?.ok)return true;toast(r?.hint||r?.message||r?.error||'操作未完成',true);return false;};
   function thumb(p,a='16:9'){const key=JSON.stringify([p,a]);if(!thumbs.has(key)){if(thumbs.size>150)thumbs.clear();thumbs.set(key,frameUrl(p,a,480));}return thumbs.get(key);}
-  function restoreAgent(){agent.append(composer);agentMarker.after(agent);}
-  function setOpen(value){open=value;player.close();root.hidden=!open;app.classList.toggle('journey-mode',open);toggle.setAttribute('aria-expanded',String(open));if(open){lastKey='';render(store.get());}else{restoreAgent();speechSynthesis?.cancel();}}
+  function setOpen(value){open=value;player.close();root.hidden=!open;app.classList.toggle('journey-mode',open);toggle.setAttribute('aria-expanded',String(open));if(open){lastKey='';render(store.get());}else{speechSynthesis?.cancel();}}
   toggle.onclick=()=>setOpen(!open);
   function showConversation(){if(!open||agentsOpen)return;agentsOpen=true;lastKey='';render(store.get());}
   composer.addEventListener('click',e=>{if(e.target.closest('#agentSend'))showConversation();});
@@ -39,7 +38,7 @@ export function initJourneyWorkspace({toast,openEditingTimeline,openLeft,openDra
     const pending=jobs.find(j=>['queued','running'].includes(j.status)),start=!n||showStart||n.source==='original',ready=d.shots.filter(s=>chosenVideo(d,s)).length;
     const active=document.activeElement,focusState=root.contains(active)&&active.matches('input,textarea,select')?{id:active.id,field:active.dataset.field,audio:active.dataset.audio,start:active.selectionStart,end:active.selectionEnd}:null;
     const historyScroll=root.querySelector('.jc-history-list')?.scrollTop,inspectorScroll=root.querySelector('.jc-inspector-fields')?.scrollTop||0;
-    player.detach();restoreAgent();
+    player.detach();
     root.innerHTML=`<nav class="jc-runbar" aria-label="创作进度"><button data-act="summary" class="jc-summary-toggle ${summaryOpen?'active':''}">${icon('undo')} Summary <small>${d.journey?.nodes.length||0}</small></button><div class="jc-phases">${[['direction','STORY','故事方向'],['pace','TIMING','镜头节奏'],['sound','SOUND','声音关系'],['done','STORYBOARDS','音画分镜']].map(([k,en,label])=>{const picked=OPTIONS[k]?.find(o=>o.id===n?.choices?.[k]);return `<button data-phase="${k}" class="${n?.stage===k?'current':picked?'complete':''}"><small>${picked?'✓':'○'} ${en}</small><span>${esc(picked?.title||(k==='done'?`${ready} / ${plan.length} 镜有视频`:label))}</span></button>`;}).join('<i>›</i>')}</div><button data-act="agents" aria-label="展开或收起 Director" class="jc-agent-toggle ${agentsOpen?'active':''}" aria-expanded="${agentsOpen}">${icon('sparkles')}<span>Director<small>${d.agent.busy?'正在执行':pending?pending.note||'预演中':'随时可以继续'}</small></span></button><button data-act="close" title="返回拍摄与剪辑">拍摄 · 剪辑 ${icon('arrow')}</button></nav>
       <div class="jc-workarea"><aside class="jc-agent-host" ${agentsOpen?'':'hidden'}><header>${icon('sparkles')} Director <button data-act="agents" aria-label="收起 Director">«</button></header><div class="jc-agent-state"><strong>${pending?esc(pending.note||'正在制作预演'):OPTIONS[n?.stage]?'等你做一个选择':'当前创作分支'}</strong><p>${pending?`${pending.progress||0}% · ${esc(pending.kind)}`:esc(n?.label||'从模糊印象开始')}</p><button data-act="fit">定位画布 ${icon('focus')}</button></div><div class="jc-agent-mount"></div></aside>
       <div class="jc-canvas-area ${grid==='lines'?'lines':''}" tabindex="0" aria-label="分镜节点画布"><div class="jc-scene-bar"><button data-act="previous" aria-label="上一镜">‹</button><button data-act="next" aria-label="下一镜">›</button><span class="jc-mono">SC ${String(Math.max(0,index)+1).padStart(2,'0')}</span><strong>${esc(shot?.title||'新的创作')}</strong><small>${shot?sec(plan[index].seconds):''} · ${esc(d.project.aspect)}</small><button data-act="library" aria-label="打开节点工具箱">＋</button></div>
@@ -49,7 +48,7 @@ export function initJourneyWorkspace({toast,openEditingTimeline,openLeft,openDra
       ${start?briefForm(d):''}${inspector?inspectorView(d):''}${libraryOpen?libraryView():''}
       </div><aside class="jc-decision-rail" ${decisionsOpen?'hidden':''}><button data-act="decisions" aria-label="展开决策记录">${icon('list')}<small>${d.journey?.nodes.length||0}</small></button><div>${(d.journey?.nodes||[]).map(x=>`<button data-restore="${x.id}" title="${esc(x.label)}" aria-label="恢复检查点 ${esc(x.label)}" class="${x.id===n?.id?'active':''}"><i></i>${d.journey.nodes.filter(a=>a.parentId===x.id).length>1?'<b>··</b>':''}</button>`).join('')}</div><button data-act="decisions" aria-label="展开决策面板">«</button></aside>${decisionsOpen?historyView(d,path,dirty):''}</div>
       ${controllerMarkup(d,{shotId:selectedShot,thumb,mediaHref})}${summaryOpen?summaryView(d):''}`;
-    if(agentsOpen){root.querySelector('.jc-agent-mount').append(agent);agent.append(composer);}else root.querySelector('.jc-composer-mount').append(composer);
+    // The shared Director panel and composer stay in the main page.
     root.classList.toggle('agents-open',agentsOpen);player.attach();transform();if(!viewReady)fit();
     root.querySelector('#jwBrief')?.addEventListener('input',e=>brief=e.target.value);
     root.querySelector('#jwDuration')?.addEventListener('change',e=>duration=Number(e.target.value));
@@ -104,10 +103,10 @@ export function initJourneyWorkspace({toast,openEditingTimeline,openLeft,openDra
       if(b.dataset.adoptPlan){report(await dispatch('journey.adopt-plan',{jobId:b.dataset.adoptPlan}));drafts.clear();return;}
       switch(b.dataset.act){
         case 'close':setOpen(false);break;
-        case 'timeline':setOpen(false);openEditingTimeline();break;
-        case 'references':setOpen(false);openLeft('ref');break;
-        case 'checks':setOpen(false);openQuality();break;
-        case 'generate':if(selectedShot)await dispatch('shot.select',{id:selectedShot});setOpen(false);openDrawer('gen');break;
+        case 'timeline':openEditingTimeline();break;
+        case 'references':openLeft('ref');break;
+        case 'checks':openQuality();break;
+        case 'generate':if(selectedShot)await dispatch('shot.select',{id:selectedShot});openDrawer('gen');break;
         case 'agents':agentsOpen=!agentsOpen;break;
         case 'decisions':decisionsOpen=!decisionsOpen;break;
         case 'summary':summaryOpen=!summaryOpen;break;
@@ -153,5 +152,5 @@ export function initJourneyWorkspace({toast,openEditingTimeline,openLeft,openDra
   store.subscribe((d,info)=>{if(!info?.light)render(d);});
   client.listeners.add(()=>render(store.get()));
   let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(open&&viewReady)fit();},100);}).observe(root);
-  if(new URLSearchParams(location.search).get('journey')==='1')setOpen(true);
+  setOpen(new URLSearchParams(location.search).get('journey')!=='0');
 }
