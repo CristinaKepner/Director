@@ -89,3 +89,4 @@ LLM 工程上下文不再对序列化 JSON 做 6,000 字符硬截断；否则位
 工程菜单的「历史对话 · 按版本查看」只读展示 `project.conversationArchive.versions`；旧工程没有档案时从 `journey.nodes[].agentMessages` 读取实际检查点记录。按版本保留原文和来源，各检查点可能重复；不声称恢复已丢失的聊天。档案随工程保存，但不注入实时 Agent 消息、不执行历史操作、不恢复旧镜头状态。文本通过 textContent 呈现，不执行 HTML。实现：core/conversation-archive.js、web/js/conversation-archive.js；测试：tests/conversation-archive.test.mjs。用户的私人档案和整合工程只保存在本地，不进 Git 或通用 DMG。
 
 「跟它说」顶部的对话版本选择器可直接调取检查点/整合档案原文。历史模式隐藏当前对话和输入框，旧审批按钮不会渲染为可执行控件；选择「当前对话」返回实时消息和待确认计划。切换工程重置选择。查看历史不向模型发送内容，不恢复工程快照。
+历史对话使用与实时聊天一致的用户/Agent 消息气泡；连续操作合并为可展开记录，失败数保持可见，思考及历史选项只读折叠。媒体按原引用显示，禁止脚本 URL；不会提供历史计划执行按钮。

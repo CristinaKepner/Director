@@ -900,3 +900,11 @@ button.model-pill:hover { border-color: var(--accent-line); }
   .topbar .models { order: 10; flex: 1 0 100%; justify-content: flex-start; margin-right: 0; }
   .model-picker select { max-width: 160px; }
 }
+
+/* Historical conversation uses the same speaker bubbles as the live thread. */
+.history-speaker { font-size:11px; color:var(--muted); margin-bottom:5px; }
+.history-body { white-space:pre-wrap; line-height:1.65; }
+.history-details { margin-top:8px; color:var(--muted); font-size:12px; }
+.history-details pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }
+#conversationHistory .msg.agent { margin-right:20px; }
+#conversationHistory summary { cursor:pointer; }

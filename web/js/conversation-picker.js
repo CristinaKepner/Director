@@ -1,5 +1,5 @@
 import { conversationVersions } from '../../core/conversation-archive.js';
-import { messageElement } from './conversation-archive.js';
+import { conversationBubbles } from './conversation-bubbles.js';
 let projectId = null;
 let signature = '';
 export function syncConversationPicker(state) {
@@ -41,7 +41,7 @@ function renderHistory(history, version) {
   const note = document.createElement('p');
   note.textContent = `${version.createdAt || ''} · 历史对话，仅查看。返回「当前对话」继续创作。`;
   history.append(note);
-  version.messages.forEach(message => history.append(messageElement(message)));
+  history.append(...conversationBubbles(version.messages));
   history.scrollTop = 0;
 }
 
