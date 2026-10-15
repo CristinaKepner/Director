@@ -84,3 +84,6 @@ If 条件成立走 true（例如面部修复），不成立走 false（跳过修
 LLM 工程上下文不再对序列化 JSON 做 6,000 字符硬截断；否则位于摘要末尾的 creation 节点、连线和媒体会消失，甚至产生残缺 JSON。creation.media 摘要保留 approved、entityId 和 role，已批准与待批准素材不混淆。
 
 `server/src/planner-reads.mjs` 对纯只读计划执行允许的读取操作，将真实结果放回 `summary.toolResults` 后继续原始请求。最多三次规划（两次补读），达到上限明确报告未产生修改；不自动执行混合写计划或模型生成。用户明确的待确认方案仍走原有确认流程。每次规划和读取前核对工程身份，防止跨工程写入。回归 `tests/planner-context.test.mjs` 覆盖长摘要、只读续接、次数上限、写操作隔离、工程切换和宿主完整调用链；模型均为测试替身，未产生真实费用。
+
+### 历史对话档案
+工程菜单的「历史对话 · 按版本查看」只读展示 `project.conversationArchive.versions`；旧工程没有档案时从 `journey.nodes[].agentMessages` 读取实际检查点记录。按版本保留原文和来源，各检查点可能重复；不声称恢复已丢失的聊天。档案随工程保存，但不注入实时 Agent 消息、不执行历史操作、不恢复旧镜头状态。文本通过 textContent 呈现，不执行 HTML。实现：core/conversation-archive.js、web/js/conversation-archive.js；测试：tests/conversation-archive.test.mjs。用户的私人档案和整合工程只保存在本地，不进 Git 或通用 DMG。

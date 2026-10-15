@@ -1,3 +1,4 @@
+import { showConversationArchive } from './conversation-archive.js';
 // UI binding layer — minimal by default, progressive by use.
 // Renders from the store; every mutation goes through dispatch() (client.js routes it to the backend or the local replica).
 // What is on screen at rest: the picture, the shot strip, one Agent input, four stage controls. Everything else opens on demand.
@@ -202,6 +203,7 @@ export function bindUI() {
   $("aspect").onchange = (e) => dispatch("project.set-aspect", { aspect: e.target.value });
   $("buildMode").querySelectorAll("[data-build]").forEach((b) => (b.onclick = () => dispatch("project.set-build-mode", { mode: b.dataset.build })));
   $("exportBtn").onclick = () => download(`${store.get().project.name.replace(/\s+/g, "_")}.director.json`, JSON.stringify(persistable(), null, 2));
+  $("conversationArchiveBtn").onclick = () => showConversationArchive(store.get());
   $("exportConversationBtn").onclick = () => {
     const data = exportConversation(store.get());
     download(conversationFilename(data.project.name, data.exportedAt), JSON.stringify(data, null, 2));
