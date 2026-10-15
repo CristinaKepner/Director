@@ -1,3 +1,4 @@
+import {planWithReads} from './planner-reads.mjs';
 import {createWorkflowService} from './workflow-service.mjs';
 import {createWorkflowJudge} from './workflow-judge.mjs';
 import {creationContext} from '../../core/creation.js';
@@ -295,13 +296,13 @@ export function createHost(opts = {}) {
     const t0 = Date.now();
     let p;
     try {
-      p = await planner.plan(text, {
+      p = await planWithReads(planner, text, {
         capabilities: capabilities(),
         summary: {...R.summarize(),creation:creationContext(d)},
         history,
         model,
         onDelta: (d) => store.get().project.id === projectId && emitThinking({ model, phase: "planning", reasoning: d.reasoning ? d.reasoning.slice(-4000) : "", steps: d.steps || [], chars: (d.content || "").length }),
-      });
+      }, {isCurrent:()=>store.get().project.id===projectId,read:step=>run(step.action,step.payload,{...meta,source:"agent"})});
     } catch (err) {
       if (store.get().project.id !== projectId) return {ok:false,error:"PROJECT_CHANGED"};
       // 体验码那一头的失败不是「模型不行」：额度用完、码被停用、码填错了。

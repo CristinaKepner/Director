@@ -65,8 +65,8 @@ function hasCreationGoal(project) {
   return Boolean(project.reference || project.creation);
 }
 
-function mediaSummary({ id, label, mediaKind, url }) {
-  return { id, label, mediaKind, url };
+function mediaSummary({ id, label, mediaKind, url, approved, entityId, role }) {
+  return { id, label, mediaKind, url, approved, entityId, role };
 }
 
 const creationSkills = ["explore", "remix", "test"];

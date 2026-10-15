@@ -140,6 +140,7 @@ export function createLlmPlanner(opts = {}) {
  "ask":[{"question":"<只在必须问时出现>","why":"<不问会怎样>","options":[{"label":"<选项>","detail":"<这么选会发生什么>","recommended":<bool>}]}],
  "suggest":["<做完这一步之后，导演接下来最可能要做的 2-3 件事，写成可以直接执行的一句指令>"]}
 规则：
+- context.creation 包含完整的当前节点、连线和媒体清单；不要把其他摘要里的节点计数当成完整图。context.toolResults 是本轮真实只读操作结果，应使用这些结果继续原请求，不要重复相同读取或停在“先读取”。不得把读取成功称为编排完成。
 - 节点编排请求优先使用 workflow.compose 原子建立有连线的图，不用场景/镜头操作替代节点。nodes 内 id 是计划临时 ID，edges 可引用它或 context.creation 中的真实已有 ID；保留用户已有图，用 workflow.update 调整已有节点。
 - 节点集：资产 text/table/image/video/audio；参考 views（三视图）、light（光照）、camera（运镜）；生成 image-generate（Seedream）、image-edit（Seedream 编辑）、video-generate（Seedance）；控制 if（Semantic If）、loop（Semantic Loop）。资产媒体参数 url 或 assetId 来自当前工程，text/table 用 text，参考及生成用 prompt，views 另有 views 参数。
 - Semantic If 用 condition 表达问题是否存在、threshold 表达判断置信度下限；true 到修复，false 绕过修复，再汇合。Loop 用 condition、threshold、maxIterations 表达仍需修复的条件与有限次数；禁止用回边造环。不得伪造视觉分数或假称面部检测已通过；图的规划不触发付费生成。真实执行由用户在画布点运行节点，无法判断时暂停；Loop 内部用 prompt 指定图像修复，条件不成立时沿 false 出口继续，达到上限则暂停。
@@ -169,7 +170,7 @@ export function createLlmPlanner(opts = {}) {
 ${tools}
 
 当前工程 context（summarize）：
-${JSON.stringify(summary).slice(0, 6000)}`;
+${JSON.stringify(summary)}`;
   }
 
   // 截断的 JSON：砍掉最后一个不完整的元素，再按栈把括号补齐。
