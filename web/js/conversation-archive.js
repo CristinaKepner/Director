@@ -30,7 +30,7 @@ function versionElement(version) {
   for (const message of version.messages) details.append(messageElement(message));
   return details;
 }
-function messageElement(message) {
+export function messageElement(message) {
   const article = element('article', '');
   article.style.cssText = 'padding:12px 0;border-top:1px solid #444;overflow-wrap:anywhere';
   article.append(element('strong', `${message.role || '记录'} · ${message.timestamp || message.at || ''}`));

@@ -1,3 +1,4 @@
+import { syncConversationPicker } from './conversation-picker.js';
 import { showConversationArchive } from './conversation-archive.js';
 // UI binding layer — minimal by default, progressive by use.
 // Renders from the store; every mutation goes through dispatch() (client.js routes it to the backend or the local replica).
@@ -1480,6 +1481,7 @@ function liveThinking(d) {
 const PLAN_FOLD = 5; // 计划超过这么多步就先折起来：一屏三十行的计划没人会逐行读
 
 function renderThread(d) {
+  syncConversationPicker(d);
   const el = $("agentThread");
   const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   el.innerHTML =
