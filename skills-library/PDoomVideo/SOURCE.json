@@ -1,0 +1,115 @@
+{
+  "repository": "https://github.com/JohnHeibel/PDoomVideo",
+  "commit": "fa546a38092e75f2b079e6a86d6abc54dd525d17",
+  "branch": "main",
+  "collectedAt": "2026-10-20",
+  "scope": "UTF-8 guides, prompts and source examples; binary assets and GitHub automation excluded; not a complete render bundle",
+  "files": [
+    {
+      "path": "source/ANIMATION_GUIDE.md",
+      "sha256": "4cb39e990cf06b90adc77fc01243a16a27aad6208b32e89f2a1aab6277d12e2f"
+    },
+    {
+      "path": "source/README.md",
+      "sha256": "30a612a163c5ebc0aab69154c15aa3a887c677f46e065d11ba88e944ad213526"
+    },
+    {
+      "path": "source/STORYBOARD.md",
+      "sha256": "ede9a335b8ed0ca115149a6b96ba1b4ec3436d1c1317a0573e8e31518f7a2022"
+    },
+    {
+      "path": "source/legacy/flash-version.html",
+      "sha256": "0d79772bc128eb7f67661c232848a949e4cf8217c166772baf290b2adcb9b996"
+    },
+    {
+      "path": "source/legacy/test-scenes.js",
+      "sha256": "b94da7fbaf00c13cd6d29549a27ba7b3cc4df8dcb1ffad3f8f66cbf55fae7bb8"
+    },
+    {
+      "path": "source/package-lock.json",
+      "sha256": "f1169be62e023229e702f7056490ee00dfbc5acb1801600a7acd8b59e0d6cbda"
+    },
+    {
+      "path": "source/package.json",
+      "sha256": "6af1829a73800e5d8a32bd76d0678846190338f718bd11ea5dc1e239766bc4ef"
+    },
+    {
+      "path": "source/render.mjs",
+      "sha256": "ecf23d3b2b1df9ee62b09127235484a922984a35b3d1d29eb57fd30f7c5af19b"
+    },
+    {
+      "path": "source/src/cast.js",
+      "sha256": "b3bd792e151a1672c1ecb145d688d5dc377d7c10deee884280e7b794a00864b4"
+    },
+    {
+      "path": "source/src/ch/c01_lab.js",
+      "sha256": "747ca02ed2724020c97a6e37e53e2a095100ecf17113220b416688884af29a35"
+    },
+    {
+      "path": "source/src/ch/c02_chorus1.js",
+      "sha256": "9face56fa2b4de479388cf8651dea4867b30c73a8cc8236e5d25c0fcd4729f9f"
+    },
+    {
+      "path": "source/src/ch/c03_takeoff.js",
+      "sha256": "d9b2b083430fb53bba2c3a6a5177d94848b5f612b3a1f653629537e8a90af457"
+    },
+    {
+      "path": "source/src/ch/c04_chorus2.js",
+      "sha256": "10a88a492678781c7a559f45d3be9b29888dc5080439ca96739a4cd6840b4b3c"
+    },
+    {
+      "path": "source/src/ch/c05_obsolete.js",
+      "sha256": "66e9a9acc8a1bbbe55cb46855d5a2e89e989295de93b173d5c39cf709ca3f22f"
+    },
+    {
+      "path": "source/src/ch/c06_chorus3.js",
+      "sha256": "4db11abeeec734b7aabf649d41171441937ed80e54c8dea74b4c7d69e2d18156"
+    },
+    {
+      "path": "source/src/ch/c07_scale.js",
+      "sha256": "f1791042536f2638bb19048fe9b97468a9c754b4469cd8e0fb2c4d58a1bf8030"
+    },
+    {
+      "path": "source/src/ch/c08_chorus4.js",
+      "sha256": "1ddf8e4750a915331a897a5080431b78b408a2512cc4821b86ceb8eeecd94075"
+    },
+    {
+      "path": "source/src/ch/c09_finale.js",
+      "sha256": "aa46a1f9e296da10003b36f8683ea0b6c9f5502ca2f940d93d26581d5fe6d396"
+    },
+    {
+      "path": "source/src/clawd.js",
+      "sha256": "addc4c4bd4196efe6110a7c044b438cd0809eedf42752e29da2e939beeaaef8f"
+    },
+    {
+      "path": "source/src/core.js",
+      "sha256": "f2dc54c6e098abb03305b79c1282cc30fcf593f181a549d0898815e1d4dda103"
+    },
+    {
+      "path": "source/src/lyrics.js",
+      "sha256": "b766864af4b08b6e9deefd4cebb59194f157ec93097932357cd703e87a8e899d"
+    },
+    {
+      "path": "source/src/props.js",
+      "sha256": "f6da922f9694451f19aff8054a1efca0ae8987ed6343ab9e97b07dbe170748b1"
+    },
+    {
+      "path": "source/src/timeline.js",
+      "sha256": "b362dc9a4a6cf1935510dbabca813cf9db322880d9e6a73a56b0526dd557269e"
+    },
+    {
+      "path": "source/studio.html",
+      "sha256": "c8a9dbd2f7fcdb001713c64f1a525fe6732444033f85ce846ffd0d79ecfa99a1"
+    }
+  ],
+  "excluded": [
+    {
+      "path": ".gitignore",
+      "size": 37
+    },
+    {
+      "path": "assets/pdoom.mp3",
+      "size": 3437188
+    }
+  ]
+}

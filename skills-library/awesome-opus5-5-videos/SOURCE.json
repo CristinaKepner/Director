@@ -1,0 +1,2839 @@
+{
+  "repository": "https://github.com/yihui-dev/awesome-opus5-5-videos",
+  "commit": "92aee2f586ac0715cb3cbcb6384834f98a33383d",
+  "branch": "main",
+  "collectedAt": "2026-10-20",
+  "scope": "UTF-8 guides, prompts and source examples; binary assets and GitHub automation excluded; not a complete render bundle",
+  "files": [
+    {
+      "path": "source/LICENSE",
+      "sha256": "0adca04960d4c36b2524d26a400b790c28e583ce019635ab2d3a9ba3dc9dda7f"
+    },
+    {
+      "path": "source/README.md",
+      "sha256": "0aea4fdbab29c20416b0c14c485f13e24fff4af26c39d43fb671a407b361e92c"
+    },
+    {
+      "path": "source/data/videos.json",
+      "sha256": "1c307487eca4e56957f4f7de4c72efcd482017f54d77495e3a88ddbcc9b4f30d"
+    },
+    {
+      "path": "source/prompts/0xchuckstock-879327.md",
+      "sha256": "d6039c5ed5083769d3001eb8b256bf21362d68ecc84b861ac68dd29d9d877cee"
+    },
+    {
+      "path": "source/prompts/0xcodez-474136.md",
+      "sha256": "23b99bce5139df985f737e93f09d3744f313bbdc4b54c0e973a80c85dacdd273"
+    },
+    {
+      "path": "source/prompts/0xevinho-436195.md",
+      "sha256": "fa44318a7c9ee2806c08f909fd313633d20805bad7529ac93734717ea89b22c5"
+    },
+    {
+      "path": "source/prompts/0xfemyn-137833.md",
+      "sha256": "ebefa9bdb9fb879c35595a4a6e51a0f5682f03458d0ec75cd8445523c1b46d23"
+    },
+    {
+      "path": "source/prompts/0xkarmi-129839.md",
+      "sha256": "52d1c6e83042ee8424c9416f36f70970245cc435cc6428b94c4d098fefed1287"
+    },
+    {
+      "path": "source/prompts/0xlangeai-178533.md",
+      "sha256": "271735f3137f9a602a9e36bafb5dbae16c7f8c85583b3aa80ea6516c06bc582c"
+    },
+    {
+      "path": "source/prompts/0xlangeai-597929.md",
+      "sha256": "dd5626080c1f03f8ee91386aa319a452b64fbd1e547ce2a90587b022a9c54356"
+    },
+    {
+      "path": "source/prompts/0xnfrith-068999.md",
+      "sha256": "4eaa7f913007551ea17a3545f1f1c619fc3144ea5796eb92be703db10b054016"
+    },
+    {
+      "path": "source/prompts/0xnicc0-516612.md",
+      "sha256": "9f3f269032749021fa71b8cf895197db40bf6e7f5669edb5d21fddb5384df9d0"
+    },
+    {
+      "path": "source/prompts/0xpai-eth-635565.md",
+      "sha256": "a95f53d4e83e7804e5b048c02b17e4cb9f9d5bc2efbefa892d4c8fa25434d952"
+    },
+    {
+      "path": "source/prompts/0xrapzz-433554.md",
+      "sha256": "0492556638afdceab8c9c5bc8b6aea88bd099757ec7fa9ca9a7d495601418da3"
+    },
+    {
+      "path": "source/prompts/0xrathi-511319.md",
+      "sha256": "059a77ab0d2311214732bdf81b6bf038cb28270769cdbceece9e207f4eb2bb98"
+    },
+    {
+      "path": "source/prompts/0xsolty-735200.md",
+      "sha256": "0253871252b17332c5dabc27172f981117201fd3695043f72421d49550d1f3b6"
+    },
+    {
+      "path": "source/prompts/0xspikez-483865.md",
+      "sha256": "e8a3f6209ad09b10c35568d4c92256bc8024d2a3936ee588e41b8f8e8231a076"
+    },
+    {
+      "path": "source/prompts/0xvalure-331584.md",
+      "sha256": "89456950296f1e1f8afe365600060dbade12a451a626d758f0cc8435f5581611"
+    },
+    {
+      "path": "source/prompts/0xvalure-354245.md",
+      "sha256": "caada55ef6272f95e937d2517d6dc7affb4a82d30bac204d6780929cdf138f7f"
+    },
+    {
+      "path": "source/prompts/0xverdao-776363.md",
+      "sha256": "ba0ac2c2e9d78850a057263ed6cf165f6818efc148d1a94f83cec6c55c9b4766"
+    },
+    {
+      "path": "source/prompts/0xwast3-222104.md",
+      "sha256": "e67927a3bcda2cbc3ae109451c7e3b070ac7f3b651b04e1a0dd465fcbf33d7c6"
+    },
+    {
+      "path": "source/prompts/1234lust-671954.md",
+      "sha256": "b7b5139c58139e1c668ea0d78debf1102077521f4dcb95c402e8529b0faa4712"
+    },
+    {
+      "path": "source/prompts/1littlecoder-378066.md",
+      "sha256": "6b99779377c52d88e6150110c3ea3ae9ab6c29b6641ba2c3affc6c0c3013d2af"
+    },
+    {
+      "path": "source/prompts/1littlecoder-914649.md",
+      "sha256": "23fac550926c32d332f20c03bb2558c8a610c7835de81622e2dc5c5fdf20f5c2"
+    },
+    {
+      "path": "source/prompts/1stnoel-603851.md",
+      "sha256": "c9122bdf7a617972b9280922bef306463167dfbeb4c729958b55235fa6f04dbe"
+    },
+    {
+      "path": "source/prompts/aayush4soni-644283.md",
+      "sha256": "208b02e8560f38e423d3cbde1f95b9dace3a8420c3030d35906d7b50becfef1c"
+    },
+    {
+      "path": "source/prompts/abderrahmen-g-899031.md",
+      "sha256": "e65de01d8b85a9387fce1f26332266d1983439383bd59be49ebc25ab662ea918"
+    },
+    {
+      "path": "source/prompts/abhinavflac-251740.md",
+      "sha256": "f2accd516e0eb805cecf692c15b613a22b9b3c106ebc3ce04f16801426b81ea4"
+    },
+    {
+      "path": "source/prompts/abhinayguptha-259981.md",
+      "sha256": "3902be9c0a95e9f02981216087326cdaae4667afbc24d9550c4a6871d84b4595"
+    },
+    {
+      "path": "source/prompts/abyssalld-602690.md",
+      "sha256": "ca2881838a5a001cc49b323dfc38e658b7ff5793e1d063fb6fa29a13e8b73414"
+    },
+    {
+      "path": "source/prompts/acoramaa-053577.md",
+      "sha256": "1de9089ac71bb692c49dfb993e830fc96aad960f1750d7766e406e58eaf7a48b"
+    },
+    {
+      "path": "source/prompts/acoramaa-248467.md",
+      "sha256": "bd4febdc99ee41b98cf57658e040942ed504552ccfb8d75965f61c9ed9f1eb96"
+    },
+    {
+      "path": "source/prompts/adomicael-707503.md",
+      "sha256": "300f8940deb7fbdd355ac53422c84ec39af7527ebf33b22eefb1ad85d10d8cba"
+    },
+    {
+      "path": "source/prompts/adrianduta96-992248.md",
+      "sha256": "22be5285ab456e5a45254b67f0955c88b8b65cc9f864886aeaafada6fbf5951c"
+    },
+    {
+      "path": "source/prompts/advait-jayant-712107.md",
+      "sha256": "27bf45d3ad953447b2a2d9bd6ec5d260398bd91e7ab2b5b8293a312c634e7fa6"
+    },
+    {
+      "path": "source/prompts/agentgamesbot-355554.md",
+      "sha256": "dd62469c28ae5e8a3b0206d7a1cd0c0ab2022c36dbcd9b4a1e58ad3dfddf307a"
+    },
+    {
+      "path": "source/prompts/agioyaz-397647.md",
+      "sha256": "1ad586197f91afe373400ba0868e71c99f9a32d5e3777919f896bfaa40d7c2db"
+    },
+    {
+      "path": "source/prompts/agioyaz-986461.md",
+      "sha256": "9b6d587d3053d07f6e8b7f26fb65451704c45b53ed7b1f868bf41a55ac584011"
+    },
+    {
+      "path": "source/prompts/ai-ba-reza-113363.md",
+      "sha256": "8b0a729d4b707672464fe1d944e633a55935d374cd0b3a15d994416dcc6f2273"
+    },
+    {
+      "path": "source/prompts/ai-baymax-416787.md",
+      "sha256": "ec995a3fbcf11a2e6534dfdb9ce22aeff5247a585ba6cc0e9de427e200d57660"
+    },
+    {
+      "path": "source/prompts/ai9app-989009.md",
+      "sha256": "fdac7e990c58590c48b4e3506d64b42fbcd68561d91fb2eeb50e6a37313f1a5f"
+    },
+    {
+      "path": "source/prompts/aiaircle34052-950750.md",
+      "sha256": "2089309cd90653b893831734ccc690de57d45c27802593b29f0b487f93f71342"
+    },
+    {
+      "path": "source/prompts/aichrislee-378670.md",
+      "sha256": "450ac21aadf65d2bd934e49be0fdf327d58e6c040ac7182f32cd6a8e83aaaf01"
+    },
+    {
+      "path": "source/prompts/aichrislee-408244.md",
+      "sha256": "f4d3b6cbaa742a1424bc6a47f84993099c32a3de7e98163a84b4e8525c5942dc"
+    },
+    {
+      "path": "source/prompts/aichrislee-476025.md",
+      "sha256": "c2ae979aa8c3afe65294d1314c24b59cd81ecbe75405e4ce6a744934d1eb8d75"
+    },
+    {
+      "path": "source/prompts/aichrislee-479847.md",
+      "sha256": "c22b57a012030ad59cfe141167a82bc32566191e0d15520a4082114e77d82f99"
+    },
+    {
+      "path": "source/prompts/aichrislee-922082.md",
+      "sha256": "6ca22f6d7a4222854293c7f2e6b101462056048df151ac88359a3e5a2e00a6e0"
+    },
+    {
+      "path": "source/prompts/aichrislee-938609.md",
+      "sha256": "5fdb4d772a7ab04abe3c42da5d9e061c687e7e1dad2747e5e2ddcb8549bed844"
+    },
+    {
+      "path": "source/prompts/aichrislee-961335.md",
+      "sha256": "8f63e3fee501cc0efac59301658c80c2b93bdcf65aebadaca16f0d539ca30a61"
+    },
+    {
+      "path": "source/prompts/aicreataro-864070.md",
+      "sha256": "fea882d4d45b9bb3fb6f9d2c7b5e5638656c14160aa21b0faa430e49e2f0066c"
+    },
+    {
+      "path": "source/prompts/aidinzeo-708182.md",
+      "sha256": "c621bc0b6d552b1743bd1bd48c1f814d1aeddb0dd32d6a3f0075c843c3f52447"
+    },
+    {
+      "path": "source/prompts/aijipusi75693-284735.md",
+      "sha256": "a3445e7ed8e44ed3de28532b5832af71d72063dc4a0a1e5ff0263b10fac9564b"
+    },
+    {
+      "path": "source/prompts/aimevzulari-256293.md",
+      "sha256": "2c751c8605a89642493ecc1c364783bd60f808e6b9144492f55e7aa7a96a5c16"
+    },
+    {
+      "path": "source/prompts/airobertdaily-416945.md",
+      "sha256": "c8e72240a096e19dc6757cc8d4def059dd5c80a4a1291659cdfe26d164cc5b14"
+    },
+    {
+      "path": "source/prompts/aisongman-461057.md",
+      "sha256": "1dd052f769c49fb47e1003c94f2807ad4187bed1727b683fc427db67760b8835"
+    },
+    {
+      "path": "source/prompts/aiwarts-428866.md",
+      "sha256": "8514ef9f448aa4ebf2cc7d465df915807bdffb9ae2e5cc183c3a280e0b418b25"
+    },
+    {
+      "path": "source/prompts/aiwarts-815008.md",
+      "sha256": "fe159493cfe25ac3a4b4c43d54d8bb56d0ef04b087595893a3b3ad904d5e3e67"
+    },
+    {
+      "path": "source/prompts/ajith-io-208546.md",
+      "sha256": "6fcf6162a6cd69c5fe9d2fe8498d2fe40a62c4aa468690245d876cc74537785b"
+    },
+    {
+      "path": "source/prompts/ajith-io-562538.md",
+      "sha256": "f4c8c6aec1692f02edfcd6456188e91480cf48dfb4e625b6d9fd4f4873b3dbbd"
+    },
+    {
+      "path": "source/prompts/ajith-io-615243.md",
+      "sha256": "ff317ad11274402a70ae827c952ca11a2ae663e9c498bfb7565d6dae636a0ac7"
+    },
+    {
+      "path": "source/prompts/ajthemongol-318512.md",
+      "sha256": "58b4fc021af6a8afca73dd80e4d1cad3ace58afa0f0117bf4e58c83ba6a2d0ee"
+    },
+    {
+      "path": "source/prompts/akakuma0219-658335.md",
+      "sha256": "4a8d0d62e871413327362788fbf7e4a02154a4b2072bc1a28860c89da7fc8456"
+    },
+    {
+      "path": "source/prompts/akokoi1-469188.md",
+      "sha256": "2a562e5033d36e4f80f013542d392ac546f9eb5fbb5375c13edcab69d6a95314"
+    },
+    {
+      "path": "source/prompts/alanschwegler-629665.md",
+      "sha256": "570eda76e05647b9b5ce84ab45e85ec097c0542f7c1cab33b9bc794f56720689"
+    },
+    {
+      "path": "source/prompts/alex-leiro-867087.md",
+      "sha256": "85e335dd0af6c4fe0f810df218b842e9a99d4ecdd184f3fd88d96c6d914d66c3"
+    },
+    {
+      "path": "source/prompts/alex-prompter-997524.md",
+      "sha256": "98ca3347422f82d49de893db9d8a84bac1a7ed887e708b25ec4a5ac084c12690"
+    },
+    {
+      "path": "source/prompts/alex-vainshtein-195332.md",
+      "sha256": "8293a0b94c8a0bfe10a5ef65bc5f4f5965167cf8160102a329204339126902b8"
+    },
+    {
+      "path": "source/prompts/alexalbert-274839.md",
+      "sha256": "f06b0f3ed20658e7eb234d4d2e2a252902e75c4a75b46d624cda0d060b2f486a"
+    },
+    {
+      "path": "source/prompts/allforbigfire-029657.md",
+      "sha256": "44f9519ef908ba329da94d1d6f2a9604b99b98928fff93dc197a7d8e44d4bb66"
+    },
+    {
+      "path": "source/prompts/allodev-069765.md",
+      "sha256": "2dbad11c2fa189a62a64aa4755b3714ec7e1f53676a21fd087741243ab93a13d"
+    },
+    {
+      "path": "source/prompts/als-link-301108.md",
+      "sha256": "1e10190f869491b83614d9c1fb30817cf40ee9e1dbb76bf05702c12abe685444"
+    },
+    {
+      "path": "source/prompts/amberpromptai-345137.md",
+      "sha256": "6e4bdc6fda634cba0c4b3223b1be3de32f9d0cb4ab9bd31159787933b0eac20f"
+    },
+    {
+      "path": "source/prompts/ambiguous-ai-389509.md",
+      "sha256": "980553ee9ae0a4e2d49bd87eb362ec763b4629272477cd11116892dc40f85804"
+    },
+    {
+      "path": "source/prompts/ambiguous-ai-505873.md",
+      "sha256": "14603e41779d209544c24a7243ad154172028a4a03de9c88326f770e8cef9ac4"
+    },
+    {
+      "path": "source/prompts/amitsingha89-780553.md",
+      "sha256": "17593815a4680a4cb5164ee2065041512d6385a697f759df3439280f34ae9a15"
+    },
+    {
+      "path": "source/prompts/amol909s-607293.md",
+      "sha256": "f0d599f3574dd12bdcc3bd4a5886f76ce686989130e49057f454e0ae0722888e"
+    },
+    {
+      "path": "source/prompts/anabology-491441.md",
+      "sha256": "112ff6d6e14b4d51a993bb6729a23a443f37112b8010777e62d7229aee47fa55"
+    },
+    {
+      "path": "source/prompts/anas0ra-952637.md",
+      "sha256": "4bbf12c0de0617b21f55589a0b9e3f627f635d9bdd0d7d05317d2586c48fab97"
+    },
+    {
+      "path": "source/prompts/andginja-618685.md",
+      "sha256": "5b92ae9d81bded51c18e8e0efd62512f994a0a0c736b1dc84ef28a12b7684f7d"
+    },
+    {
+      "path": "source/prompts/andre-lucaxxs-846347.md",
+      "sha256": "167d2f1aae2cda863c629b8a199bb3caaf1f0be34f57251adb5c53a828c14308"
+    },
+    {
+      "path": "source/prompts/andrewmichaelsa-385936.md",
+      "sha256": "d3520633cd67cf9a92bc51ceed9473d2944a9db9245935b68d291775450db59c"
+    },
+    {
+      "path": "source/prompts/andriyfernandes-807308.md",
+      "sha256": "f163c691445de510b299d352c948fc03e3ed547e1b1d5f7d30b8ddc2d7fcece5"
+    },
+    {
+      "path": "source/prompts/anduraio-570761.md",
+      "sha256": "707418a18bef9086d62f829f954291efb848165d8c532ea126d530188d419283"
+    },
+    {
+      "path": "source/prompts/angie-carel-954689.md",
+      "sha256": "b3faad7566826af1a9a376b3bfa9ab689837e7a318a2faf5ede67fac839510c1"
+    },
+    {
+      "path": "source/prompts/anilraok-009118.md",
+      "sha256": "cc7121a95cd9113a5a8fd0bd956c88ad65f35de474895ba9a708c2f014b48ed8"
+    },
+    {
+      "path": "source/prompts/anirockshady-032809.md",
+      "sha256": "61d2d052599cb8bd2194770906f559d898ca554be85f54aa6f4ac630294ea63a"
+    },
+    {
+      "path": "source/prompts/anjmaxx-459455.md",
+      "sha256": "d7b422c865082e19cb6b304230945f8f8ef790ecd0f6f8b496ce9beb5a0ee766"
+    },
+    {
+      "path": "source/prompts/ann-nnng-852885.md",
+      "sha256": "1a01389c401e44dc23b686560dbf3909a0045c785613614d17a02859ee40176b"
+    },
+    {
+      "path": "source/prompts/annacher-152174.md",
+      "sha256": "f4d7281be0f83aafbf922e530277c45c697eca4358344b89bcc8439a78a998ae"
+    },
+    {
+      "path": "source/prompts/annacher-433425.md",
+      "sha256": "5b71ca519a48f8da539f734ad2948640b77f6ba4311dcde8ccb227ceb14bf475"
+    },
+    {
+      "path": "source/prompts/apoorvjain25-150112.md",
+      "sha256": "cec7f79188888450a2f0d6db8f3191979c21b8d05ff93e74ab12bea912408512"
+    },
+    {
+      "path": "source/prompts/apoorvjain25-309680.md",
+      "sha256": "9e5b75852441490505888faf465330a0ed1bb2cff68453f891a76e67aa24a0e4"
+    },
+    {
+      "path": "source/prompts/apoorvjain25-945542.md",
+      "sha256": "611300c447a049d037169bcf48ef48adaeeaab7896125e95a48fe2b970a4b16c"
+    },
+    {
+      "path": "source/prompts/archiveexplorer-560622.md",
+      "sha256": "0884b22554542323576b8636cc9f23ec68bbe41ae70dd06b32a875e1d2c691f4"
+    },
+    {
+      "path": "source/prompts/argbeknwn-466818.md",
+      "sha256": "28d737801cf8d0a02b36f7f50d82f4a6b622ada013d31263a004f53427f83e37"
+    },
+    {
+      "path": "source/prompts/arixxbt-292438.md",
+      "sha256": "703d5fe2864011a6c3b02accb1b96e45de8abdfac8b7aca11ffc1b2144a60765"
+    },
+    {
+      "path": "source/prompts/arjunsh1607-922126.md",
+      "sha256": "e3b900e5567c255ced1cf248fd859da5a916a89957cd0f19ec02f2cc7e7832e5"
+    },
+    {
+      "path": "source/prompts/arthurkatcher-604161.md",
+      "sha256": "29019631dc5a6c95b9478d8a7eba364d6d457a3c28078c4da5e065ee9a04f98c"
+    },
+    {
+      "path": "source/prompts/artless101-964679.md",
+      "sha256": "8240778ffeb5106d69fa42b005de9f1d6ba61d2c1ec10dcb48c53c0c34a03f32"
+    },
+    {
+      "path": "source/prompts/arumii-movie-249613.md",
+      "sha256": "a73e2ab7f6304c0c589e2317c6a2ea1517df159decb7b96bd9de33a1731e6c0b"
+    },
+    {
+      "path": "source/prompts/arumii-movie-622720.md",
+      "sha256": "97a3ffcba2da3519d5b06aee73f7aad08db56364aba5ca7e0f6653cd0b0cdf81"
+    },
+    {
+      "path": "source/prompts/aschapmann-724497.md",
+      "sha256": "50f75d889aa8b8d803b5ae74b8c85995ac382c5bba18578e5c2d1c78b8292a9c"
+    },
+    {
+      "path": "source/prompts/asei-ikarashi-437835.md",
+      "sha256": "84393c58769388004b7a4ee77076be13ac343a95c0a49002a3b3685620ad4066"
+    },
+    {
+      "path": "source/prompts/astroboysoup-861770.md",
+      "sha256": "85ed5e98260f419e36ccfca0d596d2801d6e63526d1a6cae65ff3e70ade0c0a2"
+    },
+    {
+      "path": "source/prompts/astrodevil-392708.md",
+      "sha256": "81a83ac125863bc993d9348151fe0c6eb552d2e73bb299c2f5899a1e6310462f"
+    },
+    {
+      "path": "source/prompts/astrothewizard-618782.md",
+      "sha256": "6fc8a7f0e6aa1364b729761e3747e1f636cb9683100780d9e183370c7bb72bf9"
+    },
+    {
+      "path": "source/prompts/atif-0075-639088.md",
+      "sha256": "9e0cf4595a59314a1700a403c24903d10760bbdab2fffc176df7e8728804ab73"
+    },
+    {
+      "path": "source/prompts/axtonliu-290566.md",
+      "sha256": "e86fdda8767a08c82b14f1bade5aa43682faaafc3c323191ce52263c335f3c41"
+    },
+    {
+      "path": "source/prompts/aydenspringer23-227772.md",
+      "sha256": "7ece443baea8769402a77647f7b173c7edd0ef5d007785abaf0b05597ef4df22"
+    },
+    {
+      "path": "source/prompts/ayi-ainotes-933194.md",
+      "sha256": "34b7ee50c9a62a21c464238ef5c99dc2898f1280a7b40cb386eb23bc3007d5fb"
+    },
+    {
+      "path": "source/prompts/aylmerth-356252.md",
+      "sha256": "203c6a99a5b7a7eb11fa448544a3f205b07ac5c2ea553ee6a92c77e30cb3f748"
+    },
+    {
+      "path": "source/prompts/ayumi-t820-871023.md",
+      "sha256": "0d1bd0c21260334d89573c3ffa9962902c05b4882b000f9e2d3412bfbfb06870"
+    },
+    {
+      "path": "source/prompts/bilimfili1-459762.md",
+      "sha256": "cdb968868242c19bd7719460b61fa56cb9593800b2720f1b6ed7d6e56d7beac0"
+    },
+    {
+      "path": "source/prompts/bitcoinrui-812752.md",
+      "sha256": "3d32ace7e24660a4a3b8982359e0dd2ba83c1031220438f0caca98d56e67fc2d"
+    },
+    {
+      "path": "source/prompts/bitfish-539054.md",
+      "sha256": "b3ca2de7e2a837f129cb65cfdbcd1ec46e7333c5620b3e3f21b00e9004e7a5ec"
+    },
+    {
+      "path": "source/prompts/bizibeast-505124.md",
+      "sha256": "37592bd98009b10f131be50a4b8aecb91a64bf464f94ce21a5183ce0602b40fa"
+    },
+    {
+      "path": "source/prompts/blitast-studio-257328.md",
+      "sha256": "86783a5b2e18ccb754efde40a94f3bbbe68a7a4ed5661c4e241e34360837ae03"
+    },
+    {
+      "path": "source/prompts/blueoctopusai-270222.md",
+      "sha256": "aed099d9d07c59ad65f6a53dc730434e2d08cd86f5f1c38203834ed299bc59c3"
+    },
+    {
+      "path": "source/prompts/bogdandragomir-412658.md",
+      "sha256": "6a71a92f1f1f1b05c67df80984e6b03355fb09fdb7914234f3f5ffcc843c51b3"
+    },
+    {
+      "path": "source/prompts/boona11-415751.md",
+      "sha256": "a6d15825ff4bb8ccd1d4515682c98ff2ffdbf6897a94e657887465fcb6a31390"
+    },
+    {
+      "path": "source/prompts/bradmillscan-839974.md",
+      "sha256": "a9d4c01f7a922d474bcdef883daf88c76229651dc4ad59df6b2dfe81fe2fbd67"
+    },
+    {
+      "path": "source/prompts/brainextends-606193.md",
+      "sha256": "68bce1759b2b9838f1ddc72a5e76320d13adecf735acff9bf5ecb2a70863ae7d"
+    },
+    {
+      "path": "source/prompts/brainwavepub-812667.md",
+      "sha256": "cf6b03df7d79a789c374e73b6b206315655a5f0fa2bcb6e6e5462db774277dae"
+    },
+    {
+      "path": "source/prompts/brenbuilds-386902.md",
+      "sha256": "54c9d88fc23ef5685c25fd1c28f23235436a933417cee76aacec6862b7cb0af0"
+    },
+    {
+      "path": "source/prompts/bridgemindai-286423.md",
+      "sha256": "ba4cc91878c863bc26644d798faf144601daeb24bf7e5d7c8f99b467028a2bd7"
+    },
+    {
+      "path": "source/prompts/btc5887899-288258.md",
+      "sha256": "6438a7676e2a598990252798609beb1fc9d9399b57a42c6304788156c50bc030"
+    },
+    {
+      "path": "source/prompts/btcup99-311469.md",
+      "sha256": "70eee3ae0a043e525c65a10b983e64baf23aae64beef2576b0c09013e251be17"
+    },
+    {
+      "path": "source/prompts/bthreeagency-827092.md",
+      "sha256": "4e9316f33b0d5118eafc5551c5a41783c4b292e2675d156a8cf859baa46ee6d9"
+    },
+    {
+      "path": "source/prompts/buildfastwithai-582551.md",
+      "sha256": "741c4eb35383a87dd4fbb49f3ad3502ba34dd41c09344334910af240994a59db"
+    },
+    {
+      "path": "source/prompts/buildfastwithai-597035.md",
+      "sha256": "44974ad6e44d9594a88a346581578ed63b43884bcdb1bc283f354f167ad258ab"
+    },
+    {
+      "path": "source/prompts/buildfastwithai-780900.md",
+      "sha256": "ca61e83b3dc314b458301149a2c817464a9d371cf2411096f945b69285933c24"
+    },
+    {
+      "path": "source/prompts/buildfastwithai-844291.md",
+      "sha256": "c3c2db5dce920d8ba7366d466c093abfb23e501b5b8080812ef2b558c6cd3174"
+    },
+    {
+      "path": "source/prompts/builtbysketch-114092.md",
+      "sha256": "0cfc7189d25874930bffa65135d73a1625b840853af1b08fd7f0502337739665"
+    },
+    {
+      "path": "source/prompts/byaiden-vu-755862.md",
+      "sha256": "25588b990e599a3edf5d432e6e00dd06c5dba28cc2d8a5bc6e0e2ae43d6b7411"
+    },
+    {
+      "path": "source/prompts/cagrimbakirci-842869.md",
+      "sha256": "cd45cb8359a774530d5f87bdb7b9bb6325af7491cc051ccec5a8d0ce010c4866"
+    },
+    {
+      "path": "source/prompts/cansincengiz-me-424245.md",
+      "sha256": "345d65b056cbfcc8fa7918569258999bb285ad553b4242d89271848723c48f27"
+    },
+    {
+      "path": "source/prompts/cboyack-407181.md",
+      "sha256": "3e81310a75478ec27c8f211c789665b6e0bbe894b1662e8ac270d7bb9e3c64dc"
+    },
+    {
+      "path": "source/prompts/ceowinkz-683602.md",
+      "sha256": "3b6d9de159d23f7db9cbb544cd1785b3774e6934b5e4d3eaf2ab9eb412caf89b"
+    },
+    {
+      "path": "source/prompts/cgclick-497325.md",
+      "sha256": "16d4483c8359e2c10c1d97503d5def24071ced865b904e1ea2476a0b2f5b9188"
+    },
+    {
+      "path": "source/prompts/chang-200908.md",
+      "sha256": "5f2bb12a4499195f531a8b023e9fa4270ddb22cbb40c5949972775a4d1c41c53"
+    },
+    {
+      "path": "source/prompts/chapi13-131449.md",
+      "sha256": "8019dff9f75d1f17b81ed8e7719a60f1dce735163252cbe1f87a9d3b981c5acf"
+    },
+    {
+      "path": "source/prompts/charlesmendez-476517.md",
+      "sha256": "734f1ecb282dd4b5705d4c2b541e5e8b8aebfee8b5cb18ec987219f7f6e49e0a"
+    },
+    {
+      "path": "source/prompts/charlessieg-370949.md",
+      "sha256": "b0e70aaf5e153fc7f3823ea75244b6f862e0f4d5db7ffb13a5772c033add3fb1"
+    },
+    {
+      "path": "source/prompts/charliie-334026.md",
+      "sha256": "13eb475416c3cae12c9489f193810d0c32c84aae05edc231a65ecd0966cd4699"
+    },
+    {
+      "path": "source/prompts/charumitradubey-328233.md",
+      "sha256": "3f0705102d4386359c0af755fa71f7f959e5c795c5371883135698095d4ba6d9"
+    },
+    {
+      "path": "source/prompts/chatgptastra-807540.md",
+      "sha256": "cb6ed4e4a65f88a59f92f3a5c911c289338789c79fe17aa09ed475b83d83f58b"
+    },
+    {
+      "path": "source/prompts/chrisjdimarco-524106.md",
+      "sha256": "6e321ed201b41cf899fc69f275aa1c92d9e2c9990c231c20b652802adcff3ea3"
+    },
+    {
+      "path": "source/prompts/chrisjdimarco-808196.md",
+      "sha256": "a411aaa27b050a58346ab09b64a249b80fe34828423ee803d46ce962291f50e9"
+    },
+    {
+      "path": "source/prompts/chudry223-081860.md",
+      "sha256": "e06a9125839e3654d0398e30b3891785ee57e1c578abf914b72a74882c9e25ca"
+    },
+    {
+      "path": "source/prompts/chudry223-657142.md",
+      "sha256": "165b95e567e949c854ad3f6886af697ae231925038f9451f0a2aab953903488e"
+    },
+    {
+      "path": "source/prompts/cipherwrk-451155.md",
+      "sha256": "626ddf8c29c9169108b5d317d034c8c8c1b3456a3665098cba295d41f0e1432a"
+    },
+    {
+      "path": "source/prompts/claudecode-ut-314769.md",
+      "sha256": "619cf64aa7a63ecf238acfdc3af543b1ae9411e15167b0f6480b1e13678603f2"
+    },
+    {
+      "path": "source/prompts/codrops-340299.md",
+      "sha256": "8fd90b81bccfaedc76781123b549a394c72319fb1940598c2e36be460d343680"
+    },
+    {
+      "path": "source/prompts/colecornelll-047465.md",
+      "sha256": "4289fc2879fa8180e2e27a87b5df8ef979859168d7474b99819b9ea3f97b6afd"
+    },
+    {
+      "path": "source/prompts/cryptowluha-060792.md",
+      "sha256": "7c2dc4697ac2a7458873791241d1dc32c85a3762118c5660d8d9af369f5155ec"
+    },
+    {
+      "path": "source/prompts/cryptoxorz-359201.md",
+      "sha256": "848f36d39bf027aca5870b58e094ccb92b698c90e62a49287458ff38b045ea08"
+    },
+    {
+      "path": "source/prompts/curieuxexplorer-016717.md",
+      "sha256": "14afd8333b40c4a3d5912f5e686d987a5602cc55f2d3148d673825e1c0cc478b"
+    },
+    {
+      "path": "source/prompts/curieuxexplorer-272483.md",
+      "sha256": "c1c0188b845118ba03d87b123541cd57c17990ab6f5e8babcff466f70e712002"
+    },
+    {
+      "path": "source/prompts/curieuxexplorer-320803.md",
+      "sha256": "7950fddd64fdda11133b426865443f06613856adaec1cade3f9538c59adc85d2"
+    },
+    {
+      "path": "source/prompts/curieuxexplorer-408141.md",
+      "sha256": "9da3a7dfc629ae97a7a2ccef7b68dd26bb20052e15a9716b5e67a00ba1072d64"
+    },
+    {
+      "path": "source/prompts/curieuxexplorer-519730.md",
+      "sha256": "fea30612402cf364f3bab2bc53fa88ecf7c847f8105fd69bccd20cd9e2c09a3f"
+    },
+    {
+      "path": "source/prompts/curieuxexplorer-590917.md",
+      "sha256": "6a9a11a7c30d8ec4df02f0aa569a4900a1c0d5df7c61067646d0d174e73fecfa"
+    },
+    {
+      "path": "source/prompts/curieuxexplorer-772215.md",
+      "sha256": "b5143f82fbc76cffea5c8b7702d82bc831a8fb6c3f64c2c09794deb92e892c66"
+    },
+    {
+      "path": "source/prompts/cyrilxbt-149036.md",
+      "sha256": "0f486faed3e14b247df64c687d83ffeffce781edc20a630029c193862fbc5c94"
+    },
+    {
+      "path": "source/prompts/dale-vaz-879074.md",
+      "sha256": "3fd7a231eedf0cdba7cdbed7a9be4daf8678fd1334020c9982b2b42ae7570cf7"
+    },
+    {
+      "path": "source/prompts/dan-proggg-274533.md",
+      "sha256": "e5b4ed4972c83ed64aa096c2350adce28125a8cd961211f57015a00fd4756171"
+    },
+    {
+      "path": "source/prompts/dan-riverbendai-163640.md",
+      "sha256": "981d49cadadb13bafa42f96ab85a3492ccfc69d073917ebd3106ed871f393fcf"
+    },
+    {
+      "path": "source/prompts/daniel-haida-636937.md",
+      "sha256": "f2c1171f60a1dd433584ce0bb5ab6a1986901fb46de9fc4c201257e8e3bb79b5"
+    },
+    {
+      "path": "source/prompts/daniel-mac8-306214.md",
+      "sha256": "cac9b140438e50006b7f1475361b0e525dad0a3a4de6c208a3084745bb825ca4"
+    },
+    {
+      "path": "source/prompts/dannyverkissen-101463.md",
+      "sha256": "50894563919ec24df266f422e06c8f236972fb200ebd39e0cb51e3845fe30f50"
+    },
+    {
+      "path": "source/prompts/daverogenmoser-899271.md",
+      "sha256": "4a8d3a966ad57a6d479db3dfb4140de8a268f4906d9237e9e7c5e07f790cf06e"
+    },
+    {
+      "path": "source/prompts/davidmarcus-686217.md",
+      "sha256": "b7fd0353987163c68634351ffa19e197af88a101e1859ea63351e4739a98c2a9"
+    },
+    {
+      "path": "source/prompts/davidshulmanfl-842921.md",
+      "sha256": "8ba9a272cf449057bf2f79933271565cef784c5bdc6114418f592ca3f7cb1bd4"
+    },
+    {
+      "path": "source/prompts/deebeeeff-234301.md",
+      "sha256": "34997bdea257359abfba1305428dc1b740acdec266a11ebbaa646c0748ad1125"
+    },
+    {
+      "path": "source/prompts/deedydas-252537.md",
+      "sha256": "fb286692637183b75ce9418e59885b6c696e100adf2ed176cc75faa0cea9854f"
+    },
+    {
+      "path": "source/prompts/deedydas-407965.md",
+      "sha256": "56fbeeed39582c2c1327f9a5f902b60e26d91954d7a15fd235778b636989a037"
+    },
+    {
+      "path": "source/prompts/deeprajo1-623150.md",
+      "sha256": "c17f9fb81c5c37a15df929a92f046db0174ad1850bdcb24b8d6d6023c977e599"
+    },
+    {
+      "path": "source/prompts/deeprajo1-834106.md",
+      "sha256": "667282a734c0a95196765b14ac6ec48da8729de1cc1faed85a5a9f916611285e"
+    },
+    {
+      "path": "source/prompts/deifosv-786581.md",
+      "sha256": "8eddc67957b3f771df48c915c16bee4d4fb8a1fd7bcba81a013e1021dd821a28"
+    },
+    {
+      "path": "source/prompts/demitiyageekzen-818523.md",
+      "sha256": "e4aea7d5cf7005c806cd5b9076e5954e657acc2835c8eab9c31e0b1ea0ecfbe3"
+    },
+    {
+      "path": "source/prompts/demonugc-525162.md",
+      "sha256": "d7fc41e2fed0c687b82459a0e47749236c48ff315410546fe92211d02894589b"
+    },
+    {
+      "path": "source/prompts/dengent-412996.md",
+      "sha256": "12389cc7f6b99196b092c89a4d03b7c7f876ad0e851ca774d0655bb0526183ec"
+    },
+    {
+      "path": "source/prompts/dhanrajdc-602284.md",
+      "sha256": "e9c2ef2faabf0b525ac60b92d5c2bdd3bb8574561db2dd941cf96b70735e830b"
+    },
+    {
+      "path": "source/prompts/dheepanratnam-706454.md",
+      "sha256": "fb0c92fe643197e85c7cbf60d7a834ee9f2094db4bcc2ce89b6672f8124b7b46"
+    },
+    {
+      "path": "source/prompts/diamai-157697.md",
+      "sha256": "537e47d752a14547159e38b6cb2113fc992add8a67815b3cd196373af38327a0"
+    },
+    {
+      "path": "source/prompts/dimoff2000-260969.md",
+      "sha256": "6abac684a53e2a6eb6b535b615beb12337d0732f81dd9ed9886e27899e50b27c"
+    },
+    {
+      "path": "source/prompts/djadkison-394122.md",
+      "sha256": "f1e27a8af28e8f2bd328bbfd719fdcccd2b81c60a72eae10bdfd306387a64f69"
+    },
+    {
+      "path": "source/prompts/dmowlin-221566.md",
+      "sha256": "9b2e8d08219d1c32ac076f5ecaccc927c2397cc8d8255b7fc9a951f6fd341533"
+    },
+    {
+      "path": "source/prompts/dotey-522564.md",
+      "sha256": "3186cc7972c352b3d0768f7dc106617d9215008e41a6be03377879c217b3ea85"
+    },
+    {
+      "path": "source/prompts/dotey-773568.md",
+      "sha256": "41b4a7e9d3255f0adb7ffb039b22ef77e8ec57e1e316b8e1550a8a3a0e02977f"
+    },
+    {
+      "path": "source/prompts/dotey-927166.md",
+      "sha256": "77eafca53e8e106eb67d7febf2c0f2ea63b800fdc93fbcf2e3733f60c168e840"
+    },
+    {
+      "path": "source/prompts/doubleunplussed-181894.md",
+      "sha256": "4a9d64fa12d87cbcc350805af3db0ce848be994ecfcf2b9c8bb531a91b4bed4e"
+    },
+    {
+      "path": "source/prompts/drake5112-661428.md",
+      "sha256": "805a6aa77c3470426ddc5e7ce7723e3e63ff8f943817d55daa0ccc5cccbb121a"
+    },
+    {
+      "path": "source/prompts/dreyk0o0-165270.md",
+      "sha256": "3d81f25686ca88560b8ef6688dd9f46d2e22da686be6a076ab7026502ae095f9"
+    },
+    {
+      "path": "source/prompts/drishtantk-356656.md",
+      "sha256": "37bb2cfe52924409810d6f6c47c1be17af0e7ef6909f3e921d7ec3620e2cd256"
+    },
+    {
+      "path": "source/prompts/drrickio-009558.md",
+      "sha256": "219474a27485af46e02ea51c1534c197c8a0e1225af4a0980d42b913b82f7081"
+    },
+    {
+      "path": "source/prompts/dustindavis-644806.md",
+      "sha256": "8ba5fbe6c771f5870c7565821a57050baafe831af8e9c022a37ee449cee7a142"
+    },
+    {
+      "path": "source/prompts/dys-hay-749645.md",
+      "sha256": "46c94a435eec06ab890f9d137b04ca24a640c58f3fb831105e1197676dc8981d"
+    },
+    {
+      "path": "source/prompts/dzhohola-249003.md",
+      "sha256": "1ce55d6af41cd41c36e7bca61b06a062d96a0139d84b91241a989d3a78fc07fd"
+    },
+    {
+      "path": "source/prompts/earthwalkerx17-912577.md",
+      "sha256": "30d65c60f8d6e481a808acd4e966776f60198b2c891581ae68b6d8a0dda44b14"
+    },
+    {
+      "path": "source/prompts/egawa-ai-design-092323.md",
+      "sha256": "0c55df6759eff0adf7072cc0aead4b794c232f010f8f8cc94f2819c90280c9be"
+    },
+    {
+      "path": "source/prompts/egeberkina-949521.md",
+      "sha256": "3a1fef658567fe4f5411d448d01b784b84be7070e676efe49a4219a202a6b665"
+    },
+    {
+      "path": "source/prompts/ehsanik-162993.md",
+      "sha256": "56bb2978bdb42d6007aa5f01fe173bbb20f2562fe2976de76da96f49924957d1"
+    },
+    {
+      "path": "source/prompts/eigeorguy-813651.md",
+      "sha256": "44355c5b94ec3f49c589e9c58d2614b3b49c1390309f0c2fe7abad2770ad77d9"
+    },
+    {
+      "path": "source/prompts/eleanorina-653042.md",
+      "sha256": "ebb249fe66ba72164d36bc04bcf6fb5ae090f24c0ed0aae156db176b78ca47b7"
+    },
+    {
+      "path": "source/prompts/elitzavasileva-591465.md",
+      "sha256": "9e8f009dd7e9e6ba564383c10f0a903d238cc2cf42d3ea8c332220347ac22ac6"
+    },
+    {
+      "path": "source/prompts/elkrispis-872980.md",
+      "sha256": "fac4a0c3a0bfb071e4a6e300ff05a702a9a4b42d3e9ea91f39236723968c6ce7"
+    },
+    {
+      "path": "source/prompts/emollick-019567.md",
+      "sha256": "7c4913961c05a8929c199c2061bc697782d7a6cf09be889382e470dcff720b03"
+    },
+    {
+      "path": "source/prompts/engmoelgaraihy-694832.md",
+      "sha256": "2ca8832e21b2f99838cdc3775c48bb83925b69ab4f9bcdd3f2c86104876f978a"
+    },
+    {
+      "path": "source/prompts/enhanced-jp-776726.md",
+      "sha256": "863c2fa7aac164b07f345a5193847ca647fb3ad86af6489020c29a5a891ad2f0"
+    },
+    {
+      "path": "source/prompts/envoldev-017555.md",
+      "sha256": "14e9314b14b1948c247e1772addb48a83ef5a816042de264cfeba4d6ab65916d"
+    },
+    {
+      "path": "source/prompts/ercankeskinx-897906.md",
+      "sha256": "13bdd91e5b49f3c7dfd81f45666baa98124a80f3b01f9c2863a5b466d93a476a"
+    },
+    {
+      "path": "source/prompts/eric-khun-667455.md",
+      "sha256": "771bd3ad765700b1aa19a0336eb22f0aecd5e9b061d28119f9e30960586c6467"
+    },
+    {
+      "path": "source/prompts/essjaykay755-847163.md",
+      "sha256": "12a55ce40ed5c7aeeea6e33fa804ed31d21c3910eb97cc0546d009e2812689af"
+    },
+    {
+      "path": "source/prompts/everestchris6-399895.md",
+      "sha256": "5ff49fdbf23696b1271848834ce555589393150336d6f62d28185523a867bcbf"
+    },
+    {
+      "path": "source/prompts/ewashoku-201053.md",
+      "sha256": "e4d18637f8c4c17eec293c283bc0183b7258896edb932546503744f693ee2f83"
+    },
+    {
+      "path": "source/prompts/explorations-iq-921682.md",
+      "sha256": "dd910c5d52a914ae86ee1bf4a6431e72e1a8413678c978a001a14912dd15dfd4"
+    },
+    {
+      "path": "source/prompts/eyadnour-172216.md",
+      "sha256": "1a85a84cfacbc4cd170f49e31948ec5775a3870a8350818407855c64d1bc08fe"
+    },
+    {
+      "path": "source/prompts/ezshine-750731.md",
+      "sha256": "568abe44823d28118a25621d81f7303fa7e3c8157e6e148e6ce8d2b40d06bee2"
+    },
+    {
+      "path": "source/prompts/falcong-j-277506.md",
+      "sha256": "ff0e1dedc3eda2707065c7486f082cec44195fffcc9235b34d2c9c6971e848e1"
+    },
+    {
+      "path": "source/prompts/fanfulladev-063524.md",
+      "sha256": "85b9775ce3c22609bc336a9c56edcf100b86b2809a514c70eabb3be43672fd8f"
+    },
+    {
+      "path": "source/prompts/faroukzy-138551.md",
+      "sha256": "df1ff3d676ad1c2ad8a1ab6ff112ee1369263f64d2eaa10077758b4921b3af72"
+    },
+    {
+      "path": "source/prompts/federicoaltepo1-312496.md",
+      "sha256": "6f2563d5d2337db8127d4affed9050ccc36d761b6e132ae4a349709bde7fc57f"
+    },
+    {
+      "path": "source/prompts/felipemoller-936736.md",
+      "sha256": "aac953d112167c02179ca2b0d58f6d75431e27a351113b84b7a5b5a53796dc6d"
+    },
+    {
+      "path": "source/prompts/filicroval-168898.md",
+      "sha256": "28666c48b6a53117397a1bdea1547a84eba53b97318983d2512f44c5a0ed3106"
+    },
+    {
+      "path": "source/prompts/financeyf5-462150.md",
+      "sha256": "3a951b14fe26c54fdaf40a16b6bb761740fa2a2cd6109c434f1b0acae6419455"
+    },
+    {
+      "path": "source/prompts/fire-ozgur-130104.md",
+      "sha256": "2eb3f507e32505e6469c031c48225cbf40f6a1d9a4889379bc3f3b5f9c4af750"
+    },
+    {
+      "path": "source/prompts/fleyta88-443662.md",
+      "sha256": "7ac86b17171a293ceb4e6c98293e0d4f9c52425b7bba0d96aad3c66721906487"
+    },
+    {
+      "path": "source/prompts/flxrnc-251921.md",
+      "sha256": "b5b7590e953fb8aecf2f9b840db2a9dc156bca2bbf84e9b45e43a3cde125da15"
+    },
+    {
+      "path": "source/prompts/flxrnc-619627.md",
+      "sha256": "d4b7577c1d1e5440643488642a51816386d1f88b48bc61cbdd31d1678721f594"
+    },
+    {
+      "path": "source/prompts/fornyapayzeka-135914.md",
+      "sha256": "2583dab78285aecf90b38915f640a5e9b6df578930e27469c38ecfed31a1e2cd"
+    },
+    {
+      "path": "source/prompts/fornyapayzeka-795431.md",
+      "sha256": "50e03fa73aa197cd24d71518b664fe1594cc270e2d41ad04bdc4fc0c7ff1c0fc"
+    },
+    {
+      "path": "source/prompts/fr-sorrentino-871017.md",
+      "sha256": "9f220e371b745cea78be5e8014c0abb28da956c415536569de8b625fd7f3244b"
+    },
+    {
+      "path": "source/prompts/fractadev-861266.md",
+      "sha256": "99390cd73bf3e75566c2ccfa356a9bcf98a358332b7fd48b9cbd904ddbcb58d7"
+    },
+    {
+      "path": "source/prompts/francoxavier33-341663.md",
+      "sha256": "896776d2f0d7e2858c4c144e03e9835464bb8120b5ce177b8c54f37e879e0e3f"
+    },
+    {
+      "path": "source/prompts/friskyggg-054427.md",
+      "sha256": "3ea647230faedf9b50bc008411719ec56c240dfa5e5f097f2d20da42556f208b"
+    },
+    {
+      "path": "source/prompts/froessell-562325.md",
+      "sha256": "7e689992844316fbc75a46cf4d89530a951870b14d510d13427b8f20d6a02b78"
+    },
+    {
+      "path": "source/prompts/fumiyamizuguchi-500632.md",
+      "sha256": "2aea4557d769ecb7888127cd6a2ead7cfc011c61fdca217d725ea71eb71b49b2"
+    },
+    {
+      "path": "source/prompts/gabzofar-852359.md",
+      "sha256": "4c7c22caff3af397d18559611bddf254617687b150f1abdd9cb940463f9802f9"
+    },
+    {
+      "path": "source/prompts/gandamu-ml-124280.md",
+      "sha256": "9543a789f18b6a36a6bdacd7555744db1cc849cda70e915b8ca7a7868247ca4a"
+    },
+    {
+      "path": "source/prompts/gandamu-ml-220530.md",
+      "sha256": "72ccf37417906b7584ff4aca37977348d18dd10fb886d2d4385cffe336c9b481"
+    },
+    {
+      "path": "source/prompts/garmdotcom-987439.md",
+      "sha256": "58cd2d14ea7a09406e39ebef643c47f44fcc8faf9f2c88ae71bfcaa341773c38"
+    },
+    {
+      "path": "source/prompts/gautam-mer1-530003.md",
+      "sha256": "59c05da4216d352179c7d66e8eb3f109802c4afc8521246267f275e1a952462a"
+    },
+    {
+      "path": "source/prompts/gdgtify-130294.md",
+      "sha256": "cad858ef70a5509ea59eea2ca8d4c118b2504bd67f83092572c9f8a1d232e612"
+    },
+    {
+      "path": "source/prompts/gdgtify-393073.md",
+      "sha256": "7f54674c4713e76cd7924d84a046938dad7e68cb8ace4b4cf10c8ab7e556c8aa"
+    },
+    {
+      "path": "source/prompts/gdgtify-929495.md",
+      "sha256": "32032d4ed714e85ace6305f2ec215b89596c804e00c53c90a189b7b54bdc3c33"
+    },
+    {
+      "path": "source/prompts/gdgtify-989608.md",
+      "sha256": "a5de067c8f4e56c1ac395b6dbf09b36d0e18266d4ec340aea104da0e9460f733"
+    },
+    {
+      "path": "source/prompts/genelab-999-088672.md",
+      "sha256": "fb8d7e375cf359fc700a54727752b2646156a4f5c09fa1d8f7119d9365f4903f"
+    },
+    {
+      "path": "source/prompts/generussai-904308.md",
+      "sha256": "e552358bc490b8e57c796cfd86c82dcb41a583ac0c90c623410732957a1fd29a"
+    },
+    {
+      "path": "source/prompts/georgejimenez98-427173.md",
+      "sha256": "7ba38136440645686be4bd6e1136064daa44d9174dc049a905740c9a2c8ad034"
+    },
+    {
+      "path": "source/prompts/georgejimenez98-431559.md",
+      "sha256": "bede4e81214c8113c7ade027bf99c0815f1e83f3e9e55f8a245cb6ddc3d62cbf"
+    },
+    {
+      "path": "source/prompts/ggsimm-535814.md",
+      "sha256": "e4e2221dbeefd96d706ef1cb28085c51843e273b95e6b145f2f96d9cebbbd25b"
+    },
+    {
+      "path": "source/prompts/ghinaiya-nirmal-308943.md",
+      "sha256": "566d5202efc222acf87a04362150d81da74806fcdd734e0eb242928a011e20a5"
+    },
+    {
+      "path": "source/prompts/gigabit-million-959719.md",
+      "sha256": "a3351884abd4a049e54556886b277f69d59ef70f2801ab92d85204da68d156d5"
+    },
+    {
+      "path": "source/prompts/gizakdag-239768.md",
+      "sha256": "913377b1c8789ade298d8a1f330952e1236b1e8233d7491106fe0f51bcf36302"
+    },
+    {
+      "path": "source/prompts/gkxspace-923139.md",
+      "sha256": "24344e482e2959431b1ef8d8835d7aa49ba6874c617bfc5287e6aefeae465f76"
+    },
+    {
+      "path": "source/prompts/gmgmgm1545-245507.md",
+      "sha256": "89b21d87d5f1fb3294ffd3ab8afbd32a038cc850b75f67eb91d3350ff636d2eb"
+    },
+    {
+      "path": "source/prompts/godsboy7777-005594.md",
+      "sha256": "1c7da21425c8670c0f5416785b33ab55cf1c9f87188f4e456cbdeea9596b59e6"
+    },
+    {
+      "path": "source/prompts/godsboy7777-150194.md",
+      "sha256": "5ab3f9d30e330984617d9c1c9fe779184930922aac7776733fbe30d1e139601e"
+    },
+    {
+      "path": "source/prompts/goldiez2599-685869.md",
+      "sha256": "d01148e4807747e8946ea7f0bcc0a2e4fd21b883b8e52bc78ae281eae254d54d"
+    },
+    {
+      "path": "source/prompts/gonzalomacagno-344202.md",
+      "sha256": "573aa257c20ab8167ae81f558eca9e4439356de2d2b066ee7977c0d5076e4f08"
+    },
+    {
+      "path": "source/prompts/goofyninjaaa-315331.md",
+      "sha256": "1b5051f6920c9274eb9250fee00cf3d0fd258e1e6b5c17b93a074a567085e7ce"
+    },
+    {
+      "path": "source/prompts/gorden-sun-797351.md",
+      "sha256": "8e855c7ec1efcbc5c84b61b86051e95dc337172b635e50b00960e24286ae7acc"
+    },
+    {
+      "path": "source/prompts/gouthamjay8-910269.md",
+      "sha256": "0f5eac6f945be152f4d3cbaac62cafe7b29492cc54962976b14027d8e0d2dbf4"
+    },
+    {
+      "path": "source/prompts/grace-sunnyy-486816.md",
+      "sha256": "b911495ad36135659d072aa4d8c57169627dafba5c4d6a84132f0792b54f53f4"
+    },
+    {
+      "path": "source/prompts/groundcontrol-230877.md",
+      "sha256": "b82542f5cd21186219b156f90b9cfe26f9ff39d0098c1af835ebc72d2f4b3473"
+    },
+    {
+      "path": "source/prompts/hahazwei-425483.md",
+      "sha256": "383693b9ceaf81c4af049181f082783260ca60f1f3eb65b96161a912dc8fdcf3"
+    },
+    {
+      "path": "source/prompts/hakimieiqbal-762926.md",
+      "sha256": "3bd6c9a7558f687d48d5df4c2a4d97aab4a75211da29c20c985b7bba79b65f5e"
+    },
+    {
+      "path": "source/prompts/happycapyai-634965.md",
+      "sha256": "703e45457368c4bf84660694ec7c69726b97c8dbffe135712e24a287e7ba5a55"
+    },
+    {
+      "path": "source/prompts/haribuilds-007643.md",
+      "sha256": "a05533454b508fede618662ed284d66243265217b456cacbb7101e5adb9424c8"
+    },
+    {
+      "path": "source/prompts/helloshiva0801-438284.md",
+      "sha256": "a6ab39cdd1b0ea383f6fbc865f0a9a5ea1b5439ed153ef204f9bd681e7df11d3"
+    },
+    {
+      "path": "source/prompts/hellovyom-800659.md",
+      "sha256": "793da79dd3b445122ccf10cdf013527f0072db6f4c7e89006b61b34aa2216372"
+    },
+    {
+      "path": "source/prompts/henkpoley-761980.md",
+      "sha256": "d686adc25029530d6323cfceba466d11d3b3c4d54e36b6b2899b36cbfc1547be"
+    },
+    {
+      "path": "source/prompts/henkvaness-975279.md",
+      "sha256": "759dcea66d4b42a18accad4c6bfcfa948dd8c53323e8313ed3efd2529f6c51b9"
+    },
+    {
+      "path": "source/prompts/henritoivar-445215.md",
+      "sha256": "2188fb2c7ea25ce0b7eaeab936f2233100395d4a4f864c042b53f6cf648e1266"
+    },
+    {
+      "path": "source/prompts/henrygsing-050247.md",
+      "sha256": "2474d26e33d336515896d5520927389379154601bc0cc583c81b6ab7ab0a9a69"
+    },
+    {
+      "path": "source/prompts/heyiammallik-293397.md",
+      "sha256": "9d3d4874a2213e7ff295f5f3f3056f423b716c165404dd336c3ad9aa56c07fca"
+    },
+    {
+      "path": "source/prompts/heyiamnick-119558.md",
+      "sha256": "66d618e21c27a60eee1d4446812beefe9013c9956ff014cde9edba4dca048bb5"
+    },
+    {
+      "path": "source/prompts/heymrzak-349060.md",
+      "sha256": "721969c5e0b871a95ee8f48dbcd24d0137cc4048b71e1bb37add63bbb7d9bd7e"
+    },
+    {
+      "path": "source/prompts/hicallmechai-878304.md",
+      "sha256": "5595cab3510d8c9149f46123b13aa93a8a43bc833dcd9bb17abab55090d15368"
+    },
+    {
+      "path": "source/prompts/ho-ba-761062.md",
+      "sha256": "65201304be23dfc46d996ad61b1ee378e4ce204824a60699b2cc670be09ef03b"
+    },
+    {
+      "path": "source/prompts/howdevelop-733090.md",
+      "sha256": "3ca30e013d3808ca973526192fa018d1ccb46fbbd8b980d8bf0bd01264090be3"
+    },
+    {
+      "path": "source/prompts/howlemont-503897.md",
+      "sha256": "2ee3b1147ffe252bc1579db0f5ba75309368c77a15cea704743c6b2e14b26cbc"
+    },
+    {
+      "path": "source/prompts/hoyoyoda-543147.md",
+      "sha256": "532a042f1a202f473a2b3f3eb968a48d549075c981c0f4f3e1b001e1c1473fd6"
+    },
+    {
+      "path": "source/prompts/hsanat-012699.md",
+      "sha256": "f3b6a3a50949f26ad89be4c1dea64cd3f1f931a2d0cba57f9cbe825c2301494c"
+    },
+    {
+      "path": "source/prompts/hugon001-609629.md",
+      "sha256": "fb4e28284cfbf57442d82b3b44a390044b206ae056d05b3777a954a3c910eaa3"
+    },
+    {
+      "path": "source/prompts/humzaakhalid-011081.md",
+      "sha256": "530ce53043a7f1a2e69bd5827b43970900b5e1f45a513baf984b205401c789c9"
+    },
+    {
+      "path": "source/prompts/humzaakhalid-537875.md",
+      "sha256": "f4ad8b36433f238685c08a85ef9d8389000602bda54db2b75d8c48fed8f971cd"
+    },
+    {
+      "path": "source/prompts/hunzai-842605.md",
+      "sha256": "bc975d43318642c3ac2d61f95b58ba7d7bc9069f9c361dec3d949bf2bbfe3f83"
+    },
+    {
+      "path": "source/prompts/iammukeshm-421585.md",
+      "sha256": "a4c0d5c0e5f7582ec5407142b48ce46fe51d49569283f8b358bdcaa30bd8162c"
+    },
+    {
+      "path": "source/prompts/iammxfschr-955831.md",
+      "sha256": "becb12f620785ef852ec9cee8b1977eaff16e70112f37cd96baa6e7ccdf4e0dc"
+    },
+    {
+      "path": "source/prompts/iamshankhadeep-506266.md",
+      "sha256": "abdec4cf05cf33825e1ce3612753feac2c42274b43a0cafc09746457df3afd2e"
+    },
+    {
+      "path": "source/prompts/iamtanzil-120030.md",
+      "sha256": "f5b61e58618914ad3aee55cc88c0e26d54c16863eb401c258505f1afb3228800"
+    },
+    {
+      "path": "source/prompts/ik-builds-585923.md",
+      "sha256": "af74cef6b21727f3dca7da05f591ca443af021c35d1d25ce767b22e700b43a1e"
+    },
+    {
+      "path": "source/prompts/iliareingold-486492.md",
+      "sha256": "fc9a6b3dc9cd8441ea4ef3b7530feb3d6cef45a54224d1f66077be27cb627020"
+    },
+    {
+      "path": "source/prompts/ilyapion-072443.md",
+      "sha256": "b1405bdc0694b5f10f82326864a77c72c09c7ab780e6958b7ee728aceb0b5026"
+    },
+    {
+      "path": "source/prompts/imryven-495965.md",
+      "sha256": "402791d5819106bb934301c12fe5ab6a314d51850b2880746fa910854f51932f"
+    },
+    {
+      "path": "source/prompts/imthatcarlos-133592.md",
+      "sha256": "0df7a452aa2babffadd640b9d5ab5f5581741a522724725d2c027281cd22e3ad"
+    },
+    {
+      "path": "source/prompts/incognitoprince-849212.md",
+      "sha256": "3185e9319be3283125a0a653aada125169d61709820aa67864c783db8da66cf0"
+    },
+    {
+      "path": "source/prompts/iniyanai-856596.md",
+      "sha256": "742000ba6a41bf3cd0f09907398ff82e55b3cf272b3b3720b1528054615b5a55"
+    },
+    {
+      "path": "source/prompts/inoue-aix-234322.md",
+      "sha256": "33fef795a8733e6a8ebbe691e606700fe0fd8f9df4bc4e77094f4fced6d7b5ed"
+    },
+    {
+      "path": "source/prompts/irinatoxi-962937.md",
+      "sha256": "621182a0a4d76b41bc1587ac217e9f5b1390572358a780524aa6aa0149eba858"
+    },
+    {
+      "path": "source/prompts/ishaaqahamed-107563.md",
+      "sha256": "6a15c1774e95edc1bad0d9750da754a178ea8a0d1819941b42b784c3ec1ef746"
+    },
+    {
+      "path": "source/prompts/ishuagra02-678129.md",
+      "sha256": "255ac7019414b64e4fcd0fab2afcfe43972ee0c67587c83d79e1b9598b271b51"
+    },
+    {
+      "path": "source/prompts/ishuagra02-922825.md",
+      "sha256": "06fc482849434a137f7b80e6d395d7e06b41af22a8fdcccbf858d80cd22af074"
+    },
+    {
+      "path": "source/prompts/itakahashikun-990109.md",
+      "sha256": "a4a56811ce9a2b5c6f5605c8184a37a81be3ac332d96286ebeab87523a5864d8"
+    },
+    {
+      "path": "source/prompts/itisrazak-332386.md",
+      "sha256": "b024ff2ef43d2a5525b3fe3e80251ddbc21129b44e2f72d9e76c2d063e4714fc"
+    },
+    {
+      "path": "source/prompts/itsahmedharoon-544194.md",
+      "sha256": "3a774331fe1e1f6fa8dfc87be2d22d90861f093de635a4f79d37524433f55e32"
+    },
+    {
+      "path": "source/prompts/itsjdraven-557760.md",
+      "sha256": "b985b3df441f7254f328ce51e8bccb24d21b87ea1e4dca21339eb4f73a598396"
+    },
+    {
+      "path": "source/prompts/itsolelehmann-762215.md",
+      "sha256": "835e2043cc8d115dcd53225133b6445bab12a38a47fb8906d763d58927506388"
+    },
+    {
+      "path": "source/prompts/itsyashf-692347.md",
+      "sha256": "3c53c90d890cbd6344c572da93c4a9222549d92724bba344e63c3d4b381d2964"
+    },
+    {
+      "path": "source/prompts/ivanainai-190629.md",
+      "sha256": "6058f5b4203927d98691df6cad3373403b5e6749f91552859d347a14a0178d26"
+    },
+    {
+      "path": "source/prompts/ivanainai-245918.md",
+      "sha256": "534c55c40d140c1cb5c099490367e0820729e1188d24c0ba6bc342b10ec1d31e"
+    },
+    {
+      "path": "source/prompts/ivysparkleai-543294.md",
+      "sha256": "37ef970d1b735c44c11de797810856513468b8a8caad488b4d91e569d09a918a"
+    },
+    {
+      "path": "source/prompts/izmaelmag-282849.md",
+      "sha256": "7f3c7681605f71b35622e72213f93fd776c3ae59de5ac1b0d2fbbb38580541b2"
+    },
+    {
+      "path": "source/prompts/jackfriks-338762.md",
+      "sha256": "241a3f4fbef563134e41b2ad3a13e985a15f5a28d824d2fb3316a126ee88230a"
+    },
+    {
+      "path": "source/prompts/jake11moran-414633.md",
+      "sha256": "8764cfdae30df4c821c5a0f8c7d57e6628621e9adfb590b58f47c48670853e16"
+    },
+    {
+      "path": "source/prompts/jakubantowski-020905.md",
+      "sha256": "9b511eb744d35de6f79c65ab34d352f25da9c76b43105728c235ef354a0df950"
+    },
+    {
+      "path": "source/prompts/jamee-now-583635.md",
+      "sha256": "e93776869f4f26da3e576e6db156c1fd85f6358bf080df9b1d32d77ed0a03a07"
+    },
+    {
+      "path": "source/prompts/janeloic-905802.md",
+      "sha256": "b303b4eaef25d9607ebd10e2996247ab44b66c2277f5eba51d9fa8c5c6c90577"
+    },
+    {
+      "path": "source/prompts/janlaywss-379361.md",
+      "sha256": "fa310e931babd40b609fd41adea32357c827fac4c62c6a3d8618464e973c6e52"
+    },
+    {
+      "path": "source/prompts/jarvis11x-544635.md",
+      "sha256": "afe17d8818407316f15519bb955aec00fe244225934e99cc7b10737ef5e318f1"
+    },
+    {
+      "path": "source/prompts/jasondainter-028222.md",
+      "sha256": "9cb3b366cbfec1ec23b4d3720c7469ea832ef14044b6c7a2a134b68a651e97e1"
+    },
+    {
+      "path": "source/prompts/jasperdeboer-157391.md",
+      "sha256": "5b81c5f87459187387f68be71ef44103502ab3820da4e0d39791e21997cdd01e"
+    },
+    {
+      "path": "source/prompts/javi-llofriu-059888.md",
+      "sha256": "d44de0f0506256819d237f3579f1dfdec0c54d026c65e41ddfbef2623027b56d"
+    },
+    {
+      "path": "source/prompts/jayscambler-495095.md",
+      "sha256": "deb61cf6453dd72c6b4c9320f452c3544a5cf4789bb9a516070846335c03ee32"
+    },
+    {
+      "path": "source/prompts/jazzen-chen-894989.md",
+      "sha256": "9184761c69f1934fa44d86460ae042e4a0cd860833b2e4917ff9b286ce7c61fc"
+    },
+    {
+      "path": "source/prompts/jdverolme-302685.md",
+      "sha256": "9d9f7611ce44cb42fb3f6c64635ea8d465993e8b8f53400c994cac65a6e04249"
+    },
+    {
+      "path": "source/prompts/jhylee95-452427.md",
+      "sha256": "85a03a501e6c2cf729906c72ceca4895de92c07a4c035ed9f54c7511a4206277"
+    },
+    {
+      "path": "source/prompts/jiro-aicompany-487818.md",
+      "sha256": "d878a1065af9f87bc3a08151ca5b61538fd817dc652d4f9419f0813bd7493636"
+    },
+    {
+      "path": "source/prompts/joao-felixl-809438.md",
+      "sha256": "1791ec33e15b8e1bec27474e27b5860cd706ff2ab72ee3a6f2fb0ce87a07449a"
+    },
+    {
+      "path": "source/prompts/johncodunayo-560372.md",
+      "sha256": "153e49485298b24f51ec0d89464a790f08aef284397b2292c3235e907119b1c4"
+    },
+    {
+      "path": "source/prompts/johnmckeownn-511049.md",
+      "sha256": "237d1cfbd0485e49a6004f5ef351966ddcb06e325b1f490d887cb409590196cd"
+    },
+    {
+      "path": "source/prompts/johnsavage-ai-427263.md",
+      "sha256": "a7dc93b87972413148f9803206288924dc37a9fc7f6beee185e13256ec9ff8a3"
+    },
+    {
+      "path": "source/prompts/jrayon-054015.md",
+      "sha256": "2cdf0c6ada87e663a3f4acf6242ecf512624464776cb232d39547ee599b2cf95"
+    },
+    {
+      "path": "source/prompts/jstjs-129051.md",
+      "sha256": "590a78fbfe4496c92c48588b737825eebf07dd1ac9d32150eb5b223353353e74"
+    },
+    {
+      "path": "source/prompts/juancarlos17626-382690.md",
+      "sha256": "65c577c3d350aa234cecf846597ab60ea7971a0c9e05ca91b7b1497025e7f975"
+    },
+    {
+      "path": "source/prompts/juancarlos17626-429530.md",
+      "sha256": "9f72b88fac170d4668535a26003b8c9910e2427db898742dfc7a53c2332dc234"
+    },
+    {
+      "path": "source/prompts/julianpscheid-494027.md",
+      "sha256": "5f7ce0080593f8d23d6b83c921999a3136e976be76f87ca73dd7a68e998f9d6b"
+    },
+    {
+      "path": "source/prompts/justincooperman-188876.md",
+      "sha256": "0ef009ece4306926c4cc8b51f1c9cdc11b35494595ec1fdf81d57dc38f8e0331"
+    },
+    {
+      "path": "source/prompts/kadaliao-048854.md",
+      "sha256": "2ac5dc897f6e750c733e58bac844292494ffa9c32cc86bcf1139ff15fbb3ce39"
+    },
+    {
+      "path": "source/prompts/kaiyu-ai-762929.md",
+      "sha256": "82889a2daaeff914404ce309c0251f9b91d338ba2dd2775d0dd83ec51b40374c"
+    },
+    {
+      "path": "source/prompts/kamstudiolabs-100086.md",
+      "sha256": "b9a8fcb954f0c71fdcbb6b900e2ccc03bd623ce00a5129984dfb7b9cd896fc3f"
+    },
+    {
+      "path": "source/prompts/kamstudiolabs-440893.md",
+      "sha256": "2f0987a3a9f3b0b3599ca64c8f47121b08b59418ea72989d71ca62d94ed04c48"
+    },
+    {
+      "path": "source/prompts/kamstudiolabs-877996.md",
+      "sha256": "97afbfda24c0ff044ce5c8ce4e89e9c2762f76b05333765e384ac7992f106cdd"
+    },
+    {
+      "path": "source/prompts/kantamk-176511.md",
+      "sha256": "986bf5fb4009248406fc43fbd522e551452713fa068e09572be9c3330fa06a3f"
+    },
+    {
+      "path": "source/prompts/kenjiphang-750512.md",
+      "sha256": "0352267ae387496b30b5494b28b7fca6d66775eee4986ad57b6554e46f5b5ab1"
+    },
+    {
+      "path": "source/prompts/kepochnik-237752.md",
+      "sha256": "6303b4c1c5f87aab26e0a709a422ecd3583ce821f471e6f3a726deba70cf1619"
+    },
+    {
+      "path": "source/prompts/kewai386772-262769.md",
+      "sha256": "e39984dce9122b98da13b625a17e4ceb93c97bdc8ba93a39510adf1faba8f71c"
+    },
+    {
+      "path": "source/prompts/kewai386772-276947.md",
+      "sha256": "954e56b98b98d66293ea8e33b3be16647001268d0eac910c9098282ae7599770"
+    },
+    {
+      "path": "source/prompts/kgonia7-746268.md",
+      "sha256": "35239f5b359e7f17609d54ac4fdd65fc2c3fb8352fb1e84ea1b97894e75610ae"
+    },
+    {
+      "path": "source/prompts/khlaseek-dsgner-877659.md",
+      "sha256": "3f2865dfd9c3a109c89ba0516e8d563ee20e44b84ae8ef961055b47a6fe62b37"
+    },
+    {
+      "path": "source/prompts/kikelopezdesign-173471.md",
+      "sha256": "8bcf01bab877eec030d5d81520140e2024b010d42edda0a390dfee32ebe5e4a2"
+    },
+    {
+      "path": "source/prompts/king1818888-642123.md",
+      "sha256": "831bf386ade75a2f0f42f8453ccb144436c10a25ced3361fee8a293e48bf3731"
+    },
+    {
+      "path": "source/prompts/kingokings-835071.md",
+      "sha256": "33f20eede8553c18cb17c25fd183f04a4b1df16a264b23cab8f6c5a8ba7d31ba"
+    },
+    {
+      "path": "source/prompts/kingokings-992769.md",
+      "sha256": "42e3335faed1efdea4618b05811499ece826b291816fe02fde8903b397c824dd"
+    },
+    {
+      "path": "source/prompts/kisaka-ki-859326.md",
+      "sha256": "83f791cd84e7019b704977f5aa0b22d689f0aa01137d35c7d67e5caf16fcf4db"
+    },
+    {
+      "path": "source/prompts/kisalay-921896.md",
+      "sha256": "722a0bd9865e1c11d231c8655be0824a420a22774b8b99e43c2a76a83061c3c0"
+    },
+    {
+      "path": "source/prompts/kloss-xyz-067876.md",
+      "sha256": "f87612705df3ba1ad292594a85ec07fc605af4b4b559f659cc6b3d1d03e3f130"
+    },
+    {
+      "path": "source/prompts/kloss-xyz-941143.md",
+      "sha256": "03cdfeb33da81a80a7c4e2ca5b12c38f5e91f925a575f90f06d592f6b4ec4f1c"
+    },
+    {
+      "path": "source/prompts/kmasiff-549880.md",
+      "sha256": "4a07fec3c4ebdd8535e6f931c202c25d8ac2b61a7f90234b6b6530b12eecda23"
+    },
+    {
+      "path": "source/prompts/koldo2k-741714.md",
+      "sha256": "1fbd4ceb916699cd93563e08f0769839e4f313b139d43925a33f384f8f9e5d3d"
+    },
+    {
+      "path": "source/prompts/konstantinsaifo-169107.md",
+      "sha256": "aa18e56a6e2bf150afe7af3140219ec82c450c060dd2c046f5dab3465d1fe331"
+    },
+    {
+      "path": "source/prompts/konstantinsaifo-501736.md",
+      "sha256": "44a7872a9a221cb90d7666bd72638275363a0adfb89d8724328c8b3b0df8951e"
+    },
+    {
+      "path": "source/prompts/konstantinsaifo-587629.md",
+      "sha256": "cec03f8023ecb24a817111d44ba233e0493cc3cb7f4d247704e9b12869c65fab"
+    },
+    {
+      "path": "source/prompts/kopert0x-098349.md",
+      "sha256": "ae83fa091ed27708c4c36d1fbeb81f44cb22a44eafb4bda68b56e6f85966ec1b"
+    },
+    {
+      "path": "source/prompts/koushikde-937635.md",
+      "sha256": "c66560b7e2e341faa20a490d885cbc60a87b3c0b2ff13efe24c1605eb8762018"
+    },
+    {
+      "path": "source/prompts/ksmialowski-473410.md",
+      "sha256": "3d68518e51649017336275b710aac61e58031e9e14e8165df4272ae0d28f544f"
+    },
+    {
+      "path": "source/prompts/kum1ta-740521.md",
+      "sha256": "5aaafd3bb6d88f52a760e777cd572d6d27581e1410de0a3c09497e122361a985"
+    },
+    {
+      "path": "source/prompts/kurahu-capten-054506.md",
+      "sha256": "c6869ad2d32fef22e5f6c30c932892dc802a9d077960cc551fbaca58e9f1bdf7"
+    },
+    {
+      "path": "source/prompts/kureshirfan-386691.md",
+      "sha256": "2b0dc07853889677979c58ef3d189d07f4fbe04981055eeee00e8d723cce6cde"
+    },
+    {
+      "path": "source/prompts/l3d1c-632524.md",
+      "sha256": "1942685171cd7f99334d4e9cc843ac7cf20cdd20bb350b24e300a299cd68d600"
+    },
+    {
+      "path": "source/prompts/l3d1c-752011.md",
+      "sha256": "53595b6d7ea13bccdd06e13eaab9a494a4c5bc8b9a7485fdcb75ee01a09f6c0c"
+    },
+    {
+      "path": "source/prompts/lalulu-create-091362.md",
+      "sha256": "664c106218635ef5fc98b4bb6a3fb2fecb6b5a7f11447a67243d50c347ffb906"
+    },
+    {
+      "path": "source/prompts/ldataengineer-823010.md",
+      "sha256": "87d7189a3451aaebe1d056b25cd52869bbf389ca5fdc3ee7894a346eac526d5a"
+    },
+    {
+      "path": "source/prompts/leandroriviello-827135.md",
+      "sha256": "90d8be5100a1ff2064cc543700ad55670e3abf2730576b01ac6cb724415230c0"
+    },
+    {
+      "path": "source/prompts/leanzubrezki-766171.md",
+      "sha256": "a5deb3b442189609a00bfe0f328ca237704ca154a41439918beb326b385c765a"
+    },
+    {
+      "path": "source/prompts/lemcosmos-535145.md",
+      "sha256": "0300ac47d445d81188793a28417c541a155e62d8a9e81b3edca7644343d332dd"
+    },
+    {
+      "path": "source/prompts/leo114119-936422.md",
+      "sha256": "8da654bfd275868550becb80d9524d54d4d1a12d029c3cdb17b7db14ca2daae1"
+    },
+    {
+      "path": "source/prompts/leowenai-125931.md",
+      "sha256": "35951e38a787ba2ba7eb3879946406eb990894828a12e17611655fb832a19e00"
+    },
+    {
+      "path": "source/prompts/lepadev-475414.md",
+      "sha256": "178ca41f6db772b0f70213ac55f9911e01bec9e1ee3e6706f8bbcc83ffb55de4"
+    },
+    {
+      "path": "source/prompts/lester-tyy-480587.md",
+      "sha256": "f163cf72b18d28cf44460333cb7ec2fa9c44722d8e64e7f22b5853dc929e05e3"
+    },
+    {
+      "path": "source/prompts/lexnlin-241739.md",
+      "sha256": "d62b4911fdec9fdbc35bb012c5db67b62a692511cbcf77dfc5deb37f0c97e905"
+    },
+    {
+      "path": "source/prompts/ligayabeebe-323995.md",
+      "sha256": "27ce2f2889091f5d73168eae3f7452885a820e020165786aec8e81ec8e0d390a"
+    },
+    {
+      "path": "source/prompts/linearuncle-971663.md",
+      "sha256": "497752a0e7f942c9ef5565014000aba332305b1fdf0b24d7af5282922c1cac74"
+    },
+    {
+      "path": "source/prompts/linke1427832-343079.md",
+      "sha256": "6dcd2569f5789ae948c616e52b50f39d159533c23eb46a2b4a69ad4173317724"
+    },
+    {
+      "path": "source/prompts/lisp-mi-139812.md",
+      "sha256": "d2e3e60da1f4ba069e7c71cc81936a0633762db4f8b4f90b4d407c925f22ae12"
+    },
+    {
+      "path": "source/prompts/listudio-023803.md",
+      "sha256": "0b3fdac3caa52bfa0011e6a120d52dad94dc1e2be3d9bf94e9e64d309b6d5ece"
+    },
+    {
+      "path": "source/prompts/llama3dstudio-012980.md",
+      "sha256": "fc037e5810613609ed10fdac4991c293dc968d30bf4b2f48376e725951c12c8e"
+    },
+    {
+      "path": "source/prompts/llama3dstudio-918962.md",
+      "sha256": "754454d90dac5a2bb54065981c354a850afbbe900c2c9dc2e0da4bc0ce11494b"
+    },
+    {
+      "path": "source/prompts/lnkiai-544254.md",
+      "sha256": "8cd6d3373ed1f6c97adb3902794784ebdbe2e2c9055453d67fa62e678cb4425e"
+    },
+    {
+      "path": "source/prompts/localjulius-625706.md",
+      "sha256": "a7767fb531044fee9e33a13df66cd0131f834e21c813cdd3530377378e25b3d1"
+    },
+    {
+      "path": "source/prompts/loicrambo-980558.md",
+      "sha256": "eb1fa3c88aa22380b09f9b9b70c35f4ad7460176e1a1b994916332b02a129b4e"
+    },
+    {
+      "path": "source/prompts/lribes4-742305.md",
+      "sha256": "cc6b71b09a5dd95fe8f60dcb2b6f84381569e755d08d6ce1679b1a40a06593a7"
+    },
+    {
+      "path": "source/prompts/lukasersil-726495.md",
+      "sha256": "5a15f3dd78f2557c23fc03dfca57f722b463eb26b6fa461f22b1ac674d0b3da6"
+    },
+    {
+      "path": "source/prompts/mablesjoseph-735781.md",
+      "sha256": "59f3df4ccfbbc95391b63aa4646e83c1d35f9b018469459c4885c1d4f11ec528"
+    },
+    {
+      "path": "source/prompts/macrohou-733862.md",
+      "sha256": "b9304167a2154d220ff46c8153e395a9c50ceb63ce7574b4dde0b65b8c9e3c8e"
+    },
+    {
+      "path": "source/prompts/madebyjmayala-649220.md",
+      "sha256": "10e2c397918d7220246d18e3670231b8bff33895f5f3bf51208313b357366c9d"
+    },
+    {
+      "path": "source/prompts/madhav-xo-524440.md",
+      "sha256": "0a450c077fd4a7d2c53b519da3c149ed0e29faf0457a5caf66f8f45fc601c7cd"
+    },
+    {
+      "path": "source/prompts/madpencil-753990.md",
+      "sha256": "038cb2a1773e65b3c97e8a5ace4fdf1988a1129912a59db23dbe88e308d81786"
+    },
+    {
+      "path": "source/prompts/majidmanzarpour-927543.md",
+      "sha256": "06b9d0bc1e6dd59ee91fea16971030b2505471d0477786e46a18111adb402a48"
+    },
+    {
+      "path": "source/prompts/majin-appsheet-693327.md",
+      "sha256": "8b2bf5dcec44a28f09acf60c31030bccf541fe0e15c40a248fde1f93092fb58a"
+    },
+    {
+      "path": "source/prompts/majorbaguette-834228.md",
+      "sha256": "edebc28dce030ce102908115ad2bdd44455bd1937e4f1d155d8df9f8d269254e"
+    },
+    {
+      "path": "source/prompts/mandelduck-768972.md",
+      "sha256": "d3f9b6d35dc7378f9d6ff722d4b5d660a3b5d6409058f78e3229561419802685"
+    },
+    {
+      "path": "source/prompts/manuelogomigo-052364.md",
+      "sha256": "df7492e0159e4763fb02daa5bef66767174c8722f98f84b037825c82a9b6bf46"
+    },
+    {
+      "path": "source/prompts/mappletour-334921.md",
+      "sha256": "617e33fe1453fcf338689e1ef163ab20d72c7c874823d7b8ccb75ecd015af831"
+    },
+    {
+      "path": "source/prompts/marklaunches-041046.md",
+      "sha256": "9a3362c4fccd548ddc20ddf6bc5c1186a2e52af5f906b67241b1c11d7a3c36fe"
+    },
+    {
+      "path": "source/prompts/maruo-0314-998343.md",
+      "sha256": "902edffc4e13dbf32dd9d12b33034ed2d0497e008765cd2c3467f1a0b28c595f"
+    },
+    {
+      "path": "source/prompts/mattbean-917572.md",
+      "sha256": "c1b27385bd1f56cb04cc2f187d54e1242bbf54dc0ea547ef9aae3417c657842e"
+    },
+    {
+      "path": "source/prompts/maxalexweber-459784.md",
+      "sha256": "fc654104b163f6eea889f8102426f6d83b27d337bae8feba828f8443a9254621"
+    },
+    {
+      "path": "source/prompts/maxhirsch13-600983.md",
+      "sha256": "5cf90417dc9be68830c972b1e2c07d3fbc27a00ac5d1a1c12c24c5e636d41fc1"
+    },
+    {
+      "path": "source/prompts/maxthelion-649723.md",
+      "sha256": "2dfedbca31c592c124a66a6c493a861bbfc35fcb6b87aa07eba434dfa4f8803c"
+    },
+    {
+      "path": "source/prompts/mayuresh-empire-687553.md",
+      "sha256": "41d0a52fdcaa0cc770c6625a7481499bdead6e2cc16a0aa0cee6451b7cf5c8c9"
+    },
+    {
+      "path": "source/prompts/mdaman010-111079.md",
+      "sha256": "a17baa7608ca77dcf4bf64c41dfca8b2a78e5c8b812a415e41a211644f4f881b"
+    },
+    {
+      "path": "source/prompts/mdaman010-207866.md",
+      "sha256": "bef8031c68c54e2fddfe25bf4ac9c79af5e7efda0cd327ebcfe51b98788e87f6"
+    },
+    {
+      "path": "source/prompts/mdaman010-610173.md",
+      "sha256": "07ec85f469119b9f5b87a8fee330c2694a1268dbefb29ffa1ddcf06f9fad52fb"
+    },
+    {
+      "path": "source/prompts/meetarno-782464.md",
+      "sha256": "7c766c69ecfc0ee35e7e68cf35deb837b4bf3f260613cc9916edee3270bc4972"
+    },
+    {
+      "path": "source/prompts/mehul4795-417532.md",
+      "sha256": "3f54c0dcda0b402b0b6df535680f8779c791ee9f6f24f9787ccbf74bf07c54c2"
+    },
+    {
+      "path": "source/prompts/melvynx-638493.md",
+      "sha256": "330a2fc6a556ec549b4c2c1a71e493668d44a196ee2c7a3512f9db864a0ce136"
+    },
+    {
+      "path": "source/prompts/miaai-lab-774895.md",
+      "sha256": "05eb2b6945a6ba57f564cb0c3c701a239b905dee8585384fc38694360e189ea6"
+    },
+    {
+      "path": "source/prompts/michaelraspuzzi-740595.md",
+      "sha256": "7dd4ac2f4d6cbc644176577cab01ea218db39534a46e99e49019e4941b472d6f"
+    },
+    {
+      "path": "source/prompts/michaelzsguo-782312.md",
+      "sha256": "f55182b2cbf1415a8b62174edb1858558bb3d74568ea7ec18442d65e48c6b668"
+    },
+    {
+      "path": "source/prompts/micheleharmonic-244175.md",
+      "sha256": "340a4b12cfde599d8bae2c7eb738bc0164d4b5d52fcb2f22703d640ef4c267e0"
+    },
+    {
+      "path": "source/prompts/miguel07code-091611.md",
+      "sha256": "305a7eb255e37affb857a0cc029b8f4f2fd4abf1014d82f4c9a43a8eadaab5bc"
+    },
+    {
+      "path": "source/prompts/mileson07-065690.md",
+      "sha256": "e99fc6ea5f17e836d0f71e61e58b825df6f083fced4b0e3f9feef150b4451459"
+    },
+    {
+      "path": "source/prompts/milos-gis-317580.md",
+      "sha256": "724922349383bcc6786136f5c810dd50d5650436fe61379892b71eec3d3faa89"
+    },
+    {
+      "path": "source/prompts/minochan0824-827805.md",
+      "sha256": "c48b1e3155db3a896346e598c2a649d0af7c1c4157a580e07cbfa79a8c129ad8"
+    },
+    {
+      "path": "source/prompts/miskinho-956105.md",
+      "sha256": "5a2074f16d95e7a37c8f6315d56cbcb4b8dbd7b151ae4e57c722efea86a9edd3"
+    },
+    {
+      "path": "source/prompts/mizugame-22-719199.md",
+      "sha256": "da5309062cd7324f22972613a0f4d1aabaf1245fe7acc131ab2ccfb52c97a042"
+    },
+    {
+      "path": "source/prompts/mochi-agi-421448.md",
+      "sha256": "d7185bed06a3c460e856f438b49fd695c16ec4abb59809f70b9fef49fc8f347d"
+    },
+    {
+      "path": "source/prompts/modaalbuilder-868989.md",
+      "sha256": "c2b4f3e833001445bf7a39dcabebf7122f841e48a5125e573f5003bb9aec7e09"
+    },
+    {
+      "path": "source/prompts/moguzbulbul-215591.md",
+      "sha256": "2d99d96eda864c2f9e3ed8348a91652293e46088de3d65c8837bdbbbe46e0d46"
+    },
+    {
+      "path": "source/prompts/mondemsuraj-691517.md",
+      "sha256": "574518e1fcf37100c15aa75b5b03e0ebe278305678a6594b455dfbf1e0c346b9"
+    },
+    {
+      "path": "source/prompts/monokern-832979.md",
+      "sha256": "b9693b816031a99accd4d8bc1954926267810325a5387e5bf92c225ad613bc82"
+    },
+    {
+      "path": "source/prompts/moritzkremb-466494.md",
+      "sha256": "0d49d231a3ce23e2ad3ce4196123f7c0c619cff0194f26e5b91b497e62ab54f3"
+    },
+    {
+      "path": "source/prompts/morse-369333.md",
+      "sha256": "0c05acbc7a45f1eda0964422aef44e373657395a631202ee2bf8bc7865c17f2c"
+    },
+    {
+      "path": "source/prompts/mounnna-497266.md",
+      "sha256": "4b4747c6cb0bc703aef9311a8a757594c0008cfa0fdfd2b508c99a4f580eec0f"
+    },
+    {
+      "path": "source/prompts/mouri45-575311.md",
+      "sha256": "02451c5e782e6d45e3b69b8e8047db0be1abf1d5e53298dbdffad46828f34572"
+    },
+    {
+      "path": "source/prompts/mousszy-baby-014197.md",
+      "sha256": "7c3290d876fb924a4f20271eed08ae08ed5003ede7bea5427b55d2046840e271"
+    },
+    {
+      "path": "source/prompts/mozetech-471882.md",
+      "sha256": "359ccf4cd4774cd6a676c22714790a734e9dab16634cde1b4f6d70d733ef5b69"
+    },
+    {
+      "path": "source/prompts/mrblock-096062.md",
+      "sha256": "240ea132c2b46c2ec2b9dc140c288588717a6e11bc3c61c20a12790efbc18ed5"
+    },
+    {
+      "path": "source/prompts/mrkindey-267498.md",
+      "sha256": "bb0d9502422e3208c71ee0ab9fbb3b9cac3d04f194a0361334cebbcb4c9bf13c"
+    },
+    {
+      "path": "source/prompts/mtvneo-148436.md",
+      "sha256": "e4c65491ffca9be0ee3fccd6cc2cd1ec1b4a231fab82733cb4254e250b758560"
+    },
+    {
+      "path": "source/prompts/mtvneo-819281.md",
+      "sha256": "a20f06853f322e56daa16bf3ed735f6091b2e9731b5a53fabbf7c7c6656a5c9c"
+    },
+    {
+      "path": "source/prompts/muhamma61700589-512003.md",
+      "sha256": "02e9ecd8c09b06a0deb1f5e2982a876925fd4a518a48f0b932bd9a6ac151b212"
+    },
+    {
+      "path": "source/prompts/mycodecoach-459574.md",
+      "sha256": "6aaee73c2763045d8fdcfe7c9bb6f21df147f07ef2fb59a3e03e36018e549d61"
+    },
+    {
+      "path": "source/prompts/myonisto-923578.md",
+      "sha256": "e3ef79969deede704be483458e4380d3c6c942eba5c5494b95234544a9e0ea6d"
+    },
+    {
+      "path": "source/prompts/n01ennn-597182.md",
+      "sha256": "da3be9f4dcb095b3835f003822f0658373ee3dcd581b16daade89db7185688af"
+    },
+    {
+      "path": "source/prompts/nakazakifam-831964.md",
+      "sha256": "a038c725ff1b417c8dbb62a0b9c1751f8ce2d76cd2be895b1caa78753cdd9627"
+    },
+    {
+      "path": "source/prompts/nathanwilbanks-981110.md",
+      "sha256": "ac29bd4e9c05c49068b5ed6267284eaf8f3d947eaedbb318a10a08f856661a37"
+    },
+    {
+      "path": "source/prompts/nehalmax-802479.md",
+      "sha256": "fa5cfc8e630c2cade67e16c3432cb3944ca04bde6832109ffdbfccdca8b0fdb6"
+    },
+    {
+      "path": "source/prompts/nemtudo-614053.md",
+      "sha256": "b2b3cf8fb9dce97dfaf27a75dfa6f7677c92384ce9123b3a19a763ea9b911745"
+    },
+    {
+      "path": "source/prompts/nezbuilds-294391.md",
+      "sha256": "9c8c533f86f639996315de6cc748cfd298deaf6d64939948a794ca702edd2c59"
+    },
+    {
+      "path": "source/prompts/nft-chen-068069.md",
+      "sha256": "528309a5bb05166af4960b9a7ded5dd7ad5db6cfd83220331819ab28d5f28fff"
+    },
+    {
+      "path": "source/prompts/nft-chen-350878.md",
+      "sha256": "7084e88943b8fd4cac6b77c436e5153617b1d371f7f5151940ecc46323efa6ee"
+    },
+    {
+      "path": "source/prompts/nicolamanzini-156628.md",
+      "sha256": "69f7dc33b53998bf2313a249b1bfe321e9cca3f40b5e693db779a17adcade06f"
+    },
+    {
+      "path": "source/prompts/niebin-gg-621849.md",
+      "sha256": "bba853b3231aa844f779836b60f9efdaddcd27d476a92ffc110a83110b38e6ff"
+    },
+    {
+      "path": "source/prompts/niegramotny-197521.md",
+      "sha256": "4115d26239c4da5178e61f3a01af21df6659aec9b1ae1aa673383b709956d797"
+    },
+    {
+      "path": "source/prompts/niirajrshah-163739.md",
+      "sha256": "47d3ccb46d2a40cc8f344c919f43375c01ec4e828ceb13ec40975a697f79dfb6"
+    },
+    {
+      "path": "source/prompts/nikolajankovic-616097.md",
+      "sha256": "1be2a5a47d6917fba88125e17184ce2bf174bfd882b9cb031cc98f5a5ac3dcc0"
+    },
+    {
+      "path": "source/prompts/nilou-salehi-458567.md",
+      "sha256": "5010ad162c89813c4f3d736da5f1fb1293d939fc2e20d068ca201caa6a49ceec"
+    },
+    {
+      "path": "source/prompts/ninjaswebcom-684126.md",
+      "sha256": "e4854abd41735be75de6f68b44068efa8a5571f78c855cd1f3b5647393b254de"
+    },
+    {
+      "path": "source/prompts/nischalsharma-587738.md",
+      "sha256": "54f3a16289ce0f66218c98919458712a84560fcb0094ed493b028b709732973b"
+    },
+    {
+      "path": "source/prompts/noah-z-zhang-765393.md",
+      "sha256": "2526c7264f8019212a4739a940c72ef2c9392bfb5b78d571d97194b24b5c0c7c"
+    },
+    {
+      "path": "source/prompts/nofollowers2023-974928.md",
+      "sha256": "a3b34bdb4f55053ff9d4effe6329a3125069965ff230d73631bd13af7d33aca5"
+    },
+    {
+      "path": "source/prompts/nolit64-347627.md",
+      "sha256": "10efcf48e37a87b4d3e57417b8a7c0f8d5720291d22e6022df85128bb6ed2fdd"
+    },
+    {
+      "path": "source/prompts/nolkeeg-635633.md",
+      "sha256": "54528b93ae424efe02a3240f7e23a4ba6a83f1a9d1b1ee74b125a3ada6fc8af7"
+    },
+    {
+      "path": "source/prompts/nonbiri-ai-110674.md",
+      "sha256": "980501aa3936bfc7e7d4e9371568524cc72a47ee65846af67f4afe7558f0b5ed"
+    },
+    {
+      "path": "source/prompts/notdwd-766641.md",
+      "sha256": "c85c842ca762b196da0b2ad3afa5833000dd3daae05af5378be155757eb7b374"
+    },
+    {
+      "path": "source/prompts/notdwd-998633.md",
+      "sha256": "057a63131eee7ad07b2db2dd023437e139773516d12c2e985c698b921751a965"
+    },
+    {
+      "path": "source/prompts/nqaze-939886.md",
+      "sha256": "d37deeff4ffaf74c1e12d866272be0c47b40caf60ba774167a07a2170ab7de57"
+    },
+    {
+      "path": "source/prompts/nummanali-340931.md",
+      "sha256": "4f6a5ae793f8c5cc693a810dd9d2a1553541852e9c45d90b742823506f571981"
+    },
+    {
+      "path": "source/prompts/nybobs-680050.md",
+      "sha256": "4f44fb3ab6d2e1e6b25aadf95b9df51ae3792df8e084e98d8981a958d8c31883"
+    },
+    {
+      "path": "source/prompts/oab10don-457273.md",
+      "sha256": "0bdcea1fbe4bb16aed6a0e8627f8fa340e217817c121cca00c684bc319a2b1f9"
+    },
+    {
+      "path": "source/prompts/obydulme-052905.md",
+      "sha256": "50a280d2b89ffb83dac092129ebff9de5139e20a804f7a281b5e3f5b35f54b8f"
+    },
+    {
+      "path": "source/prompts/okapi-fukugyo-166351.md",
+      "sha256": "3de4ac7c0a0314754801fd9559adedc5a231af929485888d73ac3ee6c6b5ed70"
+    },
+    {
+      "path": "source/prompts/okazaky-084783.md",
+      "sha256": "633a12ba6b716b47df4508da9a9d92d8badd4e9a097d596bf7f7b07408c90b20"
+    },
+    {
+      "path": "source/prompts/oliahmed205-069378.md",
+      "sha256": "091fc770677a53a630536d4807914b5bf350412139b77ba15fd386ffa7a0ac52"
+    },
+    {
+      "path": "source/prompts/onewaysidewalks-440008.md",
+      "sha256": "4a7498d79795fa6186b69c703c8834b931ec45e3f9c4ac3664f2cebb4e7b4a75"
+    },
+    {
+      "path": "source/prompts/op7418-021491.md",
+      "sha256": "53e28fe36b24fd65ca299d9f31a02b921a294ec440a846c60a35eb5f92b8eb84"
+    },
+    {
+      "path": "source/prompts/op7418-814408.md",
+      "sha256": "a6103f5e414388dc978605e18b0a5ad6664eaf85d43228b92f6bcb3eb5fff625"
+    },
+    {
+      "path": "source/prompts/op7418-818226.md",
+      "sha256": "bb698514f72fdc35dedf7e36791743db5e724b684e854094e8b3e85819a61222"
+    },
+    {
+      "path": "source/prompts/opener-ai-843891.md",
+      "sha256": "f9f3a70a213d938fc57208988b1db69fc78d045ef885f24f398557836aae5a94"
+    },
+    {
+      "path": "source/prompts/otatechie-035448.md",
+      "sha256": "93d5b5c6f10ace8c6dc857935106b1fed12bf22d4a04902ce816cd7be975ebd2"
+    },
+    {
+      "path": "source/prompts/oxpsats-182908.md",
+      "sha256": "12d15f4213d0753842905203d2ee7455b4e530433cd98d97f71295ce1c6caa51"
+    },
+    {
+      "path": "source/prompts/pagustafsson-566609.md",
+      "sha256": "813032be967e494981807d9fbe9acb2b55fbdb55e1fe2d627d12cf6c3834bfbb"
+    },
+    {
+      "path": "source/prompts/palashbagchi11-389221.md",
+      "sha256": "33dc8a65d1d518fa8fa8c5a943dc03a4da897b7b21a081ee64388fcacbd568b3"
+    },
+    {
+      "path": "source/prompts/pankajkumar-dev-718609.md",
+      "sha256": "25bd83e0ffc73586686bfa4d73886656fae33a06dc2eed71d592ddebc244a24a"
+    },
+    {
+      "path": "source/prompts/paripune-657175.md",
+      "sha256": "3aae78f20f0a175f5c335e29e5e7ee5d6afb497998066d025840e0605ced32a2"
+    },
+    {
+      "path": "source/prompts/parkerrex-701462.md",
+      "sha256": "a811b5037e4bedbade30310a1a6d45d316d8ac378f9d3afdfd159c6b82ac6efd"
+    },
+    {
+      "path": "source/prompts/paulo-kombucha-283883.md",
+      "sha256": "b99d55a5a06eb7cac5db9b71fb0055599d1c73dc49ae76228eccece71ce6ab5e"
+    },
+    {
+      "path": "source/prompts/pbteja1998-651644.md",
+      "sha256": "019a008466f64a32db9f7a2160b062221bf1c43d287c336155c56c4fed3ba183"
+    },
+    {
+      "path": "source/prompts/per-simmons-944727.md",
+      "sha256": "26ed75825e99a21dbe551487a97fa89be65dc234c2c69898adf95ceb1d819423"
+    },
+    {
+      "path": "source/prompts/perezalexa23-414045.md",
+      "sha256": "f4e530c21fb2d6f835de17d2bab11c3bcfbf1c65c34d3e08442bc88a9139809d"
+    },
+    {
+      "path": "source/prompts/petert-350098.md",
+      "sha256": "600ff87f9b3b859969391ca17c921b8ce797c6ae3daaa8bfe7974f2a490e494b"
+    },
+    {
+      "path": "source/prompts/petert-540960.md",
+      "sha256": "006036af65e05b48d4d54962349418c32f2cf77e99f58c9e2ed14d551b51973f"
+    },
+    {
+      "path": "source/prompts/petert-635793.md",
+      "sha256": "ba2e2664901a8d84876181f8d4dc56b4520197fddd4dd273fcc72220b51de067"
+    },
+    {
+      "path": "source/prompts/pisajeski-168993.md",
+      "sha256": "135b80d89db320520332ecd6bbe58d2c7931f9d9f5c3e16074990bff8dbcb1e9"
+    },
+    {
+      "path": "source/prompts/piyushaaryan2-196586.md",
+      "sha256": "aa48506178640703f001276dcf34830a9f7a542e9794fbfcb1be4cd811f8d513"
+    },
+    {
+      "path": "source/prompts/pluginplay-472343.md",
+      "sha256": "5bc8597c7bea0b15ea7a11572d376c82c97864ecf001fb505e78c487bbbe7f2f"
+    },
+    {
+      "path": "source/prompts/pluvio9yte-662953.md",
+      "sha256": "dc9472a4a96df9b8218241d49938096909df848ed0e2c162e69ee79a51172168"
+    },
+    {
+      "path": "source/prompts/ponzponz15-145882.md",
+      "sha256": "8f07e5f10a8300df4f311c482c25b9115e1bd456c90ed6ee5eec6d846458b320"
+    },
+    {
+      "path": "source/prompts/pound75423-464968.md",
+      "sha256": "3cfa8bc1dd7c9da0509a00460f7ea406ad81bb007e8ab0e28b5e2cd67aeb5fc7"
+    },
+    {
+      "path": "source/prompts/pradeepxkapoor-641956.md",
+      "sha256": "6fa2e50c4659f1853a03c927e13c5b451683aa2369c86cd707dc81a4d0bfbd95"
+    },
+    {
+      "path": "source/prompts/pranavclickks-254816.md",
+      "sha256": "b5766ce95dc32408dfb0c1f9b25bf2a05cd9808250fda87da25a2587a158e383"
+    },
+    {
+      "path": "source/prompts/prasad-pilla-496049.md",
+      "sha256": "bd16f908df4c2b28160e3cba0cb2f4ba67bb63bcc9b2e74fb7e3cf7ec0bacff2"
+    },
+    {
+      "path": "source/prompts/prasenx-693512.md",
+      "sha256": "719686b1be1025b6d4889ee87d0deb5f2f9fd357afc4252485114614fb88cec0"
+    },
+    {
+      "path": "source/prompts/priyansh0327-206409.md",
+      "sha256": "e6d80a3d6e9a5a34b129b5831f0f68deee02096a25daccfb220596352fc7a6a8"
+    },
+    {
+      "path": "source/prompts/proanaliteg-458642.md",
+      "sha256": "92dee2a0d997e6d72708d40b662ba6918b402aeeb305681709bc38b520c34259"
+    },
+    {
+      "path": "source/prompts/punit-io-584518.md",
+      "sha256": "a186e31d99cb0be6930ac58ac82361332596768408a559e8db3fe9156576bb01"
+    },
+    {
+      "path": "source/prompts/q970270495-497923.md",
+      "sha256": "ec6ef478bfb9737e30b455220663e72052fd9271e3c644860cc69f55407dd7fe"
+    },
+    {
+      "path": "source/prompts/qianqiongge-246969.md",
+      "sha256": "1d08e0246f275b967c0490a1e8cc86ba83fce4babcae924a046895ac0694cda0"
+    },
+    {
+      "path": "source/prompts/qinelke-271655.md",
+      "sha256": "c7b0d6cc064ade7d3fae619c223388ad16d6434d47e32067e6106c135f5c9b0b"
+    },
+    {
+      "path": "source/prompts/quickdesignio-338399.md",
+      "sha256": "010f99c87cab596fe18243461a2003d14602b9c37eacea06f1db56a861db4560"
+    },
+    {
+      "path": "source/prompts/rafiroutes-596199.md",
+      "sha256": "e043eea93f989c8fca01ab19fa7f673c1641a5bd4918c6aebb7286667e134b9d"
+    },
+    {
+      "path": "source/prompts/rakhsh-tech-544921.md",
+      "sha256": "204fbb6e3198f270b36a935272b5351fdf084b45431279650dd6ff94dab5c60e"
+    },
+    {
+      "path": "source/prompts/rames-jusso-776559.md",
+      "sha256": "5fc8c8bfe37c9e116cc2e34db232eaf6e4bbddf21dbcae8ea0a3370d5aadead5"
+    },
+    {
+      "path": "source/prompts/rammanq-034553.md",
+      "sha256": "62cd576d927e3bd6e6afe8ac80b7fbad23232ad95ccb45787100c5c8b4288068"
+    },
+    {
+      "path": "source/prompts/raphaelaubryy-687877.md",
+      "sha256": "2b756450df2324410b3a70544b5440cd034d43e260882e7d83174f0a39966f74"
+    },
+    {
+      "path": "source/prompts/rashadmirza404-020971.md",
+      "sha256": "7a16fa7638f596aa92316e39069f88d0c42c2a1ad78ba23a3abdf3721d0a0e78"
+    },
+    {
+      "path": "source/prompts/ratheejaisal-154698.md",
+      "sha256": "ba0919dfa2b5be7b3a2bb566d265e38e6d3314257a4acace927508dbb0652aa7"
+    },
+    {
+      "path": "source/prompts/realfedeuru-475858.md",
+      "sha256": "ef522d79406bfeb3135dbd53c7ac820c0c36fbcb4d377757cb26a6334e073c6e"
+    },
+    {
+      "path": "source/prompts/rebutonepress-688099.md",
+      "sha256": "aeb866afa2bb51d11ade1e6cd064fad3e9c1aa32c0fc9c4c7df11fec525cf5b6"
+    },
+    {
+      "path": "source/prompts/redp314-642106.md",
+      "sha256": "bc73e5b0727f7d38fe1ecdd03520c47f9e393c34392598706e6b1d3cdb6471ba"
+    },
+    {
+      "path": "source/prompts/redpersongpt-284430.md",
+      "sha256": "d4cbb156486455596869f5346782f5510651c45f4bcb8aaec12868e45dec5be2"
+    },
+    {
+      "path": "source/prompts/reflex-cloud-304046.md",
+      "sha256": "d86ba87dfac490a4ffe8b84db9b6e68214941d233932a41a4bacc7a05750b721"
+    },
+    {
+      "path": "source/prompts/rehan-shei-839416.md",
+      "sha256": "02d82e829b88f2920dbf7d07a27f4775330dd03e96035954e262664da30367a5"
+    },
+    {
+      "path": "source/prompts/renmu2017-477264.md",
+      "sha256": "ac7a1acea0a7748843a44a02bf4687325dc7a5eb473abfb09bbfa9fb20c47b2d"
+    },
+    {
+      "path": "source/prompts/retropunkai-060898.md",
+      "sha256": "0c9d3cae2ce989276a2f3e8ee33a9bea0669a91c99d40a44fbec63e0d75e0b2c"
+    },
+    {
+      "path": "source/prompts/retropunkai-277590.md",
+      "sha256": "f6cf156c1f183b231ef7052fd727c62a957031f9d624e4a9495c149c15679e3e"
+    },
+    {
+      "path": "source/prompts/rishit30g-568278.md",
+      "sha256": "aad4223b48900a5b481a186af753ea6eeca2b63dc4adabed6b5a945700e2c7d8"
+    },
+    {
+      "path": "source/prompts/riverroadlabs-269620.md",
+      "sha256": "8d6bc97f692214bda3ae832d0abec5a531bc3e29081f972ad79b8e6cddab46a5"
+    },
+    {
+      "path": "source/prompts/riyadbkhsh-300736.md",
+      "sha256": "8f659bfcfd7eee111ae85db1dbbd5892bf4c3b206bbe0a4ec9e061554585e233"
+    },
+    {
+      "path": "source/prompts/rneayan-406275.md",
+      "sha256": "0e9a6c183a6e7bc730045f1ced844b66fa4ce5584ffbaf73239a19a7faf64356"
+    },
+    {
+      "path": "source/prompts/rneayan-417829.md",
+      "sha256": "35a51ebacec4b4baa0853f62759a4ae12ff1c84f68afd4cf07cb963ebcef557d"
+    },
+    {
+      "path": "source/prompts/rneayan-441493.md",
+      "sha256": "2f20eb074772f282a8c8dffa4ea87fc813319dea913c2981138dddf58d536efd"
+    },
+    {
+      "path": "source/prompts/robvjourney-237474.md",
+      "sha256": "8c26a90d47173b2121744128057e67ad56ca88b80972a0dfa2a942b5e458e597"
+    },
+    {
+      "path": "source/prompts/rohanpaul-ai-500542.md",
+      "sha256": "ee557a965cfeb66171a2618cb53a1c460ff8dc416665b960811eab6f1f267b77"
+    },
+    {
+      "path": "source/prompts/ror-fly-880547.md",
+      "sha256": "7687540e80593be4bdc46f8fde0f95b66f22cab0f3d954d395d02ee70341df67"
+    },
+    {
+      "path": "source/prompts/rossaxbt-312793.md",
+      "sha256": "e18cc0b77bc496fb7197a82d71e0c2a74ce5255615c0af63b63d6ea361a843df"
+    },
+    {
+      "path": "source/prompts/rossaxbt-707651.md",
+      "sha256": "bdb7a3c11fa5b379dde2c6c44c74c26feff6b929ed7afe1a934d20f34cb858b6"
+    },
+    {
+      "path": "source/prompts/roundtablespace-232366.md",
+      "sha256": "158ec6806aca868a7b6fe60da73358e6ec9735091c60b539ee8ed2abba79ade8"
+    },
+    {
+      "path": "source/prompts/rpa-dake-593915.md",
+      "sha256": "3120d22b4f0193cb6c13033f8d62928a0a8948870a89afaf71d21085677060f8"
+    },
+    {
+      "path": "source/prompts/rubenssoto-ai-802657.md",
+      "sha256": "30981ee40c429a79197ef941f5ab8de5de13f0f88da7715a5442c43a7330401a"
+    },
+    {
+      "path": "source/prompts/rush3rx-342153.md",
+      "sha256": "496fac4a3306072c03b07ac339ced0ed1bdf39054f196bf12c44d3fb40306d17"
+    },
+    {
+      "path": "source/prompts/ryan-morr-666741.md",
+      "sha256": "fcf657a72dbda7664daad0688ff68e75d0f10e6a566aa115c7ed39e6bf1460f4"
+    },
+    {
+      "path": "source/prompts/ryzoft-887481.md",
+      "sha256": "f2733cebc86e682d6c66b32269fec4f015245062aa989daf1f10c382d0a1fe7f"
+    },
+    {
+      "path": "source/prompts/saadpastadev-347341.md",
+      "sha256": "8add61ee4185924eef70f556b2274b4e3b2ff82b6076b1408be9d149657c1658"
+    },
+    {
+      "path": "source/prompts/sab8a-475686.md",
+      "sha256": "8750a9a18ecc17360b2705c306a99374453345264c557d9ea69a76e36d6eea2a"
+    },
+    {
+      "path": "source/prompts/sachaarbonel-673648.md",
+      "sha256": "bdfae8ff039bcd232198071f92ef744e860279eedee0e89e53ab4578d9cd8c17"
+    },
+    {
+      "path": "source/prompts/sadalbert10-856416.md",
+      "sha256": "7bf8283dfde75e8cc14577bb87d19d02329667e9212835eebcfdb36637a13a94"
+    },
+    {
+      "path": "source/prompts/safaelmali-004843.md",
+      "sha256": "aca1208fa97039289c549958bb272b19c3b9c8363c983df03441c744d3a74bfc"
+    },
+    {
+      "path": "source/prompts/sahilvermaai-189237.md",
+      "sha256": "5759c1f894a796b3d1b5ce6147dbf234cc76269c5e68f8528c884873f9723abc"
+    },
+    {
+      "path": "source/prompts/salmanr2d2-661615.md",
+      "sha256": "73e5803d04df8369c1bbe7c166998d97b930a5d47ad2f2c2cc66ef3e1b358c85"
+    },
+    {
+      "path": "source/prompts/saltyaom-620933.md",
+      "sha256": "6f44599ec296e02ceb7a9814a4b62c62ee551083c0260c53eceee62c068b5c00"
+    },
+    {
+      "path": "source/prompts/samaote-124569.md",
+      "sha256": "2eae30ee933e819990dd828ca538434e07a05e6a5828f308e36c3e4c13e130e1"
+    },
+    {
+      "path": "source/prompts/samissudo-927179.md",
+      "sha256": "1f2adeb2b7262ec2fa3f6b6c8ae56b351a65a4a4ff866ef508b90e2c14a713c9"
+    },
+    {
+      "path": "source/prompts/sammmaing-702076.md",
+      "sha256": "dc81e11231f4835f8f4ee546f976930c32dbf2cbf5bf1f246949ac95583b0ba2"
+    },
+    {
+      "path": "source/prompts/samuel-spitz-503053.md",
+      "sha256": "0279564177f27a94a83e0bf1189a411d327cc55ec1469d32f5e43ef5e9418876"
+    },
+    {
+      "path": "source/prompts/sanjay-khadka07-620029.md",
+      "sha256": "d784a72dabfee8813f1e9d4c482fd5e825e41cdb705db53acd602afd74ca3eee"
+    },
+    {
+      "path": "source/prompts/sanjeevn72-151834.md",
+      "sha256": "a64950ecc138c4f67e09185184192aa45a8ba6578834370f91f726851dc452c9"
+    },
+    {
+      "path": "source/prompts/sanjeevn72-457691.md",
+      "sha256": "41b30b72597e8ac18ae15cfa3f5d9e8fef2af7047a9edb0272ab56650cd5f741"
+    },
+    {
+      "path": "source/prompts/sarut0bisasuke-069973.md",
+      "sha256": "ceaa66f3783f699a5468a990757e9a53a404f243a8d49ae1bde20a9ab8e97c24"
+    },
+    {
+      "path": "source/prompts/saxxyweb3-690124.md",
+      "sha256": "38b109d5accc6cc44b188a55d84fdfee1d56b24816a63c1eddff195cc0a41ca3"
+    },
+    {
+      "path": "source/prompts/sayan-shanky-868515.md",
+      "sha256": "d471e4cdcd6fdf14d3ec865185c03ba933091b5bbf5869380078be964c334391"
+    },
+    {
+      "path": "source/prompts/sciencedegens-843325.md",
+      "sha256": "44ad1120f7c9f44755a2877926a692b9c8b2ab48e576b8692a5da84ddb533cb7"
+    },
+    {
+      "path": "source/prompts/screeendev-981790.md",
+      "sha256": "1affdf0d0010e308f0b5ba14d3f42f5bc021b41fcd1fd8468b08897401ee448e"
+    },
+    {
+      "path": "source/prompts/sdinesh91-159008.md",
+      "sha256": "b09b88569f414cc022c8f51524d338367b3708638bc561a6cedb067f3291230d"
+    },
+    {
+      "path": "source/prompts/seantiffonnet-675262.md",
+      "sha256": "f2facb8b60e6c8e20b0b40d53351e3a055b49a9ea2b6f799ea1e1e911633b8c1"
+    },
+    {
+      "path": "source/prompts/seri-nonnon-231813.md",
+      "sha256": "835a056750da5ef806558a9b91ab50df89a7637b23725e7903a882a2495e97f0"
+    },
+    {
+      "path": "source/prompts/shengtang135754-900065.md",
+      "sha256": "789c810f31a1813b15aee5dea22c527c8e7111c15b9835d41e26b602b163bded"
+    },
+    {
+      "path": "source/prompts/shunshu32385143-944719.md",
+      "sha256": "48be816a276cf3758f40f0bd745c1ea2a29000a0b7c47a3304904d429fadd386"
+    },
+    {
+      "path": "source/prompts/signalz-jp-918002.md",
+      "sha256": "29ddfb933091771076165ebde79516f139917196002a0cbe7a3c6c6b509f7c68"
+    },
+    {
+      "path": "source/prompts/simonasltu1-981181.md",
+      "sha256": "479f9bbf18d673c729f1d620ef5cae181405e135faa6886a639b973004b97135"
+    },
+    {
+      "path": "source/prompts/slvdev-975986.md",
+      "sha256": "f6a114ec3a0cf35229037f2b51be98678a25f96851cb796c60b40dfe76c80911"
+    },
+    {
+      "path": "source/prompts/smallhusk-272056.md",
+      "sha256": "30920d5b0fc73c0540f3840d658ecf2a0e902728122afeadd712ea60958fc95d"
+    },
+    {
+      "path": "source/prompts/smitjaineditor-843957.md",
+      "sha256": "9639583b93fd89f694e5c4f1c6f7444ff16721167d47ff20b9d013e8d07ff93b"
+    },
+    {
+      "path": "source/prompts/so-ainsight-225926.md",
+      "sha256": "51564bd93cb8e92145d9c219d1edf96e447a3b522d899673fe7fb44ceb3f4c68"
+    },
+    {
+      "path": "source/prompts/sonali-sahu-09-350200.md",
+      "sha256": "3466a2973ffa73ba378f41f3b443504969966a21a3ea5d2712ece839e7b26c18"
+    },
+    {
+      "path": "source/prompts/songkeys-384673.md",
+      "sha256": "c3ea660f98b459754528097c2ab9acb7cb3da1d86429b2cdfdab515083fd958d"
+    },
+    {
+      "path": "source/prompts/soumymaheshwri-825921.md",
+      "sha256": "56294e28bfa8674177a92d88f571edb41552f916417ebd3d55f96f0db59d5cf1"
+    },
+    {
+      "path": "source/prompts/souradip3000-800291.md",
+      "sha256": "0e50955acd4df442eaaceafb569e797dcf05c3582006a95d8b302f0e9b458e11"
+    },
+    {
+      "path": "source/prompts/souravbhar871-477361.md",
+      "sha256": "f78fd2d1609a39ffb3f520d1547c1ca15d26206fc1ff8ebf45f5235a25e63fec"
+    },
+    {
+      "path": "source/prompts/spacyapps-157886.md",
+      "sha256": "ed4a069685173ad0c69387527317835b9b6b57730da41ea7bd5a00b85622ee32"
+    },
+    {
+      "path": "source/prompts/spearwtf-029058.md",
+      "sha256": "cfc61e3205f62ee703de5689882dd39b7d436f8c0f4a69e4834c961f879ac943"
+    },
+    {
+      "path": "source/prompts/sportyblocks-320796.md",
+      "sha256": "a60fd9d4f0d715c47a34063413e217054a3f29eb8ab3e57e766dc1b6902d528e"
+    },
+    {
+      "path": "source/prompts/stefanostraus-971191.md",
+      "sha256": "cb839dc528b8b91cb728645faf6c74ee2ce0d93864885a12975df8b141cd7adb"
+    },
+    {
+      "path": "source/prompts/stephanferraro-224281.md",
+      "sha256": "b2f8c2840219e8f6bde980a91fb9a4860f0eec7240acf22e21eed4b9daeb9110"
+    },
+    {
+      "path": "source/prompts/stewchan2-369810.md",
+      "sha256": "33eeb7c454f666d0934733661218110dfb50288f5d09dd630c816e9ca3ac0a63"
+    },
+    {
+      "path": "source/prompts/stokebuilder-356793.md",
+      "sha256": "6e3799658b46a3af2fd3db77c500431aa7533508fda1c1ad11f483bbb9eabc28"
+    },
+    {
+      "path": "source/prompts/subraiz24-994209.md",
+      "sha256": "198c7c947fa44886700ae2e191e0028e7a28ef2b49ca8587ddb8481d7fde5f4d"
+    },
+    {
+      "path": "source/prompts/sudo-kiran-254201.md",
+      "sha256": "ac15207a7e219cab3331280df4bea3ffa1f5a6c103141c80f4231fdefc28d17a"
+    },
+    {
+      "path": "source/prompts/sudo-kiran-335993.md",
+      "sha256": "bbb40e6051ca11e921226a410feaa34074e87ac16e117621ce6591c98a4d1874"
+    },
+    {
+      "path": "source/prompts/sudo-kiran-670892.md",
+      "sha256": "7265fa2c305b76bc033715b017fc2eb60b8b23cb7889de87fe785243ee1e2858"
+    },
+    {
+      "path": "source/prompts/sudo-kiran-696074.md",
+      "sha256": "c1c74495896a67cfa987870eb7fd15c6c47cd06440816cb809cf07975611e1f4"
+    },
+    {
+      "path": "source/prompts/superalesha-970412.md",
+      "sha256": "77e96355912efb9d3baa5c323e31875af593b4da1c111deaeb53f02d8b733106"
+    },
+    {
+      "path": "source/prompts/supremebeme-306746.md",
+      "sha256": "1876dd97351e418ed82b2fe502d5a0465cd21b8c5cc96f55deb632f2dac2746c"
+    },
+    {
+      "path": "source/prompts/suryarajendhran-730437.md",
+      "sha256": "71f41fab21dc021e5e33cd0774c84fef7f3eaf687ce58ad66412d7286614f55e"
+    },
+    {
+      "path": "source/prompts/syntheticbeef-389075.md",
+      "sha256": "8403e82c60ce4604606c65caae4e668330f5322d7bbf8e52833d475bd851475b"
+    },
+    {
+      "path": "source/prompts/t4k1ra-cg-110846.md",
+      "sha256": "129d59584c6ac2b6345b3884a0d351bca13e6546fc4523660409cb0fd09dbd2d"
+    },
+    {
+      "path": "source/prompts/tak3sh8-441895.md",
+      "sha256": "2ca8bf757f323f4d3c5ba558a58f489ab21835b6fb0c686b8a3caf5da47db3a1"
+    },
+    {
+      "path": "source/prompts/tanabe-fragm-322001.md",
+      "sha256": "09ab6578dd5b3d6077cf6a5af3d72f1ab3b1a85a2ef34324d30bb00b6f5a5008"
+    },
+    {
+      "path": "source/prompts/tanabe-fragm-706979.md",
+      "sha256": "843cb0193111c1c7d0be29ed22254c678ce083e65a6685bd6ae77bb6d33026a5"
+    },
+    {
+      "path": "source/prompts/tankazunori0914-156748.md",
+      "sha256": "aab1771dbd65822371d7b5ee5ff8ab96ba03bd117310292083f8448e546a57fe"
+    },
+    {
+      "path": "source/prompts/tarunyadav9761-053244.md",
+      "sha256": "5aa5c7a89dc9d113d1437c6444849ffa23f05932c017ef1bc34b18daf575556d"
+    },
+    {
+      "path": "source/prompts/taylorbereiter-189192.md",
+      "sha256": "714b4789b8cffe92c645f56195f1d1747fb7ca950a1e6af78c67a148e6333d35"
+    },
+    {
+      "path": "source/prompts/tdinh-me-301409.md",
+      "sha256": "6d39b225d69eee2df861d494c27d2ac878329cf7ceb5924cc7f4ec4b2fab7fee"
+    },
+    {
+      "path": "source/prompts/techartist-021472.md",
+      "sha256": "8eeea25f90babfcbee076c73fbceb8b3eb53bf8b685e7695336f12ad9f816ce3"
+    },
+    {
+      "path": "source/prompts/techartist-697078.md",
+      "sha256": "2b8de4ce478a3aec27cf755e21f36f3a041c1be80fa89040a3226b4ec0ad61a8"
+    },
+    {
+      "path": "source/prompts/techartist-786274.md",
+      "sha256": "d8b5ad0d84a5a461502fa1e5b4c51a8eaaf2dffebabe048e0c655825e74d409e"
+    },
+    {
+      "path": "source/prompts/techhalla-498547.md",
+      "sha256": "9dacb57ca18bf36335f3c31735fea0b03f8da20a198e8392f8e367f3afb73ea5"
+    },
+    {
+      "path": "source/prompts/techtactician-144474.md",
+      "sha256": "86994185c472363ebb88e2ef85000110efae76eb61333ebc6ffc7ca8b281bf16"
+    },
+    {
+      "path": "source/prompts/techyoutbe-588678.md",
+      "sha256": "3076c0487290f33de367a1db8cfe96bdbfddea6eb9ea8eed408b96edf261c646"
+    },
+    {
+      "path": "source/prompts/tejasthange3-128242.md",
+      "sha256": "7c03073e0577a531fc9b36cd166976c0f6b3f8c031fb5abe92537d09df0f7cd5"
+    },
+    {
+      "path": "source/prompts/teleboost-app-521507.md",
+      "sha256": "6290a9adfaeb0ef4a1d1011687ff82036e9962c75a4622e62a4431f0f52dbd7e"
+    },
+    {
+      "path": "source/prompts/testlandblog-617500.md",
+      "sha256": "7ab7eb773eab11765ef17cb20c1a4b028066a3ec5adc69b6a6c3718aa9e30e96"
+    },
+    {
+      "path": "source/prompts/tetsu-tetsu333-576886.md",
+      "sha256": "88499a6c2de6a423c605104128a1c327a72cc42d0be4350874ba70a7f25ac809"
+    },
+    {
+      "path": "source/prompts/thallisribeiro-750805.md",
+      "sha256": "4d3335aab7610a073cb093d01fc2f2be0f9e8f67112e3379af40da7e3e0aa84a"
+    },
+    {
+      "path": "source/prompts/thallisribeiro-829318.md",
+      "sha256": "d45e2c371b26bc988adad424503426b6d6f2bd68fe99e7414ff260fd9becd945"
+    },
+    {
+      "path": "source/prompts/thebuggeddev-482912.md",
+      "sha256": "01f1d281e16d2e81037bbeb9bd9e34893f2e12f68879920379f94a663877e4ac"
+    },
+    {
+      "path": "source/prompts/thegawdstiles-738178.md",
+      "sha256": "85637d1bbb33bdac9d915b090688ddb4278042eac8d1eb5411fdaf8872c09666"
+    },
+    {
+      "path": "source/prompts/thegreatola-738411.md",
+      "sha256": "70100c4b60f963b39982e219198bee8df697907fe60e0c81b5a67cfc66d1c564"
+    },
+    {
+      "path": "source/prompts/thegrootdev-966114.md",
+      "sha256": "01166698ca6e2202de1005632c09243cd535068d9bd9ca720ea10f0f2d70582c"
+    },
+    {
+      "path": "source/prompts/thejohnnyhuy-282154.md",
+      "sha256": "de6bf75a5133ead615a3670e3ba2d05fdf6e9abb735da34d25e1e10f6a783c4e"
+    },
+    {
+      "path": "source/prompts/theparuchh-013286.md",
+      "sha256": "90a47f4fcfe7561a952683a4c55c38dd1ed67ed58abd2a76053f97edcb232f9b"
+    },
+    {
+      "path": "source/prompts/thesethian-384517.md",
+      "sha256": "7553c25f5dd931ec9848bd50676d9dbde53c971844a351c0f7bf23fdfd2d5f1b"
+    },
+    {
+      "path": "source/prompts/thewevr-681887.md",
+      "sha256": "e2aa73774e4ad9a7ec38ade85821309295d03a174d702c624bbb40f8a21f9126"
+    },
+    {
+      "path": "source/prompts/thilina-a-915273.md",
+      "sha256": "78c9666d0734ed44e370bccb9547f40aa50621b3e63e0326abf70028a90b7d8d"
+    },
+    {
+      "path": "source/prompts/thinkszyg-886066.md",
+      "sha256": "293dfbaac6f3390790a163191b2bc8e9c682c3a95cb8b31a67d49ab29f0dc8b1"
+    },
+    {
+      "path": "source/prompts/threeaus-886343.md",
+      "sha256": "3eabbfa1ff9bbdd74ade0c60e823d0b65d70a0204c23f5141febe7637eb8f0eb"
+    },
+    {
+      "path": "source/prompts/thuggy-juice-072370.md",
+      "sha256": "107f35a2a119cf244c4aee7e7242447fc1441b2efabb0ef2255f884bbce1385d"
+    },
+    {
+      "path": "source/prompts/thusatharan-433543.md",
+      "sha256": "7c583e77f57815330ff2eb157323d003a5a04f807aeabc4d08a9f20a6c9eddb6"
+    },
+    {
+      "path": "source/prompts/thusatharan-640926.md",
+      "sha256": "29214b58ca30a8f1c169493ed58cd32cefe7aadd767da0bc63382a0938099b22"
+    },
+    {
+      "path": "source/prompts/timguignard-623571.md",
+      "sha256": "9ac921710547ff145ccd9abfa072a5e8b223ea5832c55270918f86e8373afc11"
+    },
+    {
+      "path": "source/prompts/tkz-aiart-864352.md",
+      "sha256": "a52f8015ab7bd931a2c243db31ea6d859ea1ac6b2f8ea7d15a3031df01e3216f"
+    },
+    {
+      "path": "source/prompts/tomandrieu96707-875264.md",
+      "sha256": "e5f5fd333800b7458e70e6f82aa6ca32af3bdbd5d1f58d669cb5072770a8b958"
+    },
+    {
+      "path": "source/prompts/tonka1981jp-288376.md",
+      "sha256": "d7133d8bc3766eb5b72432cc5d9246b9fc18e79f74d1848732dc2f960afc3728"
+    },
+    {
+      "path": "source/prompts/tonnusos-006126.md",
+      "sha256": "e448d73610dc8f5a5bf6dbffce46cf2b3b9e361461275e5aed4092fcb33f1eaf"
+    },
+    {
+      "path": "source/prompts/tony-tt-872147.md",
+      "sha256": "33045e582284a7b8f3f60192af43c42b2a2dc2fe661ec057d51e3bc5afd6a42b"
+    },
+    {
+      "path": "source/prompts/tonysurix-596746.md",
+      "sha256": "306d4b706d8ca021d39528148bd432666874e948c1f7f366e9c6d18bdc887046"
+    },
+    {
+      "path": "source/prompts/topi-003-055288.md",
+      "sha256": "922eca71e5d685489cb1d0f9544ddc9eb1de5e0773aeab07dbe091f0f6e9082f"
+    },
+    {
+      "path": "source/prompts/topi-003-659728.md",
+      "sha256": "1309b26348cab30601a9117b1a5d550e17e4f5ba8743dc7bcc5341bf5fec7ef7"
+    },
+    {
+      "path": "source/prompts/triglyceee-161719.md",
+      "sha256": "70a4959cef6171ea2ae1f168832a1bafb9b04f98ac120068dd7be07c83d10579"
+    },
+    {
+      "path": "source/prompts/truenyl-447745.md",
+      "sha256": "73495e93df79e2780f061623455aa8e2fe1d05e31f874b1073e293224e05bcd7"
+    },
+    {
+      "path": "source/prompts/tstfully-680192.md",
+      "sha256": "785740e216aee5a17fe9f6cfee896e1d66fdd04b4d934301f0f31874599feef6"
+    },
+    {
+      "path": "source/prompts/twoclipping-000267.md",
+      "sha256": "0600067aed88a2a398418036336956fcaa924bfaa7b6a60e8bb5f550f0f1af2d"
+    },
+    {
+      "path": "source/prompts/twoclipping-041659.md",
+      "sha256": "b4499f031fbe6c7b5bf8a53a2ab72803ba3ff5d47a33c60304a9f477e55decdb"
+    },
+    {
+      "path": "source/prompts/twoclipping-402193.md",
+      "sha256": "b5ac1863da179b2c156d2b8d8b2df5ed017843567a70ecd19de18e74ccb1ade4"
+    },
+    {
+      "path": "source/prompts/twoclipping-496100.md",
+      "sha256": "ecb8efb69c7c27dae518790937d665cc15b4d904fd1337433db76289c889a4aa"
+    },
+    {
+      "path": "source/prompts/twoclipping-551116.md",
+      "sha256": "58bb8741e9a0224afdb6794979bbc18131d00628dcc0ce58da6bc93bfe2e7e47"
+    },
+    {
+      "path": "source/prompts/twoclipping-747965.md",
+      "sha256": "205f3c0bff72b24f0bb429da97da27113b7ad681e43d66e6c02e7c7733f4815e"
+    },
+    {
+      "path": "source/prompts/twoclipping-762046.md",
+      "sha256": "8e69e140f902b70b63f8e85b09c89e37d5971aa8313df3f21f4fa86065ef80f6"
+    },
+    {
+      "path": "source/prompts/tycenjm-098014.md",
+      "sha256": "e37b14179870b7d1e3adc3760a90706ebd95c267caeea8f058c3c2d454444bea"
+    },
+    {
+      "path": "source/prompts/typingmusou-160705.md",
+      "sha256": "9078f062c26f083451a54efa993c7abfc3a5b4e8c70580cbdf2e40c14d6bf798"
+    },
+    {
+      "path": "source/prompts/uinerd-635877.md",
+      "sha256": "ff80590ec16cab28c7a10683058b538554fd3dda374ec955bf436e0cc797e532"
+    },
+    {
+      "path": "source/prompts/ultimaxbt-549714.md",
+      "sha256": "995ba2d0448e1f2babffba3c77a911b1d56e69c487c619499a43dcc20effa612"
+    },
+    {
+      "path": "source/prompts/ulyssexbt-205279.md",
+      "sha256": "bd5c68d7d5ba6dea55070ad2db6a083b180ce2f16a82ac8533ec45af1c6ed9a3"
+    },
+    {
+      "path": "source/prompts/utsavchopra30-560359.md",
+      "sha256": "2c0fa0156b562ff78fe2abdff77ed7e6595eaabc45d535687fbb52a6fbaab74f"
+    },
+    {
+      "path": "source/prompts/vahidf24-121886.md",
+      "sha256": "822d73daffa1a624325468a3ffa248aeba0cdf7fda01bb07914787e792ff9fbb"
+    },
+    {
+      "path": "source/prompts/vectorcrossprod-436573.md",
+      "sha256": "5a57e32079b7f789245abce3aa5d3bcb07b857a874d2293905190d01810e40ea"
+    },
+    {
+      "path": "source/prompts/ved-cj-066575.md",
+      "sha256": "3c15fccd6451ee5e977053c3f90d5831c20eb5a1fdc7a7c5c6a613d6d6f45f8a"
+    },
+    {
+      "path": "source/prompts/verbove-268381.md",
+      "sha256": "f669f07c55cfd4812d55bf87ec040888588585f92ce907d581eda7d5a1c3196b"
+    },
+    {
+      "path": "source/prompts/vibechine-465008.md",
+      "sha256": "ea1f11155e10ce5954c8f72f316a7a22296f1a551d1881e20876bfeee7dfaa91"
+    },
+    {
+      "path": "source/prompts/vic305-885957.md",
+      "sha256": "bf6e82835a600f943d340ad842d6d2c9bbd3d8cd22e5d96db7ca32832da3dfe8"
+    },
+    {
+      "path": "source/prompts/victortaelin-875778.md",
+      "sha256": "c55f25214d6b88ce6eab9cd0d9dfdc7f03dc6b7072f7ec45494a926800ab8e98"
+    },
+    {
+      "path": "source/prompts/vignesh-rav-417649.md",
+      "sha256": "41f6aaee85b5b671ec8f9ce19740c01b852bfe6d981f5a914e057e36e5ccc589"
+    },
+    {
+      "path": "source/prompts/viktoroddy-402509.md",
+      "sha256": "8296e9fe2366a0811f89b74dbb37c88ceb40179c530d0758a9217da6e14750dd"
+    },
+    {
+      "path": "source/prompts/vince-builds-355650.md",
+      "sha256": "54ac94f3eaa648c11bbc178fe328dcc7016d334d19dc33887ac33bbb5060ec05"
+    },
+    {
+      "path": "source/prompts/voxyz-ai-345550.md",
+      "sha256": "34677b7c1f4ee131d089b2629c3517d82684387d32d368ce15cb10125536e8a3"
+    },
+    {
+      "path": "source/prompts/wangyinrec-532344.md",
+      "sha256": "5a1c61861d9fb9db4c8342b7204d73166b7d5150fc9500921ac68ee38a9c0e2b"
+    },
+    {
+      "path": "source/prompts/wani-shola-459278.md",
+      "sha256": "6d792e4b34c518ed8dfa5f06f5839bf9e565e748fa524599ab6aa8ec23570a58"
+    },
+    {
+      "path": "source/prompts/waseemkhalo-636267.md",
+      "sha256": "4da4d5544ae8393080e9655320159554bcab162edf10a89d4c3b82e0f8e06f06"
+    },
+    {
+      "path": "source/prompts/washow-cfo-175311.md",
+      "sha256": "b340a09e148697a9ef6b043e10dff5ee8d36982561b9629125e53dc25d7caa00"
+    },
+    {
+      "path": "source/prompts/wikiwayne-080350.md",
+      "sha256": "b77e19cbc88bafb015f95af6a2fe539bab8f92c44a1cafbb2d6de18cf890fba6"
+    },
+    {
+      "path": "source/prompts/wikiwayne-486055.md",
+      "sha256": "91dcee066bda799b9eca5a4532d1cf04639fb193fac01d979310994ebb97baf0"
+    },
+    {
+      "path": "source/prompts/wilzerjb-007630.md",
+      "sha256": "be3398afb97aebdf620810960eb06b38aa0687a2943f4c10cac737ad94f935f0"
+    },
+    {
+      "path": "source/prompts/woojinrad-455731.md",
+      "sha256": "4b5f877db20d136e99be0a0e73cf851ff173ddf383fe324d2762932b3c27a1d6"
+    },
+    {
+      "path": "source/prompts/wozu-co-893062.md",
+      "sha256": "01c6cd42e2e78477eb56fca8c228dfdbab58049ca15d565331f5994a28e1b569"
+    },
+    {
+      "path": "source/prompts/wustep-884086.md",
+      "sha256": "847f30b4eb88065572d7afa56936dc6a659a4026b68200758320576583385b94"
+    },
+    {
+      "path": "source/prompts/wzarok-283635.md",
+      "sha256": "0da3ee204aebdb4a8c9911d62ed7a37635e9a914e0a629a00872a733a14e280e"
+    },
+    {
+      "path": "source/prompts/x4b47x-034026.md",
+      "sha256": "1405d494d076976f09153d5e874a13dc354587d18bc12c9f098fb014cc00ab71"
+    },
+    {
+      "path": "source/prompts/x7mdnet-157811.md",
+      "sha256": "77a76bb5da3edbfcf079734f3be390851aaea1b28fcc277e9294af89ee04cc19"
+    },
+    {
+      "path": "source/prompts/xamfonos-004331.md",
+      "sha256": "d131c5067bbdd7185c62e734df1528bf22cb8a5da6eb126d40356a304d57db01"
+    },
+    {
+      "path": "source/prompts/xanares-738984.md",
+      "sha256": "f80c1bdcdf36feb0361959816780648bbd758d6b98d24b0c0be38743297ce614"
+    },
+    {
+      "path": "source/prompts/xanderwow-a-597063.md",
+      "sha256": "c7c9654ea302fc7179e246b3584a0a011fe33b7590ab3722ca29daf599999e83"
+    },
+    {
+      "path": "source/prompts/xelandre-687413.md",
+      "sha256": "40649183145411e7b3366c1368a32d03d742fdaf3696941d1a51c2c696ca4f05"
+    },
+    {
+      "path": "source/prompts/xenit-v0-532873.md",
+      "sha256": "028861cbbbe63ddfd3e85b1cdedef77974b5696e7c5e6946a6fdb3cc2965eaeb"
+    },
+    {
+      "path": "source/prompts/xodud-rkd-160324.md",
+      "sha256": "4803216fd0563326ebd3aa2a8c7b2855d7cd1870d44557102d6dc575561d0fc3"
+    },
+    {
+      "path": "source/prompts/yama-kiyo-134910.md",
+      "sha256": "eb1683cb3691003d06955a5254a31a8acb801929da03e598a35ce470358c0334"
+    },
+    {
+      "path": "source/prompts/yanivm79-158103.md",
+      "sha256": "2ec7e0c77b3c58d4f5b7908d4ba98a70adc083cf743036a4b7351daa0b10dcbf"
+    },
+    {
+      "path": "source/prompts/yankis0x-174321.md",
+      "sha256": "21d2a546a88e2e57334722fc181e1c7766f080e0af79e7cbe91fe42393b01237"
+    },
+    {
+      "path": "source/prompts/yanliudesign-839698.md",
+      "sha256": "99e55c564e415065792dfba87f8e3d4e84a82341fe89a1a6fe0258a06511ca62"
+    },
+    {
+      "path": "source/prompts/yarhmm-341449.md",
+      "sha256": "d17fdc400e0f97cff72c2f245ec738bc4ea411332bb552f62fc7973ae6a1bead"
+    },
+    {
+      "path": "source/prompts/yatudou14-822057.md",
+      "sha256": "1487f50686c1f7590c56365f7864b79fd6635aeea8e84f8242392acc643bd7a6"
+    },
+    {
+      "path": "source/prompts/youwareai-259061.md",
+      "sha256": "b8a645a9f40426947bef6e8befdddcde2037f858a5d6b05d2ffe4cad32e4658f"
+    },
+    {
+      "path": "source/prompts/youwareai-300653.md",
+      "sha256": "97e9f644bcf84bedd37042cee1fbdd0273b58d96be2dc2e1edef170642bdab27"
+    },
+    {
+      "path": "source/prompts/yunn260414-016888.md",
+      "sha256": "09b86f1610c7a54eb005ef08d5f8213c854a73e60bb49d730b453f2482bf5931"
+    },
+    {
+      "path": "source/prompts/yuyudora622-858156.md",
+      "sha256": "0d5c54391e00c8fc55603b3624826d093b554fc741d683404e9eb9066eb951a2"
+    },
+    {
+      "path": "source/prompts/zacxbt-234711.md",
+      "sha256": "f4085b3963f75f10b0431dd497898fd460f06071171404c89d6610e2862d8316"
+    },
+    {
+      "path": "source/prompts/zacxbt-944604.md",
+      "sha256": "586539499161642aa668e59430ed22972e66026a9e80f01a09ea742b652653a4"
+    },
+    {
+      "path": "source/prompts/zakisbuilding-495680.md",
+      "sha256": "31bb66e29137ace605644b1974c99aeed18a517028ef5735c20d04b470e65c72"
+    },
+    {
+      "path": "source/prompts/zeezomb-726206.md",
+      "sha256": "062249a57ef767ad90708d23c6eef5cea9cb88d1e348ec20f3f2a14b51d5cf6e"
+    },
+    {
+      "path": "source/prompts/zhang-baoqing-920413.md",
+      "sha256": "0f9692784e0a1ddfd5a7e98a3d8d41e3f557c8866644abf900ffad57b6ff2c04"
+    },
+    {
+      "path": "source/prompts/zheke-622583.md",
+      "sha256": "6f92bf764d017804c0ddc98161aa8f1f4458ae88aa3622a0847fd9612eb1b10d"
+    },
+    {
+      "path": "source/prompts/zhu185178-255661.md",
+      "sha256": "b5a7ffb6db3e302adef48d1498e6be00d9061c8f1314a1d6c53d89eaeacd69e0"
+    },
+    {
+      "path": "source/prompts/zigapoto-942208.md",
+      "sha256": "1b5669a10bf91eaf3add682655902d69bc26f025db0fa25e6c8e34eaa3b0b8ca"
+    }
+  ],
+  "excluded": [
+    {
+      "path": ".gitignore",
+      "size": 10
+    }
+  ]
+}

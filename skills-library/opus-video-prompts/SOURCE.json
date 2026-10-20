@@ -1,0 +1,90 @@
+{
+  "repository": "https://github.com/joeseesun/opus-video-prompts",
+  "commit": "7977c807781d4ba7c235247b8899a72575a30d00",
+  "branch": "main",
+  "collectedAt": "2026-10-20",
+  "scope": "UTF-8 guides, prompts and source examples; binary assets and GitHub automation excluded; not a complete render bundle",
+  "files": [
+    {
+      "path": "source/README.md",
+      "sha256": "173d9891809c39bee086b41023837020d72e32f0a11d64f25ede026c9f412e7a"
+    },
+    {
+      "path": "source/cases.json",
+      "sha256": "302991a6f82d4202c839ef3fa349525ee9569360be9dc3545efba35a9bb51ac0"
+    },
+    {
+      "path": "source/prompts/01-inference-startup-launch.md",
+      "sha256": "247843b29835938794ea076e1299ac8dd79045f32293215957ba91c0b8d647f6"
+    },
+    {
+      "path": "source/prompts/02-motion-showreel-15s.md",
+      "sha256": "939bfe873e95cac2dc12309d51baccf70b897ee56e01db32236fad5d69a6fca3"
+    },
+    {
+      "path": "source/prompts/03-china-5000-years-lineart.md",
+      "sha256": "0fa6c39433f72aab9ac281ee22c0e3a00842e25018da121f0c8c740b43ad0982"
+    },
+    {
+      "path": "source/prompts/04-opus-1984-ad.md",
+      "sha256": "2b1ef0037ef37202db1a36ac06fc1f41a39dd851ba9ad310f1fdd0bdc62ba33f"
+    },
+    {
+      "path": "source/prompts/05-transformer-explainer-js.md",
+      "sha256": "1e39bf706cecbf5f685f57068bf0436eeb05ec5fbf839e6865749f3f36b8884c"
+    },
+    {
+      "path": "source/prompts/06-room-to-quarks-zoom.md",
+      "sha256": "7b834866a18c582626fff7aa616609c91ffc747914c3c9456f2e83a553cd29fa"
+    },
+    {
+      "path": "source/prompts/07-business-explainer-30s.md",
+      "sha256": "0626036c73c385b1b847fb758b0a18bacc6ede2f5e42e3b2beefc4a19123e285"
+    },
+    {
+      "path": "source/prompts/08-negroni-recipe-explainer.md",
+      "sha256": "bce4c7d81bc7f35401c358d2d467a28eaad476c05af788d15049e3815deab367"
+    },
+    {
+      "path": "source/prompts/09-atmospheric-circulation-tts.md",
+      "sha256": "175d9b521510fab8da4d20c2cc2f4cd0c762f9aaacfe95d2801f9a2682d48f6d"
+    },
+    {
+      "path": "source/prompts/10-talking-head-to-lineart.md",
+      "sha256": "63b1b9919859c218a4779593e7807f75d62f2f780389af6ec56ffecf81530126"
+    },
+    {
+      "path": "source/prompts/11-austerlitz-film.md",
+      "sha256": "55d55be05a69f91cbacd40d425be92267287d6e15cfd0d947ad0553ac7696064"
+    },
+    {
+      "path": "source/prompts/12-remotion-app-promo-1.md",
+      "sha256": "62dfcd2dddc86ff7758bd72eff9608305aacbf283fdd3fa09e90d92efc8f73b7"
+    },
+    {
+      "path": "source/prompts/13-remotion-app-promo-2.md",
+      "sha256": "182ca1a69e9d498c367fa777f13a015da1e54c8d57d3d12950019cec39f970ee"
+    },
+    {
+      "path": "source/prompts/14-saas-launch-real-assets.md",
+      "sha256": "57bc1979a0ed3cc5e9815b9332fc6aea7dbecdd5615c248702f2dbd8739dee27"
+    },
+    {
+      "path": "source/prompts/15-ui-morph-loop.md",
+      "sha256": "ab101886e2310c1bbc54a391f00f6c6e44491040479b4da901d9ea553fad349f"
+    },
+    {
+      "path": "source/prompts/16-high-end-product-video.md",
+      "sha256": "20d7a8f77ed617d0b0f3aaf67e9420616906cc4d6a2cc10ad0d1574b3c3659da"
+    },
+    {
+      "path": "source/prompts/17-pixel-wizard.md",
+      "sha256": "6cc336eba15161eec7eee6781f67bc5ab22b8b24874f22f62e723dfd80ca1bd1"
+    },
+    {
+      "path": "source/prompts/18-prehistoric-island-threejs.md",
+      "sha256": "676135d91194f172dcdc82aafeddac81629adeaf6f5420d73c5d371f26084ea5"
+    }
+  ],
+  "excluded": []
+}
