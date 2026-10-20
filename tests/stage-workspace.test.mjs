@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { stageResult, stageMapFrame } from "../web/js/stage-result.js";
+import { stageResult, stageMapFrame } from "../web/js/features/stage/stage-result.js";
 
 const base = () => ({ project: { currentShotId: "a", playhead: 0 }, shots: [{ id: "a", range: { inFrame: 0, outFrame: 48 } }, { id: "b", range: { inFrame: 10, outFrame: 82 } }], jobs: [] });
 const job = (id, patch = {}) => ({ id, shotId: "a", mode: "v2v", status: "done", result: { kind: "video", url: `https://media.example/${id}?signed=1` }, ...patch });

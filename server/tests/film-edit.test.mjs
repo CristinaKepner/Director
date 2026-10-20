@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {createFilmAssembler,findFfmpeg,mediaDuration,captionAss} from '../src/film.mjs';
+import {createFilmAssembler,findFfmpeg,mediaDuration,captionAss} from '../src/features/editing/film.mjs';
 const bundled='/Applications/导演台.app/Contents/Resources/app-src/bin/ffmpeg';
 const bin=findFfmpeg(process.env.FFMPEG || (fs.existsSync(bundled)?bundled:undefined));
 function run(args){const r=spawnSync(bin,args,{maxBuffer:16*1024*1024});assert.equal(r.status,0,r.stderr?.toString());return r.stdout;}

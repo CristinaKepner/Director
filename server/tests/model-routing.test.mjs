@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { classifyModels } from '../src/adapters/model-catalog.mjs';
-import { routePlanners, routeGeneration } from '../src/adapters/routing.mjs';
-import { createMosshubAdapter } from '../src/adapters/mosshub.mjs';
+import { classifyModels } from '../src/features/generation/model-catalog.mjs';
+import { routePlanners, routeGeneration } from '../src/features/generation/routing.mjs';
+import { createMosshubAdapter } from '../src/features/generation/mosshub.mjs';
 const catalog={planning:['gemini-3.1-pro-preview'],video:['MiniMax-H3','MiniMax-H3-Max'],image:['gemini-3-pro-image','doubao-seedream-5-0-pro-260628']};
 const json=data=>new Response(JSON.stringify(data),{headers:{'content-type':'application/json'}});
 function execute(adapter,job) {

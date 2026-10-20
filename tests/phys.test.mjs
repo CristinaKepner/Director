@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as R from "../core/index.js";
-import { physicalInfo, depthOfField } from "../web/js/phys.js";
+import { physicalInfo, depthOfField } from "../web/js/features/stage/phys.js";
 
 test("景深按薄透镜公式：50mm f/1.8 对 3 米，全画幅大约 40 厘米", () => {
   const d = depthOfField(50, 1.8, 3, 36);

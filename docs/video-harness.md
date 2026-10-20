@@ -44,7 +44,7 @@ Harness 让导演台的 Agent 有可保存的任务、可执行的工具、检�
 | `harness.adopt` | `runId` | 明确采用已复查候选，可撤销 |
 | `generation.resume-query` | `id` | 查询已有远端任务，不创建新任务 |
 
-后台模块：`core/harness.js`（要求、签名、本地判定），`core/harness-actions.js`（操作），`server/src/harness.mjs`（执行与恢复），`server/src/harness-inspector.mjs`（FFmpeg/视觉检查）。界面在 `web/js/harness-panel.js`，复用已有播放台与时间线。工程 JSON 的 `harness.runs` 保存完整记录；`project.harnessSpec` 保存要求。
+后台模块：`core/features/quality/harness.js`（要求、签名、本地判定），`core/features/quality/harness-actions.js`（操作），`server/src/features/quality/harness.mjs`（执行与恢复），`server/src/features/quality/harness-inspector.mjs`（FFmpeg/视觉检查）。界面在 `web/js/features/quality/harness-panel.js`，复用已有播放台与时间线。工程 JSON 的 `harness.runs` 保存完整记录；`project.harnessSpec` 保存要求。
 
 启动后台时配置已有视频模型与 `--llm-key-file`、`--llm-base`、可选 `--judge-model`。桌面版沿用启动时配置的 GPT / Claude / Gemini 视觉模型与内置 FFmpeg（当前默认 gpt-6-astra），`--judge-model` 可单独指定；文本专用规划模型不用于看图。参照读取保留原有模型配置。
 

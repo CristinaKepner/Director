@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createLlmPlanner } from "../server/src/adapters/llm.mjs";
-import { planWithReads } from "../server/src/planner-reads.mjs";
+import { createLlmPlanner } from "../server/src/features/agent/llm.mjs";
+import { planWithReads } from "../server/src/features/agent/planner-reads.mjs";
 const done = {
   steps: [
     {

@@ -6,8 +6,8 @@ import {
   loadProjectData,
   persistable,
 } from "../core/store.js";
-import { createWorkflowService } from "../server/src/workflow-service.mjs";
-import { workflowJob } from "../server/src/workflow-generation.mjs";
+import { createWorkflowService } from "../server/src/features/workflow/workflow-service.mjs";
+import { workflowJob } from "../server/src/features/workflow/workflow-generation.mjs";
 const node = {
   id: "generate",
   type: "video-generate",
@@ -125,7 +125,7 @@ function resetGraph() {
 function videoJob(input) {
   return workflowJob(node, input, { videoProvider: "seedance-2" }, "run");
 }
-import { createJudge } from "../server/src/adapters/judge.mjs";
+import { createJudge } from "../server/src/features/quality/judge.mjs";
 const verdict = {
   conditionSatisfied: false,
   confidence: 0.93,

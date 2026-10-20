@@ -5,7 +5,7 @@
 // 80 个已经规划好的镜头因为尾巴不完整全部作废。少几个镜头比什么都没有强得多。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createLlmPlanner } from "../src/adapters/llm.mjs";
+import { createLlmPlanner } from "../src/features/agent/llm.mjs";
 
 const CTX = { capabilities: [{ name: "shot.create", doc: "建镜头", params: {} }], summary: {}, history: [], model: "stub" };
 
@@ -70,7 +70,7 @@ test("彻底不是 JSON 的回复仍然报错，不假装抢救到了东西", as
 });
 
 test('MossHub classifies authorized models and excludes video/image from planning', async () => {
-  const { planningModels, discoverModels } = await import('../src/adapters/model-catalog.mjs');
+  const { planningModels, discoverModels } = await import('../src/features/generation/model-catalog.mjs');
   const catalog = {data:[
     {id:'gemini-3.1-pro-preview',supported_endpoint_types:['openai']},
     {id:'MiniMax-H3',supported_endpoint_types:['openai','openai-video']},

@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 1,
+  "features": [
+    {
+      "id": "projects",
+      "title": "工程管理与保存",
+      "modules": [
+        "core/features/projects/demo.js",
+        "core/store.js"
+      ],
+      "tests": [
+        "tests/runtime.test.mjs",
+        "tests/shell.test.mjs"
+      ],
+      "actionPrefixes": [
+        "project"
+      ],
+      "docs": [
+        "docs/technical-reference.md",
+        "docs/backend-api.md"
+      ]
+    },
+    {
+      "id": "creation",
+      "title": "空工程引导与创作主页面",
+      "modules": [
+        "core/features/creation/creation.js",
+        "core/features/creation/creation-actions.js",
+        "web/js/features/creation/creation-workspace.js",
+        "web/js/features/creation/creation-start.js",
+        "web/js/features/creation/creation-dialog.js",
+        "web/js/features/creation/creation-markup.js",
+        "web/js/features/creation/creation-overview.js",
+        "web/js/features/creation/creation-upload.js",
+        "web/js/features/creation/creation-commands.js"
+      ],
+      "tests": [
+        "tests/creation.test.mjs",
+        "tests/creation-agent.test.mjs",
+        "tests/stage-workspace.test.mjs"
+      ],
+      "actionPrefixes": [
+        "creation"
+      ],
+      "docs": [
+        "docs/workflow-canvas.md"
+      ]
+    },
+    {
+      "id": "workflow",
+      "title": "节点编排与运行",
+      "modules": [
+        "core/features/workflow/workflow.js",
+        "core/features/workflow/workflow-actions.js",
+        "core/features/workflow/workflow-compose.js",
+        "core/features/workflow/workflow-runtime-actions.js",
+        "web/js/features/workflow/creation-bridge.js",
+        "web/js/features/workflow/creation-execution.js",
+        "server/src/features/workflow/workflow-service.mjs",
+        "server/src/features/workflow/workflow-runner.mjs",
+        "server/src/features/workflow/workflow-routing.mjs",
+        "server/src/features/workflow/workflow-steps.mjs",
+        "server/src/features/workflow/workflow-condition.mjs",
+        "server/src/features/workflow/workflow-generation.mjs",
+        "server/src/features/workflow/workflow-judge.mjs",
+        "creation-ui/src"
+      ],
+      "tests": [
+        "tests/workflow.test.mjs",
+        "tests/workflow-agent.test.mjs",
+        "tests/workflow-runner.test.mjs",
+        "tests/workflow-service.test.mjs"
+      ],
+      "actionPrefixes": [
+        "workflow"
+      ],
+      "docs": [
+        "docs/workflow-canvas.md"
+      ]
+    },
+    {
+      "id": "agent",
+      "title": "Agent 规划与任务协作",
+      "modules": [
+        "core/features/agent/agent.js",
+        "server/src/features/agent/planner-reads.mjs",
+        "server/src/features/agent/llm.mjs",
+        "web/js/features/agent/task-progress.js"
+      ],
+      "tests": [
+        "tests/planner-context.test.mjs",
+        "tests/creation-agent.test.mjs",
+        "server/tests/planner.test.mjs",
+        "server/tests/model-routing.test.mjs"
+      ],
+      "actionPrefixes": [
+        "agent"
+      ],
+      "docs": [
+        "docs/harness.md",
+        "docs/workflow-canvas.md"
+      ]
+    },
+    {
+      "id": "conversation",
+      "title": "当前对话与历史版本",
+      "modules": [
+        "core/features/conversation/conversation-archive.js",
+        "core/features/conversation/conversation-export.js",
+        "web/js/features/conversation/thread.js",
+        "web/js/features/conversation/conversation-archive.js",
+        "web/js/features/conversation/conversation-picker.js",
+        "web/js/features/conversation/conversation-bubbles.js"
+      ],
+      "tests": [
+        "tests/conversation-archive.test.mjs",
+        "tests/thread.test.mjs"
+      ],
+      "actionPrefixes": [],
+      "docs": [
+        "docs/workflow-canvas.md"
+      ]
+    },
+    {
+      "id": "assets",
+      "title": "素材、身份参考与公网媒体",
+      "modules": [
+        "server/src/features/assets/fetch.mjs",
+        "server/src/features/assets/publish.mjs",
+        "server/src/features/assets/tunnel.mjs",
+        "server/src/api.mjs"
+      ],
+      "tests": [
+        "server/tests/fetch.test.mjs",
+        "server/tests/tunnel.test.mjs",
+        "tests/runtime.test.mjs"
+      ],
+      "actionPrefixes": [
+        "asset"
+      ],
+      "docs": [
+        "docs/backend-api.md",
+        "docs/revision.md"
+      ]
+    },
+    {
+      "id": "reference",
+      "title": "参考分析与复刻规划",
+      "modules": [
+        "core/features/reference/reference-plan.js",
+        "server/src/features/reference/reference.mjs"
+      ],
+      "tests": [
+        "tests/reference-plan.test.mjs",
+        "server/tests/reference-video.test.mjs"
+      ],
+      "actionPrefixes": [
+        "reference"
+      ],
+      "docs": [
+        "docs/revision.md",
+        "docs/backend-api.md"
+      ]
+    },
+    {
+      "id": "stage",
+      "title": "3D 舞台、实体、相机与灯光",
+      "modules": [
+        "core/features/stage/spatial.js",
+        "core/features/stage/coverage.js",
+        "web/js/features/stage/viewport.js",
+        "web/js/features/stage/phys.js",
+        "web/js/features/stage/spatial-panel.js",
+        "web/js/features/stage/stage-workspace.js",
+        "web/js/features/stage/stage-result.js",
+        "web/js/features/stage/eval-panel.js"
+      ],
+      "tests": [
+        "tests/spatial.test.mjs",
+        "tests/phys.test.mjs",
+        "tests/coverage.test.mjs",
+        "tests/stage-workspace.test.mjs",
+        "tests/shell.test.mjs"
+      ],
+      "actionPrefixes": [
+        "scene",
+        "entity",
+        "camera",
+        "light"
+      ],
+      "docs": [
+        "docs/technical-reference.md",
+        "docs/revision.md"
+      ]
+    },
+    {
+      "id": "shots",
+      "title": "分镜、运镜、故事版与 Take",
+      "modules": [
+        "core/features/shots/motion.js",
+        "core/actions.js"
+      ],
+      "tests": [
+        "tests/runtime.test.mjs",
+        "tests/contract.test.mjs",
+        "tests/cut.test.mjs"
+      ],
+      "actionPrefixes": [
+        "shot",
+        "motion",
+        "take",
+        "storyboard"
+      ],
+      "docs": [
+        "docs/user-flow.md",
+        "docs/revision.md"
+      ]
+    },
+    {
+      "id": "generation",
+      "title": "提示词、图像与视频生成",
+      "modules": [
+        "core/features/generation/prompts.js",
+        "core/features/generation/seedance.js",
+        "core/features/generation/seedance-library.js",
+        "server/src/features/generation/ark.mjs",
+        "server/src/features/generation/mosshub.mjs",
+        "server/src/features/generation/routing.mjs",
+        "server/src/features/generation/model-catalog.mjs"
+      ],
+      "tests": [
+        "tests/seedance.test.mjs",
+        "tests/workflow-service.test.mjs",
+        "server/tests/model-routing.test.mjs"
+      ],
+      "actionPrefixes": [
+        "generation",
+        "prompt"
+      ],
+      "docs": [
+        "docs/backend-api.md",
+        "docs/capability-test.md",
+        "docs/tvc/README.md"
+      ]
+    },
+    {
+      "id": "journey",
+      "title": "创作分支与音画预演",
+      "modules": [
+        "core/features/journey/journey.js",
+        "core/features/journey/journey-actions.js",
+        "server/src/features/journey/journey.mjs"
+      ],
+      "tests": [
+        "tests/journey.test.mjs",
+        "server/tests/journey.test.mjs"
+      ],
+      "actionPrefixes": [
+        "journey"
+      ],
+      "docs": [
+        "docs/creative-journey.md",
+        "docs/workflow-canvas.md"
+      ]
+    },
+    {
+      "id": "editing",
+      "title": "时间线、字幕、声音与成片导出",
+      "modules": [
+        "core/features/editing/cut.js",
+        "web/js/features/editing/film.js",
+        "web/js/features/editing/audio-cues.js",
+        "web/js/features/editing/timeline-editor.js",
+        "server/src/features/editing/film.mjs"
+      ],
+      "tests": [
+        "tests/cut.test.mjs",
+        "server/tests/film-edit.test.mjs",
+        "tests/stage-workspace.test.mjs"
+      ],
+      "actionPrefixes": [
+        "audio",
+        "timeline",
+        "film"
+      ],
+      "docs": [
+        "docs/creative-journey.md",
+        "docs/technical-reference.md"
+      ]
+    },
+    {
+      "id": "quality",
+      "title": "检查、证据与有预算修复",
+      "modules": [
+        "core/features/quality/contract.js",
+        "core/features/quality/harness.js",
+        "core/features/quality/harness-actions.js",
+        "web/js/features/quality/harness-panel.js",
+        "server/src/features/quality/harness.mjs",
+        "server/src/features/quality/harness-inspector.mjs",
+        "server/src/features/quality/judge.mjs"
+      ],
+      "tests": [
+        "tests/contract.test.mjs",
+        "server/tests/harness.test.mjs"
+      ],
+      "actionPrefixes": [
+        "harness",
+        "review",
+        "annotation"
+      ],
+      "docs": [
+        "docs/video-harness.md",
+        "docs/revision.md"
+      ]
+    },
+    {
+      "id": "desktop",
+      "title": "桌面宿主、设置与更新",
+      "modules": [
+        "desktop/main.mjs",
+        "desktop/preload.cjs",
+        "desktop/update.mjs",
+        "web/js/desktop.js"
+      ],
+      "tests": [
+        "tests/shell.test.mjs"
+      ],
+      "actionPrefixes": [],
+      "docs": [
+        "docs/distribution.md"
+      ]
+    },
+    {
+      "id": "skills",
+      "title": "创作 Skills 与题材模板",
+      "modules": [
+        ".agents/skills",
+        "docs/flova-skills.json"
+      ],
+      "tests": [
+        "tests/seedance.test.mjs"
+      ],
+      "actionPrefixes": [],
+      "docs": [
+        "docs/workflow-canvas.md",
+        "docs/creative-journey.md"
+      ]
+    },
+    {
+      "id": "platform",
+      "title": "运行时、HTTP/CLI 与共享装配",
+      "modules": [
+        "core/index.js",
+        "core/store.js",
+        "core/schema.js",
+        "core/actions.js",
+        "server/src/api.mjs",
+        "server/src/host.mjs",
+        "server/bin",
+        "web/js/main.js",
+        "web/js/client.js",
+        "web/js/ui.js",
+        "web/js/firstrun.js"
+      ],
+      "tests": [
+        "tests/imports.test.mjs",
+        "server/tests/api.test.mjs",
+        "tests/runtime.test.mjs"
+      ],
+      "actionPrefixes": [
+        "context",
+        "health"
+      ],
+      "docs": [
+        "docs/backend-api.md",
+        "docs/harness.md"
+      ]
+    }
+  ],
+  "moves": {
+    "core/demo.js": "core/features/projects/demo.js",
+    "core/creation.js": "core/features/creation/creation.js",
+    "core/creation-actions.js": "core/features/creation/creation-actions.js",
+    "web/js/creation-workspace.js": "web/js/features/creation/creation-workspace.js",
+    "web/js/creation-start.js": "web/js/features/creation/creation-start.js",
+    "web/js/creation-dialog.js": "web/js/features/creation/creation-dialog.js",
+    "web/js/creation-markup.js": "web/js/features/creation/creation-markup.js",
+    "web/js/creation-overview.js": "web/js/features/creation/creation-overview.js",
+    "web/js/creation-upload.js": "web/js/features/creation/creation-upload.js",
+    "web/js/creation-commands.js": "web/js/features/creation/creation-commands.js",
+    "core/workflow.js": "core/features/workflow/workflow.js",
+    "core/workflow-actions.js": "core/features/workflow/workflow-actions.js",
+    "core/workflow-compose.js": "core/features/workflow/workflow-compose.js",
+    "core/workflow-runtime-actions.js": "core/features/workflow/workflow-runtime-actions.js",
+    "web/js/creation-bridge.js": "web/js/features/workflow/creation-bridge.js",
+    "web/js/creation-execution.js": "web/js/features/workflow/creation-execution.js",
+    "server/src/workflow-service.mjs": "server/src/features/workflow/workflow-service.mjs",
+    "server/src/workflow-runner.mjs": "server/src/features/workflow/workflow-runner.mjs",
+    "server/src/workflow-routing.mjs": "server/src/features/workflow/workflow-routing.mjs",
+    "server/src/workflow-steps.mjs": "server/src/features/workflow/workflow-steps.mjs",
+    "server/src/workflow-condition.mjs": "server/src/features/workflow/workflow-condition.mjs",
+    "server/src/workflow-generation.mjs": "server/src/features/workflow/workflow-generation.mjs",
+    "server/src/workflow-judge.mjs": "server/src/features/workflow/workflow-judge.mjs",
+    "core/agent.js": "core/features/agent/agent.js",
+    "server/src/planner-reads.mjs": "server/src/features/agent/planner-reads.mjs",
+    "server/src/adapters/llm.mjs": "server/src/features/agent/llm.mjs",
+    "web/js/task-progress.js": "web/js/features/agent/task-progress.js",
+    "core/conversation-archive.js": "core/features/conversation/conversation-archive.js",
+    "core/conversation-export.js": "core/features/conversation/conversation-export.js",
+    "web/js/thread.js": "web/js/features/conversation/thread.js",
+    "web/js/conversation-archive.js": "web/js/features/conversation/conversation-archive.js",
+    "web/js/conversation-picker.js": "web/js/features/conversation/conversation-picker.js",
+    "web/js/conversation-bubbles.js": "web/js/features/conversation/conversation-bubbles.js",
+    "server/src/fetch.mjs": "server/src/features/assets/fetch.mjs",
+    "server/src/publish.mjs": "server/src/features/assets/publish.mjs",
+    "server/src/tunnel.mjs": "server/src/features/assets/tunnel.mjs",
+    "core/reference-plan.js": "core/features/reference/reference-plan.js",
+    "server/src/adapters/reference.mjs": "server/src/features/reference/reference.mjs",
+    "core/spatial.js": "core/features/stage/spatial.js",
+    "core/coverage.js": "core/features/stage/coverage.js",
+    "web/js/viewport.js": "web/js/features/stage/viewport.js",
+    "web/js/phys.js": "web/js/features/stage/phys.js",
+    "web/js/spatial-panel.js": "web/js/features/stage/spatial-panel.js",
+    "web/js/stage-workspace.js": "web/js/features/stage/stage-workspace.js",
+    "web/js/stage-result.js": "web/js/features/stage/stage-result.js",
+    "web/js/eval-panel.js": "web/js/features/stage/eval-panel.js",
+    "core/motion.js": "core/features/shots/motion.js",
+    "core/prompts.js": "core/features/generation/prompts.js",
+    "core/seedance.js": "core/features/generation/seedance.js",
+    "core/seedance-library.js": "core/features/generation/seedance-library.js",
+    "server/src/adapters/ark.mjs": "server/src/features/generation/ark.mjs",
+    "server/src/adapters/mosshub.mjs": "server/src/features/generation/mosshub.mjs",
+    "server/src/adapters/routing.mjs": "server/src/features/generation/routing.mjs",
+    "server/src/adapters/model-catalog.mjs": "server/src/features/generation/model-catalog.mjs",
+    "core/journey.js": "core/features/journey/journey.js",
+    "core/journey-actions.js": "core/features/journey/journey-actions.js",
+    "server/src/journey.mjs": "server/src/features/journey/journey.mjs",
+    "core/cut.js": "core/features/editing/cut.js",
+    "web/js/film.js": "web/js/features/editing/film.js",
+    "web/js/audio-cues.js": "web/js/features/editing/audio-cues.js",
+    "web/js/timeline-editor.js": "web/js/features/editing/timeline-editor.js",
+    "server/src/film.mjs": "server/src/features/editing/film.mjs",
+    "core/contract.js": "core/features/quality/contract.js",
+    "core/harness.js": "core/features/quality/harness.js",
+    "core/harness-actions.js": "core/features/quality/harness-actions.js",
+    "web/js/harness-panel.js": "web/js/features/quality/harness-panel.js",
+    "server/src/harness.mjs": "server/src/features/quality/harness.mjs",
+    "server/src/harness-inspector.mjs": "server/src/features/quality/harness-inspector.mjs",
+    "server/src/adapters/judge.mjs": "server/src/features/quality/judge.mjs"
+  }
+}

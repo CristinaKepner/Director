@@ -25,7 +25,7 @@ npm run dev -- --ark-key-file ~/.ark-key --llm-key-file ~/.aigw-key
 一次规划出 **49 个 Action，全部成功**：场景 + 房间 + noir 灯光预设 + 画幅/帧率/风格、6 个语义实体、5 盏灯、9 个机位、10 个镜头（时长加起来正好 60 s）、10 张故事版卡片，最后两步是产品与主角的参考图任务。
 
 > **这里修了一个真实缺陷。** 第一次跑，模型只回了一段漂亮的文字分镜表、**一个 Action 都没建**——它把「给出分镜表」当成了提问。规划器的系统提示词原本写着「用户只是提问/闲聊/要建议时 steps 为空」，模型照做了。
-> 改法（`server/src/adapters/llm.mjs`）：明确写清**描述一支片子、要分镜表 = 建场请求**，必须建进工程；缺品牌名这类信息用占位建出来、把假设写进 `notes`，不要停下来反问。改完同一句 brief 出 49 个 Action。
+> 改法（`server/src/features/agent/llm.mjs`）：明确写清**描述一支片子、要分镜表 = 建场请求**，必须建进工程；缺品牌名这类信息用占位建出来、把假设写进 `notes`，不要停下来反问。改完同一句 brief 出 49 个 Action。
 
 模型自己记下的假设：未提供品牌名与产品品类，以「MAISON」和黑色结构感手袋占位；参考品牌只转译成「极简产品摄影、黑白留白、经典法式优雅」等原创视觉属性。
 
@@ -58,7 +58,7 @@ npm run dev -- --ark-key-file ~/.ark-key --llm-key-file ~/.aigw-key
 10 个任务并行，**9 个 5 分半内完成**。
 
 > **第二个真实缺陷。** 01 镜失败：`InvalidParameter: the specified duration is not supported for model doubao-seedance-2-5`——镜头是 3 s，Seedance 2.x 只接受 4–12 s。
-> 改法（`server/src/adapters/ark.mjs`）：把时长钳到模型支持区间（`minVideoSeconds: 4`），生成 4 s，**再由拼接器按镜头真实时长裁回 3 s**。3 秒的镜头在剪辑上完全合法，不该因为供应商的限制而整条失败。改完重跑 01 镜，一次通过。
+> 改法（`server/src/features/generation/ark.mjs`）：把时长钳到模型支持区间（`minVideoSeconds: 4`），生成 4 s，**再由拼接器按镜头真实时长裁回 3 s**。3 秒的镜头在剪辑上完全合法，不该因为供应商的限制而整条失败。改完重跑 01 镜，一次通过。
 
 另有一条 v2v 任务失败在 `NO_PUBLIC_MEDIA_URL`：Ark 的 `reference_video` 只吃公网 URL，不吃 data URL。本机不对外，所以 v2v 需要 `--public-url` 或 `--publish feishu`。i2v / t2v 不受影响。
 
@@ -105,10 +105,10 @@ curl -X POST :5175/api/actions -d '{"action":"film.plan","payload":{}}'
 
 | 文件 | 改动 |
 |---|---|
-| `server/src/adapters/llm.mjs` | 分镜表 = 建场请求；缺信息用占位不反问；模型清单补上网关实际可用的 gpt-6-astra / claude / gemini / glm / MiniMax；max_tokens 6000 → 12000（49 步计划放不下）；**网关参数自动协商**（gpt-6-astra 要 `max_completion_tokens` 且只接受默认 temperature，第一次 400 时就地适配并记住，不维护模型表） |
-| `server/src/adapters/ark.mjs` | Seedance 时长钳到 4–12 s，短镜头由拼接器裁回真实时长 |
-| `server/src/film.mjs`（新） | ffmpeg 拼接器：素材定位（`/media/*` / 绝对路径 / 远程 URL）、统一画幅帧率、按镜长裁剪、concat |
+| `server/src/features/agent/llm.mjs` | 分镜表 = 建场请求；缺信息用占位不反问；模型清单补上网关实际可用的 gpt-6-astra / claude / gemini / glm / MiniMax；max_tokens 6000 → 12000（49 步计划放不下）；**网关参数自动协商**（gpt-6-astra 要 `max_completion_tokens` 且只接受默认 temperature，第一次 400 时就地适配并记住，不维护模型表） |
+| `server/src/features/generation/ark.mjs` | Seedance 时长钳到 4–12 s，短镜头由拼接器裁回真实时长 |
+| `server/src/features/editing/film.mjs`（新） | ffmpeg 拼接器：素材定位（`/media/*` / 绝对路径 / 远程 URL）、统一画幅帧率、按镜长裁剪、concat |
 | `core/actions.js` | `film.plan` / `film.export` / `film.status`；`hooks.film` |
-| `web/js/film.js`（新） | `runBlockout` / `renderShots` / `exportFilm` / `runPipeline` |
+| `web/js/features/editing/film.js`（新） | `runBlockout` / `renderShots` / `exportFilm` / `runPipeline` |
 | `desktop/` | 成片菜单（三步主路径 + 更多）、偏好设置窗口（密钥与规划模型）、Dock 进度条与通知、跑片时拦截关窗、运行诊断 |
 | `tests/runtime.test.mjs` | 成片流水线验收（清单、缺素材、assembler 契约、镜头顺序） |

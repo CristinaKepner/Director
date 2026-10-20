@@ -56,7 +56,7 @@ test("每个图标引用都要有对应的 symbol", () => {
   const html = read("web/index.html");
   const defined = new Set([...html.matchAll(/<symbol id="([\w-]+)"/g)].map((m) => m[1]));
   const used = [...html.matchAll(/<use href="#([\w-]+)"/g)].map((m) => m[1]);
-  for (const f of ["web/js/ui.js", "web/js/firstrun.js", "web/js/film.js", "web/js/desktop.js"]) {
+  for (const f of ["web/js/ui.js", "web/js/firstrun.js", "web/js/features/editing/film.js", "web/js/desktop.js"]) {
     const js = read(f);
     for (const m of js.matchAll(/setAttribute\("href", [^)]*?"#([\w-]+)"/g)) used.push(m[1]);
     for (const m of js.matchAll(/href="#([\w-]+)"/g)) used.push(m[1]);
@@ -92,7 +92,7 @@ test("对照的每一栏有自己的入点，播放/拖动/回到开头都按这
 // 起因是真事：台面分成九块之后，导演在「全部」底下录第一场的草片，
 // 录进去的是九块台 —— 第一场的草片里站着别的场的人。
 test("程序画面走 renderProgram：录草片之前先把别的台收掉", () => {
-  const vp = read("web/js/viewport.js");
+  const vp = read("web/js/features/stage/viewport.js");
   assert.ok(/function programScope\(d\)/.test(vp) && /function renderProgram\(d(, r = renderer)?\)/.test(vp), "缺少节目画面的分块收范围");
   const body = vp.slice(vp.indexOf("function renderProgram"));
   assert.equal((body.match(/\.render\(scene, programCam\)/g) || []).length, 1, "节目画面只能有 renderProgram 那一处渲染；直接渲染就会把别的场录进草片");
@@ -124,7 +124,7 @@ test("角色库、参照、模板库各是一个面板，轨道上参照紧挨�
 test("3D Jutsu 那一套：+ 物体是菜单不是 prompt，能导出静帧和 GLB，Esc 退出拍摄机视角", () => {
   const html = fs.readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   const ui = fs.readFileSync(new URL("../web/js/ui.js", import.meta.url), "utf8");
-  const vp = fs.readFileSync(new URL("../web/js/viewport.js", import.meta.url), "utf8");
+  const vp = fs.readFileSync(new URL("../web/js/features/stage/viewport.js", import.meta.url), "utf8");
   for (const id of ["addMenu", "glbFile", "stillBtn", "glbBtn", "stillSize"]) assert.ok(html.includes(`id="${id}"`), id);
   assert.ok(!/addEntity"\)\.onclick = \(\) => \{\s*const type = prompt/.test(ui), "+ 物体不再弹两次 prompt");
   assert.ok(/geo === "pyramid"/.test(vp), "四棱锥要画得出来");

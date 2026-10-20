@@ -4,12 +4,12 @@
 import "../../core/index.js"; // registers scene.demo / agent.* actions on the local replica
 import { store } from "../../core/store.js";
 import { dispatch as localDispatch } from "../../core/actions.js";
-import { initViewport } from "./viewport.js";
+import { initViewport } from "./features/stage/viewport.js";
 import { bindUI, loadSaved, toast, openEditingTimeline } from "./ui.js";
 import { connect, dispatch, client, onMode } from "./client.js";
-import { say } from "../../core/agent.js";
+import { say } from "../../core/features/agent/agent.js";
 import { initDesktop } from "./desktop.js";
-import { film } from "./film.js";
+import { film } from "./features/editing/film.js";
 
 window.__dc = Object.assign(window.__dc || {}, { errors: [], ready: false });
 window.addEventListener("error", (e) => window.__dc.errors.push(String(e.message || e)));

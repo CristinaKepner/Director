@@ -13,3 +13,6 @@
 - Empty-project onboarding is derived from current project contents, not a persistent first-run flag. Keep creation media and assets linked; never write stale upload results into a newly opened project.
 
 - Director 0.9.19 and Downloads/MossCreate Base are separate products. Director starts with the native project overview and a modal empty-project guide; node composition is an in-workspace view. Do not copy the Base application shell into Director.
+
+- Feature ownership and documentation: read `docs/features/README.md` and the relevant feature folder before changes. Domain/server/browser implementations live under `core/features/<id>`, `server/src/features/<id>`, and `web/js/features/<id>`; keep the single store and shared registration/assembly entry points.
+- Keep `docs/features/catalog.json` and each feature implementation list aligned when moving or adding modules/Actions. Run `npm run test:features`; browser import tests now recurse through feature directories. Migration and verified limits are in `docs/features/migration.md`.

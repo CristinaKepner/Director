@@ -1,4 +1,4 @@
-import {registerWorkflowRuntime} from './workflow-runtime-actions.js';
+import {registerWorkflowRuntime} from './features/workflow/workflow-runtime-actions.js';
 // Action Registry — the single command surface shared by the Web UI, the CLI, the Agent and the HTTP bridge.
 // Nothing here touches the DOM or Three.js. Every mutation of the Source of Truth goes through dispatch().
 import {
@@ -42,21 +42,21 @@ import {
   FIDELITY,
   LOCK_ASPECTS,
   ASSET_ROLES,} from "./schema.js";
-import { attachPrompts, compileShot } from "./prompts.js";
-import { templateList, templateById, templateFor, templateTitle, SEEDANCE_SOURCE } from "./seedance.js";
-import { planCoverage, suggestCount, MAX_ANGLES } from "./coverage.js";
+import { attachPrompts, compileShot } from "./features/generation/prompts.js";
+import { templateList, templateById, templateFor, templateTitle, SEEDANCE_SOURCE } from "./features/generation/seedance.js";
+import { planCoverage, suggestCount, MAX_ANGLES } from "./features/stage/coverage.js";
 import { MODEL_LIBRARY, ROOM_PATTERNS } from "./schema.js";
-import { compileReference, inferReplicateMode, DEFAULT_REPLICATE_MODE, REPLICATE_MODES } from "./reference-plan.js";
-import { cameraStateAt, entityStateAt, sequenceLayout, subjectPoint, fovFor } from "./motion.js";
-import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, topDownMap, mapToSvg, mapToAscii, occluderOf, sizeFromHeightFill } from "./spatial.js";
-import { shotBaseline, verifyShotContract } from "./contract.js";
-import { chosenVideo, videoVersions, cutSignature, cutMedia, cutCaption, cutTimeline, revisionPrompt, KEEP_OPTIONS } from "./cut.js";
-import {activeJourney,journeyPath} from './journey.js';
-import { registerCreationActions } from './creation-actions.js';
-import { registerWorkflowActions } from './workflow-actions.js';
-import { registerJourneyActions } from './journey-actions.js';
-import { registerHarnessActions } from './harness-actions.js';
-import {harnessSpec,runIsFresh} from './harness.js';
+import { compileReference, inferReplicateMode, DEFAULT_REPLICATE_MODE, REPLICATE_MODES } from "./features/reference/reference-plan.js";
+import { cameraStateAt, entityStateAt, sequenceLayout, subjectPoint, fovFor } from "./features/shots/motion.js";
+import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, topDownMap, mapToSvg, mapToAscii, occluderOf, sizeFromHeightFill } from "./features/stage/spatial.js";
+import { shotBaseline, verifyShotContract } from "./features/quality/contract.js";
+import { chosenVideo, videoVersions, cutSignature, cutMedia, cutCaption, cutTimeline, revisionPrompt, KEEP_OPTIONS } from "./features/editing/cut.js";
+import {activeJourney,journeyPath} from './features/journey/journey.js';
+import { registerCreationActions } from './features/creation/creation-actions.js';
+import { registerWorkflowActions } from './features/workflow/workflow-actions.js';
+import { registerJourneyActions } from './features/journey/journey-actions.js';
+import { registerHarnessActions } from './features/quality/harness-actions.js';
+import {harnessSpec,runIsFresh} from './features/quality/harness.js';
 
 export const RUNTIME_VERSION = "director-runtime/0.4";
 export const SHOT_STATUSES = ["draft", "blocking", "rehearsal", "recorded", "review", "approved"];
@@ -454,7 +454,7 @@ register("scene.room", {
 // 编译器把那一场的主体摆进去；页面把块画出来。运行时仍然只有一个 scene ——
 // 分块是摆位约定，不是第二套场次系统。
 register("scene.pads", {
-  doc: "把台面分成几块（每块一个场景）：pads=[{id,name,index,x,z,w,d}]；clear=true 拆掉分块。1/3/6/9 宫格由 core/reference-plan.js 的 padGrid 算",
+  doc: "把台面分成几块（每块一个场景）：pads=[{id,name,index,x,z,w,d}]；clear=true 拆掉分块。1/3/6/9 宫格由 core/features/reference/reference-plan.js 的 padGrid 算",
   params: { pads: "[{id,name,index,x,z,w,d,from,to}]", clear: "boolean" },
   validate: ({ pads, clear }) => (!clear && !Array.isArray(pads) ? { error: "MISSING_PARAM", missing: ["pads"] } : null),
   handler({ pads, clear }) {
@@ -1880,7 +1880,7 @@ register("reference.analyze", {
 // 落成本地文件之后，接的还是原来那条路（reference.analyze → planner 建场 → 白模 → 生成）。
 // 链接能不能用，dispatch 当场就知道 —— 没理由先建一个任务、再让它在后台失败。
 // 深一层的检查（站点认不认、要不要登录）留给适配器，那些确实得试了才知道。
-// 读参照缺什么，由适配器自己说（见 server/src/adapters/reference.mjs 的 missing）。
+// 读参照缺什么，由适配器自己说（见 server/src/features/reference/reference.mjs 的 missing）。
 // 「要网关密钥和 ffmpeg」是一句两头都可能不成立的话：缺的常常只有其中一个，
 // 人照着它去装了一个本来就有的东西，问题还在原地。
 function readerMissing() {
@@ -1973,7 +1973,7 @@ register("reference.replicate", {
     const wantBuild = build !== false;
     if (url && !hooks.fetcher?.ready) return { ok: false, error: "FETCHER_NOT_READY", hint: "后端没有可写的媒体目录，存不下素材。也可以把视频直接拖进来。" };
     if (!hooks.reference?.ready) return { ok: false, error: "READER_NOT_READY", missing: hooks.reference?.missing || null, hint: `把链接下下来了也读不了 —— 还差：${readerMissing()}` };
-    // 建场不再要规划器：空间参数是编译出来的，不是猜出来的（见 core/reference-plan.js）。
+    // 建场不再要规划器：空间参数是编译出来的，不是猜出来的（见 core/features/reference/reference-plan.js）。
     // 规划器只在导演另外打了一句自由文字时才上场，而且是在场已经建好之后。
 
     const id = uid("rep");
@@ -2121,7 +2121,7 @@ register("reference.replicate", {
 });
 
 // referenceBrief() 曾经住在这里：把结构化分析压成一段中文散文，再交给规划器猜回 Action。
-// 它被 core/reference-plan.js 的编译器取代了 —— 留着一个没人调的导出只会让人再走一次那条路。
+// 它被 core/features/reference/reference-plan.js 的编译器取代了 —— 留着一个没人调的导出只会让人再走一次那条路。
 
 register("reference.use", {
   doc: "把之前读过的一条参照换回来当前用的那条。不重新读：读一次约 20 秒、一万多 token，结果本来就存在任务里",
@@ -2250,12 +2250,12 @@ register("generation.reference", {
 });
 
 // 提示词模板：结构从哪来。空间参数是导演台自己编译的，句式和块序来自 awesome-seedance
-// 那 460 多条验证过的案例（core/seedance-library.js，MIT）。不指定就按这一镜的信号自动挑，
+// 那 460 多条验证过的案例（core/features/generation/seedance-library.js，MIT）。不指定就按这一镜的信号自动挑，
 // 挑了哪个、为什么挑，都写在编译结果的 meta.template 里 —— 看得见才改得动。
 // 一条素材，多个机位。做法来自 Scenario 那条实测（19.53 秒固定机位 → 13 个新机位，原声同步）：
 // 一段带时间码的机位清单 + 一条「只准换机位和镜头」的硬约束。
 // 导演台这边这些机位不是形容词 —— 距离、离地高度、俯仰角都是按主体尺寸算的，
-// 和 camera.frame 真正摆机位用的是同一套公式（见 core/coverage.js）。
+// 和 camera.frame 真正摆机位用的是同一套公式（见 core/features/stage/coverage.js）。
 register("shot.coverage", {
   doc: `把一条已经拍好的素材从多个新机位再拍一遍：按时长切段，每段一个机位（最多 ${MAX_ANGLES} 个）。clear=true 取消`,
   params: { shotId: "string（默认当前镜）", count: `number（几个机位；省略按时长算，约 1.5 秒一个）`, clear: "boolean" },

@@ -106,7 +106,7 @@ node server/bin/director.mjs capabilities | help camera.frame | context [scene|s
 - **Take**：Preflight(`take.arm`) → ARMED → `take.record` 进入 RECORDING。浏览器客户端带 `meta.capture` 调用后自己用 MediaRecorder 录下 Program 画面，`POST /api/takes/{id}/media` 上传 webm，再 `take.finish` → REVIEW → Circle / Reject → 故事版。CLI / 纯 API 调用则无头完成（只有快照）。后端有看门狗：客户端中途关闭也会收尾。
 - **提示词**：`generation.prompt` 由镜头编译（场景、主体语义与连续性、景别、角度、机位高度、焦距、光圈、运镜、灯光组、时长、帧率、保真度）成 Image / Video(T2V·I2V) / V2V / Negative 的中英文本并记版本。V2V 文本包含「大圆柱 = 主角 A：…」的代理体映射。
 - **多机位覆盖**：一条已经拍好的素材，同一瞬间换 N 个机位再拍一遍，原声不动（做法来自 [Scenario 的实测](https://x.com/Scenario_gg/status/2102365054389899695)：19.53 秒固定机位 → 13 个新机位）。`shot.coverage` 按时长切段（约 1.5 秒一个机位），每段的距离、离地高度、俯仰角都是按主体尺寸算的 —— 和 `camera.frame` 真正摆机位用的是同一套公式，所以「离地 1.49 米、俯 15 度」是能在 3D 里摆出来的那个数，不是形容词。末尾钉一条硬约束：表演、身体、服装、音轨都不许动，唯一的变量是机位和镜头。
-- **提示词结构**：空间参数是导演台自己编译的，**块序和句式**来自 [awesome-seedance](https://github.com/LearnPrompt/awesome-seedance)（MIT）—— 460 多条对照过原帖的 Seedance 案例蒸馏出的 25 个模板。按这一镜的信号（有没有台词、画面里有没有车、工程风格、分了几拍、多长）自动挑一个，挑了哪个、为什么挑写在 `meta.template` 里，也可以用 `prompt.template` 钉死。最要紧的一条是**分拍进提示词**：`shot.beats` 会排成 `[00:00-00:04] 第 1 拍：…` 的时间轴块，首尾相接、合计等于声明的时长，负向约束排在时间轴之后。模板库用 `npm run sync:seedance` 同步（生成 `core/seedance-library.js`，带 commit 和许可证）。
+- **提示词结构**：空间参数是导演台自己编译的，**块序和句式**来自 [awesome-seedance](https://github.com/LearnPrompt/awesome-seedance)（MIT）—— 460 多条对照过原帖的 Seedance 案例蒸馏出的 25 个模板。按这一镜的信号（有没有台词、画面里有没有车、工程风格、分了几拍、多长）自动挑一个，挑了哪个、为什么挑写在 `meta.template` 里，也可以用 `prompt.template` 钉死。最要紧的一条是**分拍进提示词**：`shot.beats` 会排成 `[00:00-00:04] 第 1 拍：…` 的时间轴块，首尾相接、合计等于声明的时长，负向约束排在时间轴之后。模板库用 `npm run sync:seedance` 同步（生成 `core/features/generation/seedance-library.js`，带 commit 和许可证）。
 - **一致性**：角色 / 产品先 `generation.reference` 出定妆照 / 产品图 → 「资产」里批准 → 之后它出现的每个镜头生成时自动带上参考（Seedream 多参考、Seedance reference_image）。Agent 听到「人物不一致」会自己走这条路。
 - **生成任务**：`generation.submit` 校验供应商与模式，任务按 Shot / Take / Prompt Version / Model 归档，进度经 SSE 推给所有页面。后端带火山引擎 Ark 密钥启动时（`--ark-key-file FILE` 或 `ARK_API_KEY`），`seedance-2.5` / `seedance-2`（t2v · i2v · v2v）和 `seedream-5`（t2i · i2i）走真实生成：提示词来自镜头编译，i2v 用故事版关键帧，v2v 用圈选 Take 的白模视频做参考，结果下载到 `server/data/media/` 并在 Generation 表里预览；其余供应商（Kling / Veo / Runway / MiniMax…）仍是可观察的模拟队列。v2v 需要 Ark 能访问参考视频，三选一：`--tunnel cloudflared`（自动开一条**只读、只有 /media** 的公网隧道，控制接口不出网，启动时会先自测可达性，不通就明确告诉你原因而不是给一个坏地址）、`--public-url https://host`（你已经有公网地址）、`--publish feishu`（传到你自己的飞书云盘取临时链接）。细节见 `docs/backend-api.md` §5.1–5.3。
 
@@ -160,18 +160,18 @@ cd desktop && npm install && npm start      # 打包：npm run dist
 core/schema.js                   引擎无关词汇：语义代理、景别、覆盖角、运镜、姿态/关节、灯光预设、供应商
 core/store.js                    Source of Truth + 历史（撤销/重做）+ 序列化
 core/actions.js                  Action Registry（project/scene/entity/camera/light/shot/motion/timeline/take/storyboard/annotation/generation/review/context/health）
-core/motion.js  core/prompts.js  运镜求值（含关键帧、动线）· 提示词编译器
-core/demo.js  core/agent.js      示例工程 · Agent 规划器（scene.demo / agent.* 也是 Action）
+core/features/shots/motion.js  core/features/generation/prompts.js  运镜求值（含关键帧、动线）· 提示词编译器
+core/features/projects/demo.js  core/features/agent/agent.js      示例工程 · Agent 规划器（scene.demo / agent.* 也是 Action）
 core/index.js                    运行时入口（服务端、CLI、测试、页面共用）
 server/src/host.mjs              RuntimeHost：权威运行时、自动保存、SSE 广播（每 Action 一帧）、录制看门狗、媒体存储
 server/src/api.mjs               HTTP 路由：/api/* · /media/* · 静态托管（可关）· CORS · Bearer token
-server/src/adapters/ark.mjs      Generation Adapter：火山 Ark（Seedance 2.5/2.0 视频任务轮询、Seedream 5.0 图片、结果落盘）
-server/src/film.mjs              Film Assembler：ffmpeg 按镜头顺序拼成片（统一画幅帧率、按镜长裁剪、concat）
-server/src/adapters/llm.mjs      LLM 规划器：OpenAI 兼容网关（GPT-5.6 / DeepSeek V4）→ JSON 计划 → 仍经 Action Registry 执行，失败回退规则规划器
+server/src/features/generation/ark.mjs      Generation Adapter：火山 Ark（Seedance 2.5/2.0 视频任务轮询、Seedream 5.0 图片、结果落盘）
+server/src/features/editing/film.mjs              Film Assembler：ffmpeg 按镜头顺序拼成片（统一画幅帧率、按镜长裁剪、concat）
+server/src/features/agent/llm.mjs      LLM 规划器：OpenAI 兼容网关（GPT-5.6 / DeepSeek V4）→ JSON 计划 → 仍经 Action Registry 执行，失败回退规则规划器
 server/bin/director-server.mjs   后端入口      server/bin/director.mjs   CLI（--remote 走后端 / 本地读写 JSON）
 web/index.html  web/css/app.css  页面与样式（vendor/three r170 已内置，无构建）
 web/js/client.js                 前端 ↔ 后端：API 地址解析、SSE 同步、快照回写（保留视图字段）、dispatch 路由、媒体上传、单机降级
-web/js/viewport.js               Three.js 投影：双保真、关节人偶、灯光、Program/自由观察、安全框、Gizmo、录像器
+web/js/features/stage/viewport.js               Three.js 投影：双保真、关节人偶、灯光、Program/自由观察、安全框、Gizmo、录像器
 web/js/ui.js  web/js/main.js     UI 绑定 · 启动（连后端，失败则单机）
 tests/runtime.test.mjs  server/tests/api.test.mjs  tools/smoke.mjs  tools/build-web.mjs
 ```

@@ -5,7 +5,7 @@ import {
   creationIsEmpty,
   prepareCreation,
   creationContext,
-} from "../core/creation.js";
+} from "../core/features/creation/creation.js";
 import { dispatch } from "../core/actions.js";
 test("every new empty project needs the start guide", () => {
   loadProjectData(createEmptyProject());

@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { findCloudflared, QUICK_TUNNEL_URL, createMediaTunnel } from "../src/tunnel.mjs";
+import { findCloudflared, QUICK_TUNNEL_URL, createMediaTunnel } from "../src/features/assets/tunnel.mjs";
 
 test("cloudflared 不靠 PATH 也要找得到", () => {
   // 最小 PATH：正是从访达启动的打包 app 拿到的那一个

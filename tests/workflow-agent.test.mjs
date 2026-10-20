@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { store, createEmptyProject, loadProjectData } from "../core/store.js";
 import { dispatch } from "../core/actions.js";
-import { createLlmPlanner } from "../server/src/adapters/llm.mjs";
+import { createLlmPlanner } from "../server/src/features/agent/llm.mjs";
 const graph = {
   nodes: [
     { id: "brief", type: "text", params: { text: "角色广告" } },
@@ -60,7 +60,7 @@ function stubPlanner(t) {
   });
   return request;
 }
-import { graphSnapshot } from "../web/js/creation-bridge.js";
+import { graphSnapshot } from "../web/js/features/workflow/creation-bridge.js";
 test("Agent cursor points at the created node using event target IDs", () => {
   loadProjectData(createEmptyProject());
   const out = dispatch("workflow.compose", graph, { source: "agent" });

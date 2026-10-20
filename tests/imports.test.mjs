@@ -24,11 +24,11 @@ function exportsOf(file, seen = new Set()) {
 
 test("web/js 里每一条具名导入，对方模块都真的导出了这个名字", () => {
   const dir = path.join(root, "web/js"), bad = [];
-  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".js"))) {
+  for (const f of fs.readdirSync(dir, { recursive: true }).filter((x) => x.endsWith(".js"))) {
     const file = path.join(dir, f), src = strip(fs.readFileSync(file, "utf8"));
     for (const m of src.matchAll(IMPORT)) {
       if (!m[2].startsWith(".")) continue; // three / three/addons 走 importmap，不在这里核
-      const target = path.resolve(dir, m[2]);
+      const target = path.resolve(path.dirname(file), m[2]);
       assert.ok(fs.existsSync(target), `${f} 导入的 ${m[2]} 不存在`);
       const have = exportsOf(target);
       for (const part of m[1].split(",")) { const name = part.trim().split(/\s+as\s+/)[0].trim(); if (name && !have.has(name)) bad.push(`${f}: { ${name} } from "${m[2]}"`); }

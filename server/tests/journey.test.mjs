@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {createFilmAssembler,findFfmpeg,mediaDuration} from '../src/film.mjs';
-import {createJourneyRenderer} from '../src/journey.mjs';
+import {createFilmAssembler,findFfmpeg,mediaDuration} from '../src/features/editing/film.mjs';
+import {createJourneyRenderer} from '../src/features/journey/journey.mjs';
 const bundled='/Applications/导演台.app/Contents/Resources/app-src/bin/ffmpeg';
 const bin=findFfmpeg(process.env.FFMPEG||(fs.existsSync(bundled)?bundled:undefined));
 test('local animatic produces separate picture, voice and score media and a playable complete film',{skip:!bin},async()=>{

@@ -145,7 +145,7 @@ curl -s -X POST http://127.0.0.1:5175/api/takes/take_abc/media -H 'content-type:
 
 ### 5.1 Generation Adapter：火山引擎 Ark（Seedance / Seedream）
 
-后端启动时带 `--ark-key-file` 或 `ARK_API_KEY`，`generation.submit` 对下列 provider 走真实 API（`server/src/adapters/ark.mjs`），`/api/health` 的 `generation` 字段会报告 `{name:"ark", models}`：
+后端启动时带 `--ark-key-file` 或 `ARK_API_KEY`，`generation.submit` 对下列 provider 走真实 API（`server/src/features/generation/ark.mjs`），`/api/health` 的 `generation` 字段会报告 `{name:"ark", models}`：
 
 | provider（`generation.submit`） | 模式 | Ark 模型 ID（默认） | 调用 |
 |---|---|---|---|
@@ -180,7 +180,7 @@ Ark 的一条硬规则（实测）：**视频请求不能同时带首帧（first
 
 ### 5.2 Agent Director 的 LLM 规划器（AIGW 网关：GPT-5.6 / DeepSeek V4）
 
-后端带 `--llm-key-file` 或 `AIGW_API_KEY` 启动后，`agent.run`（页面聊天、`POST /api/agent`、CLI `agent "…"`）改由 LLM 规划（`server/src/adapters/llm.mjs`）；`agent.backend = "rules"` 时仍用内置规则规划器。`/api/health` 的 `llm` 字段报告 `{name:"llm", baseUrl, model, models[], current}`。
+后端带 `--llm-key-file` 或 `AIGW_API_KEY` 启动后，`agent.run`（页面聊天、`POST /api/agent`、CLI `agent "…"`）改由 LLM 规划（`server/src/features/agent/llm.mjs`）；`agent.backend = "rules"` 时仍用内置规则规划器。`/api/health` 的 `llm` 字段报告 `{name:"llm", baseUrl, model, models[], current}`。
 
 | 项 | 说明 |
 |---|---|

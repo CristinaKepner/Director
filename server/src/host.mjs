@@ -1,7 +1,7 @@
-import {planWithReads} from './planner-reads.mjs';
-import {createWorkflowService} from './workflow-service.mjs';
-import {createWorkflowJudge} from './workflow-judge.mjs';
-import {creationContext} from '../../core/creation.js';
+import {planWithReads} from './features/agent/planner-reads.mjs';
+import {createWorkflowService} from './features/workflow/workflow-service.mjs';
+import {createWorkflowJudge} from './features/workflow/workflow-judge.mjs';
+import {creationContext} from '../../core/features/creation/creation.js';
 // RuntimeHost — the backend's authoritative Director Runtime.
 // Owns one core runtime instance (Source of Truth), persists it to a project file, stores take media,
 // and broadcasts every state change to subscribers (SSE clients). No HTTP here: see api.mjs.
@@ -9,13 +9,13 @@ import fs from "node:fs";
 import path from "node:path";
 import * as R from "../../core/index.js";
 import { PROVIDERS } from "../../core/schema.js";
-import { createFilmAssembler } from "./film.mjs";
-import { createJudge } from "./adapters/judge.mjs";
-import { createReferenceReader } from "./adapters/reference.mjs";
-import { createFetcher } from "./fetch.mjs";
-import { createJourneyRenderer } from './journey.mjs';
-import { createHarnessRunner } from './harness.mjs';
-import { createHarnessInspector } from './harness-inspector.mjs';
+import { createFilmAssembler } from "./features/editing/film.mjs";
+import { createJudge } from "./features/quality/judge.mjs";
+import { createReferenceReader } from "./features/reference/reference.mjs";
+import { createFetcher } from "./features/assets/fetch.mjs";
+import { createJourneyRenderer } from './features/journey/journey.mjs';
+import { createHarnessRunner } from './features/quality/harness.mjs';
+import { createHarnessInspector } from './features/quality/harness-inspector.mjs';
 
 const { store, dispatch, persistable, loadProjectData, capabilities, historyInfo, RUNTIME_VERSION } = R;
 

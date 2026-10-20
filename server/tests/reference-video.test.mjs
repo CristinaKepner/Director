@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createFilmAssembler, findFfmpeg } from '../src/film.mjs';
-import { createArkAdapter } from '../src/adapters/ark.mjs';
+import { createFilmAssembler, findFfmpeg } from '../src/features/editing/film.mjs';
+import { createArkAdapter } from '../src/features/generation/ark.mjs';
 
 const bin = findFfmpeg();
 const probe = bin && path.join(path.dirname(bin), 'ffprobe');

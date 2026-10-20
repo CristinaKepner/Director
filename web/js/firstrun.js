@@ -10,7 +10,7 @@
 // 默认只跑到白模成片：白模不花钱、一两分钟出结果。真实生成计费，放在看完之后单独问。
 import { store } from "../../core/store.js";
 import { dispatch, client } from "./client.js";
-import { runBlockout, exportFilm } from "./film.js";
+import { runBlockout, exportFilm } from "./features/editing/film.js";
 import { toast, mediaHref } from "./ui.js";
 
 const KEY = "director-console:firstrun:v2";
@@ -322,7 +322,7 @@ function done(film) {
   $("frOpen").onclick = close;
   $("frRender").onclick = async () => {
     close();
-    const { renderShots } = await import("./film.js");
+    const { renderShots } = await import("./features/editing/film.js");
     toast("开始逐镜生成，进度看底部「生成」");
     const r = await renderShots({ provider: "seedance-2.5", mode: "auto" });
     const ok = (r.results || []).filter((x) => x.status === "done").length;

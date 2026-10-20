@@ -1,26 +1,26 @@
-import { syncConversationPicker } from './conversation-picker.js';
-import { showConversationArchive } from './conversation-archive.js';
+import { syncConversationPicker } from './features/conversation/conversation-picker.js';
+import { showConversationArchive } from './features/conversation/conversation-archive.js';
 // UI binding layer — minimal by default, progressive by use.
 // Renders from the store; every mutation goes through dispatch() (client.js routes it to the backend or the local replica).
 // What is on screen at rest: the picture, the shot strip, one Agent input, four stage controls. Everything else opens on demand.
-import { exportConversation, conversationFilename } from "../../core/conversation-export.js";
+import { exportConversation, conversationFilename } from "../../core/features/conversation/conversation-export.js";
 import { store, persistable, historyInfo } from "../../core/store.js";
 import { timecode, getHooks, referencesForShot, padOf, shotPad, shotSourceSpan, padSummary } from "../../core/actions.js";
-import { templateList, templateFor, CATEGORIES as SEEDANCE_CATEGORIES, TEMPLATES as SEEDANCE_TEMPLATES } from "../../core/seedance.js";
-import { DEMOS } from "../../core/demo.js";
-import { REPLICATE_MODES } from "../../core/reference-plan.js";
-import { threadItems } from "./thread.js";
-import { physicalInfo, fmt as pf } from "./phys.js";
+import { templateList, templateFor, CATEGORIES as SEEDANCE_CATEGORIES, TEMPLATES as SEEDANCE_TEMPLATES } from "../../core/features/generation/seedance.js";
+import { DEMOS } from "../../core/features/projects/demo.js";
+import { REPLICATE_MODES } from "../../core/features/reference/reference-plan.js";
+import { threadItems } from "./features/conversation/thread.js";
+import { physicalInfo, fmt as pf } from "./features/stage/phys.js";
 import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
 import { dispatch, client, isOnline } from "./client.js";
-import { focusSelected, resetView, focusPad, renderStill, exportSceneGlb, measureGlb } from "./viewport.js";
-import { renderSpatial } from "./spatial-panel.js";
-import { renderEval } from "./eval-panel.js";
-import { initTaskProgress } from "./task-progress.js";
-import { initStageWorkspace, stagePlayback } from "./stage-workspace.js";
-import { initCreationWorkspace } from "./creation-workspace.js";
-import { createTimelineEditor } from "./timeline-editor.js";
-import { chosenVideo, cutTimeline } from "../../core/cut.js";
+import { focusSelected, resetView, focusPad, renderStill, exportSceneGlb, measureGlb } from "./features/stage/viewport.js";
+import { renderSpatial } from "./features/stage/spatial-panel.js";
+import { renderEval } from "./features/stage/eval-panel.js";
+import { initTaskProgress } from "./features/agent/task-progress.js";
+import { initStageWorkspace, stagePlayback } from "./features/stage/stage-workspace.js";
+import { initCreationWorkspace } from "./features/creation/creation-workspace.js";
+import { createTimelineEditor } from "./features/editing/timeline-editor.js";
+import { chosenVideo, cutTimeline } from "../../core/features/editing/cut.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -468,7 +468,7 @@ async function saveNative(name, content) {
 // "/media/x.mp4" from the backend → absolute URL next to the API root (survives path-prefix proxies)
 export function mediaHref(u) {
   if (!u || /^(https?:|data:|blob:)/.test(u)) return u;
-  return isOnline() && client.base ? new URL(u.replace(/^\//, ""), new URL("../", client.base)).toString() : u;
+  return isOnline() && client.base ? new URL(u.replace(/^\//, ""), new URL("..", client.base)).toString() : u;
 }
 function rand(a, b) {
   return +(a + Math.random() * (b - a)).toFixed(2);
@@ -1227,7 +1227,7 @@ function bindSync(el) {
     const box = el.querySelector("[data-run]");
     el.querySelectorAll("[data-regen]").forEach((x) => (x.disabled = true));
     if (box) { box.hidden = false; box.className = "sc-run"; box.textContent = "准备…"; }
-    const { regenerateShot } = await import("./film.js");
+    const { regenerateShot } = await import("./features/editing/film.js");
     const r = await regenerateShot({ shotId: b.dataset.regen, onProgress: (p) => box && (box.textContent = p.label || p.phase) });
     el.querySelectorAll("[data-regen]").forEach((x) => (x.disabled = false));
     if (box) {
@@ -1884,7 +1884,7 @@ function renderCheck(el, d) {
   const all = $("chkAll");
   if (all) all.onclick = async () => {
     all.disabled = true;
-    const { applyFixes } = await import("./film.js");
+    const { applyFixes } = await import("./features/editing/film.js");
     const r = await applyFixes({ findings: c.findings, onProgress: (p) => say(`${p.index}/${p.total} ${p.label}`) });
     say(`修了 ${r.applied}/${r.of} 条${r.manual.length ? `；还有 ${r.manual.length} 条要你自己拿主意` : ""}`, r.applied ? "ok" : "fail");
     await runCheck();
@@ -1894,7 +1894,7 @@ function renderCheck(el, d) {
   const skip = $("chkSkip");
   if (skip) skip.onclick = async () => {
     if (!confirm(`${c.errors} 个镜头会拍出空画面或拍错主体。确定直接录？`)) return;
-    const { runBlockout } = await import("./film.js");
+    const { runBlockout } = await import("./features/editing/film.js");
     say("开始录草片（跳过检查）…");
     const r = await runBlockout({ check: false, onProgress: (p) => p.phase === "record" && say(`录草片 ${p.index}/${p.total} · ${p.title}`) });
     say(r.ok ? `录完 ${r.recorded}/${r.of} 镜` : `录制失败：${r.hint || r.error}`, r.ok ? "ok" : "fail");

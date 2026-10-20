@@ -22,7 +22,7 @@ HTML 节点在不含 same-origin 权限的 sandbox iframe 内执行内联 HTML/C
 
 `workflow.update` 修改名称、坐标、参数；阈值在 0–1，循环次数为 1–10 整数。`workflow.read` 返回图副本。工作流摘要进入 `context.scene`，Agent 可再读取完整图。规划与执行分离：历史回放和撤销不产生模型请求。
 
-实现：`core/workflow.js`、`core/workflow-actions.js`、`core/workflow-compose.js`；界面：`web/js/creation-*`、`creation-ui/src`。领域回归：`tests/workflow.test.mjs`、`tests/workflow-agent.test.mjs`。
+实现：`core/features/workflow/workflow.js`、`core/features/workflow/workflow-actions.js`、`core/features/workflow/workflow-compose.js`；界面：`web/js/creation-*`、`creation-ui/src`。领域回归：`tests/workflow.test.mjs`、`tests/workflow-agent.test.mjs`。
 
 ## Agent Runtime 的最小接入
 
@@ -43,7 +43,7 @@ Agent 的工具白名单已包含 `workflow.compose/add/update/connect/disconnec
 
 `workflow.execute {confirm:true,maxGenerations:1..20}` 启动一次运行；界面“运行节点”先确认次数及模型费用。执行操作不在 LLM 规划白名单内，规划不会自动计费。外部 Codex/Claude 可通过已有终端 HTTP 操作集读图和提交规划，无需新建 MCP 或嵌套 shell。尚未实现本地 CLI 自动探测。
 
-运行器位于 `server/src/workflow-service.mjs`、`workflow-runner.mjs`、`workflow-routing.mjs`、`workflow-steps.mjs`；真实生成映射位于 `workflow-generation.mjs`。沿用现有 Ark/MossHub adapter，不声称已有 MOSS Create 共享实现。普通节点输出 next，If 的 true/false 为独立端口；执行前拒绝缺失节点、未知类型、非法分支和图环。未选分支跳过，合流只消费活动分支；不相关的运镜输入不能重新激活被跳过的条件链。
+运行器位于 `server/src/features/workflow/workflow-service.mjs`、`workflow-runner.mjs`、`workflow-routing.mjs`、`workflow-steps.mjs`；真实生成映射位于 `workflow-generation.mjs`。沿用现有 Ark/MossHub adapter，不声称已有 MOSS Create 共享实现。普通节点输出 next，If 的 true/false 为独立端口；执行前拒绝缺失节点、未知类型、非法分支和图环。未选分支跳过，合流只消费活动分支；不相关的运镜输入不能重新激活被跳过的条件链。
 
 Text/Table 和参考节点将文本约束传入下游；三视图是可编辑的提示约束，不是几何重建或 ControlNet。图像生成有参考图时使用 i2i；图像编辑必须有图片；视频节点有视频时用 v2v、有图片时用 i2v、无媒体时用 t2v。i2v 单张关键帧不代表整段视频参考，多张参考图保留为 reference images。多图参考需先导入本地工程；超过五图/一个视频、不支持的模式、音频参考和 HTML 自动导出会明确失败，不丢弃输入后继续。模型、时长及公网可达性沿用供应商配置检查，不做未经确认的模型替换。
 
@@ -83,10 +83,10 @@ If 条件成立走 true（例如面部修复），不成立走 false（跳过修
 
 LLM 工程上下文不再对序列化 JSON 做 6,000 字符硬截断；否则位于摘要末尾的 creation 节点、连线和媒体会消失，甚至产生残缺 JSON。creation.media 摘要保留 approved、entityId 和 role，已批准与待批准素材不混淆。
 
-`server/src/planner-reads.mjs` 对纯只读计划执行允许的读取操作，将真实结果放回 `summary.toolResults` 后继续原始请求。最多三次规划（两次补读），达到上限明确报告未产生修改；不自动执行混合写计划或模型生成。用户明确的待确认方案仍走原有确认流程。每次规划和读取前核对工程身份，防止跨工程写入。回归 `tests/planner-context.test.mjs` 覆盖长摘要、只读续接、次数上限、写操作隔离、工程切换和宿主完整调用链；模型均为测试替身，未产生真实费用。
+`server/src/features/agent/planner-reads.mjs` 对纯只读计划执行允许的读取操作，将真实结果放回 `summary.toolResults` 后继续原始请求。最多三次规划（两次补读），达到上限明确报告未产生修改；不自动执行混合写计划或模型生成。用户明确的待确认方案仍走原有确认流程。每次规划和读取前核对工程身份，防止跨工程写入。回归 `tests/planner-context.test.mjs` 覆盖长摘要、只读续接、次数上限、写操作隔离、工程切换和宿主完整调用链；模型均为测试替身，未产生真实费用。
 
 ### 历史对话档案
-工程菜单的「历史对话 · 按版本查看」只读展示 `project.conversationArchive.versions`；旧工程没有档案时从 `journey.nodes[].agentMessages` 读取实际检查点记录。按版本保留原文和来源，各检查点可能重复；不声称恢复已丢失的聊天。档案随工程保存，但不注入实时 Agent 消息、不执行历史操作、不恢复旧镜头状态。文本通过 textContent 呈现，不执行 HTML。实现：core/conversation-archive.js、web/js/conversation-archive.js；测试：tests/conversation-archive.test.mjs。用户的私人档案和整合工程只保存在本地，不进 Git 或通用 DMG。
+工程菜单的「历史对话 · 按版本查看」只读展示 `project.conversationArchive.versions`；旧工程没有档案时从 `journey.nodes[].agentMessages` 读取实际检查点记录。按版本保留原文和来源，各检查点可能重复；不声称恢复已丢失的聊天。档案随工程保存，但不注入实时 Agent 消息、不执行历史操作、不恢复旧镜头状态。文本通过 textContent 呈现，不执行 HTML。实现：core/features/conversation/conversation-archive.js、web/js/features/conversation/conversation-archive.js；测试：tests/conversation-archive.test.mjs。用户的私人档案和整合工程只保存在本地，不进 Git 或通用 DMG。
 
 「跟它说」顶部的对话版本选择器可直接调取检查点/整合档案原文。历史模式隐藏当前对话和输入框，旧审批按钮不会渲染为可执行控件；选择「当前对话」返回实时消息和待确认计划。切换工程重置选择。查看历史不向模型发送内容，不恢复工程快照。
 历史对话使用与实时聊天一致的用户/Agent 消息气泡；连续操作合并为可展开记录，失败数保持可见，思考及历史选项只读折叠。媒体按原引用显示，禁止脚本 URL；不会提供历史计划执行按钮。

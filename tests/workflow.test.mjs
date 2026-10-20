@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {NODE_TYPES,createNode,connectNodes,inspectCondition,characterWorkflow} from '../core/workflow.js';
+import {NODE_TYPES,createNode,connectNodes,inspectCondition,characterWorkflow} from '../core/features/workflow/workflow.js';
 
 test('catalog includes assets, references, generation and semantic controls', () => {
   for (const kind of ['text','table','image','video','audio','views','light','camera','image-generate','image-edit','video-generate','if','loop']) {

@@ -1,7 +1,7 @@
 // Agent 线程分组。信息不删，只是不一次全摆出来 —— 但有一条底线：折叠不能把坏消息藏起来。
 import test from "node:test";
 import assert from "node:assert/strict";
-import { threadItems } from "../web/js/thread.js";
+import { threadItems } from "../web/js/features/conversation/thread.js";
 
 const tool = (id, ok = true) => ({ id, role: "tool", text: `步骤 ${id}\nx.y {}\n→ ${ok ? "ok" : "fail"}`, ok });
 const job = (id) => ({ id, role: "agent", text: `01 镜 · Seedance · v2v 生成完成。`, jobId: `job_${id}`, media: { url: `/media/${id}.mp4`, kind: "video" } });

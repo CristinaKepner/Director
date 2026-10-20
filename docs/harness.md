@@ -124,10 +124,10 @@ Agent 每执行一步都留一张卡片。卡片要回答三个问题，而不�
 | `capture` | 浏览器 viewport | `() → dataURL`，抓一帧 Program 画面 |
 | `recorder` | 浏览器 viewport | `start(take, shot)` / `stop(id)`，MediaRecorder 录代理视频 |
 | `generation` | `adapters/ark.mjs` | `submit(job, update)`，真实供应商；不认识的 provider 落回模拟队列 |
-| `film` | `server/src/film.mjs` | `assemble` / `frames` / `toMp4` / `lastFrame`，ffmpeg |
+| `film` | `server/src/features/editing/film.mjs` | `assemble` / `frames` / `toMp4` / `lastFrame`，ffmpeg |
 | `judge` | `adapters/judge.mjs` | 抽帧 + 多模态比对新旧两版，出验收结论 |
 | `reference` | `adapters/reference.mjs` | 图 / 视频 → 结构化拍摄参数 + 一句可建场的 brief |
-| `fetcher` | `server/src/fetch.mjs` | `probe` / `download`，链接 → 本地素材。直链走普通 HTTP；页面链接要 yt-dlp，机器上没有就自己取官方的独立可执行文件到 `--tools-dir`（核对 SHA2-256SUMS，对不上不落盘），不要 Homebrew |
+| `fetcher` | `server/src/features/assets/fetch.mjs` | `probe` / `download`，链接 → 本地素材。直链走普通 HTTP；页面链接要 yt-dlp，机器上没有就自己取官方的独立可执行文件到 `--tools-dir`（核对 SHA2-256SUMS，对不上不落盘），不要 Homebrew |
 | `planner` | `server/src/host.mjs` | `build(brief)`，自然语言 → Action 计划并执行。**规划器也是可替换的能力**，编排型 Action 通过它建场 |
 
 规则：**hook 缺席时产品降级但不报错**。没有 ark key → 模拟队列照样能演完整流程；没有 ffmpeg → `film.export` 返回带安装建议的错误而不是崩；没有浏览器 → `take.record` 无头完成，只留快照。
@@ -136,7 +136,7 @@ Agent 每执行一步都留一张卡片。卡片要回答三个问题，而不�
 
 - **后端是 Source of Truth**。Shell 只拥有视图状态（选中项、视口模式、播放头、Tab、Gizmo），后端快照不覆盖这些。
 - **后端不可达时自动降级**为单机模式：同一份 core 在页面里跑，工程存 localStorage，顶栏挂明显标记，每 10 秒重试。
-- **桌面端不是第二个产品**。`desktop/main.mjs` 起同一个后端、装同一个 `web/`，只把浏览器的凑合替换成原生的：菜单、保存面板、Dock 进度条、通知、跑片时拦住误关窗口。桌面端**没有**自己的业务逻辑——菜单项全部落到 `web/js/film.js` 和 Action Registry。
+- **桌面端不是第二个产品**。`desktop/main.mjs` 起同一个后端、装同一个 `web/`，只把浏览器的凑合替换成原生的：菜单、保存面板、Dock 进度条、通知、跑片时拦住误关窗口。桌面端**没有**自己的业务逻辑——菜单项全部落到 `web/js/features/editing/film.js` 和 Action Registry。
 
 ## 9. 一致性控制（跨镜头的身份）
 
@@ -174,7 +174,7 @@ film.export     后端 ffmpeg：每镜取一段素材 → 统一画幅/帧率/�
 
 1. 在 `core/actions.js` 注册 Action：`doc` / `params` / `required` / `validate` / `undoable` / 状态机。慢操作按「建任务 + 异步推进」写。
 2. 要外部能力就加 hook，别在 core 里 import 环境。
-3. 宿主注入实现（`server/src/host.mjs` 或 `web/js/viewport.js`）。
+3. 宿主注入实现（`server/src/host.mjs` 或 `web/js/features/stage/viewport.js`）。
 4. Shell 接一个入口——按钮或菜单项，落到同一个 Action。
 5. `tests/` 加一条无 UI 验收；`npm test && npm run test:api` 必须绿。
 

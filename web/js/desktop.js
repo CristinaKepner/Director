@@ -2,9 +2,9 @@
 // The page stays the same client of the same backend — this only swaps browser affordances
 // for native ones (menu commands, save/open panels) and lets the top bar act as the title bar.
 import { openDrawer, toast } from "./ui.js";
-import { focusSelected, resetView } from "./viewport.js";
+import { focusSelected, resetView } from "./features/stage/viewport.js";
 import { store } from "../../core/store.js";
-import { runBlockout, renderShots, exportFilm } from "./film.js";
+import { runBlockout, renderShots, exportFilm } from "./features/editing/film.js";
 
 const $ = (id) => document.getElementById(id);
 const click = (id) => $(id)?.click();

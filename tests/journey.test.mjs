@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {store,createEmptyProject,loadProjectData,persistable,historyInfo} from '../core/store.js';
 import {dispatch,setHooks} from '../core/actions.js';
-import {activeJourney,journeySignature,planFromProject,validPlan,retimePlan,buildJourneyPlan} from '../core/journey.js';
-import {cutTimeline,cutSignature,chosenVideo} from '../core/cut.js';
+import {activeJourney,journeySignature,planFromProject,validPlan,retimePlan,buildJourneyPlan} from '../core/features/journey/journey.js';
+import {cutTimeline,cutSignature,chosenVideo} from '../core/features/editing/cut.js';
 const go=(a,p={})=>{const r=dispatch(a,p);assert.equal(r.ok,true,JSON.stringify(r));return r;};
 const tick=()=>new Promise(r=>setImmediate(r));
 function start(){loadProjectData(createEmptyProject());setHooks({journey:null});go('journey.start',{brief:'五个朋友在巴黎铁塔下笑闹',seconds:30,aspect:'9:16'});}

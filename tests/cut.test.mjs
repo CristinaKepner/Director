@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as R from '../core/index.js';
 import { setHooks } from '../core/actions.js';
-import { chosenVideo, videoVersions, cutSignature, cutTimeline } from '../core/cut.js';
+import { chosenVideo, videoVersions, cutSignature, cutTimeline } from '../core/features/editing/cut.js';
 const {store,dispatch,persistable,loadProjectData}=R;
 const video=(id,shotId='shot_01',extra={})=>({id,shotId,mode:'t2v',provider:'seedance-2.5',status:'done',result:{kind:'video',url:`/media/${id}.mp4`},...extra});
 function setup(){dispatch('project.set-state',{state:'EDIT'});dispatch('scene.demo',{name:'city-edge'});store.patch(d=>{d.jobs=[video('old'),video('new'),video('other','shot_02')];});}
@@ -115,7 +115,7 @@ test('duplicate shares media but edits independently; undo and reload retain bot
 });
 
 test('caption styling, timing and SRT use final sequence time after reorder and speed',async()=>{
- const {cutSrt}=await import('../core/cut.js');setup();
+ const {cutSrt}=await import('../core/features/editing/cut.js');setup();
  const style={size:3.5,color:'#c4b5fd',position:'top'};
  assert.equal(dispatch('shot.cut-update',{shotId:'shot_01',sourceIn:1,sourceOut:4,speed:1.5,caption:'Paris',captionRange:{start:.25,end:1.75},captionStyle:style}).ok,true);
  const plan=dispatch('film.plan',{source:'generated'}).data.clips[0];assert.deepEqual(plan.captionStyle,style);

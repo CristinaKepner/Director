@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
-import { createFetcher, findYtDlp, YTDLP_NAME } from "../src/fetch.mjs";
+import { createFetcher, findYtDlp, YTDLP_NAME } from "../src/features/assets/fetch.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "director-fetch-"));
 
@@ -109,8 +109,8 @@ test("自己装的那一份，下次启动就直接认得", () => {
 // 起因是真事：0.6.6 在一台新 Mac 上贴链接，弹的是「把链接下下来读参照要网关密钥和 ffmpeg」。
 // 那台机器的密钥是配了的，缺的只有 ffmpeg（没装 Homebrew）—— 而这句话把两样并列，
 // 人会去检查已经有的那一样。现在 ffmpeg 随包发，缺什么也各报各的。
-import { createReferenceReader } from "../src/adapters/reference.mjs";
-import { findFfmpeg, mediaDuration } from "../src/film.mjs";
+import { createReferenceReader } from "../src/features/reference/reference.mjs";
+import { findFfmpeg, mediaDuration } from "../src/features/editing/film.mjs";
 
 test("缺什么报什么：密钥和 ffmpeg 不再并成一句话", () => {
   const frames = async () => [];

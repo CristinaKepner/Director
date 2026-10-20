@@ -1,9 +1,9 @@
-// core/spatial.js: the evaluated trajectory, the move classifier and the top-down map.
+// core/features/stage/spatial.js: the evaluated trajectory, the move classifier and the top-down map.
 // These are the numbers the console's map panel shows and the RL environment scores on.
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as R from "../core/index.js";
-import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, topDownMap, mapToSvg, mapToAscii, MAP_CHANNELS, expectedHeightFill, occluderOf } from "../core/spatial.js";
+import { cameraTrajectory, trajectoryKinematics, classifyMove, framingReport, topDownMap, mapToSvg, mapToAscii, MAP_CHANNELS, expectedHeightFill, occluderOf } from "../core/features/stage/spatial.js";
 
 const sys = { source: "system", silent: true };
 const demo = () => { R.dispatch("scene.demo", { name: "city-edge" }, sys); return R.store.get(); };

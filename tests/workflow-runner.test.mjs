@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { executeWorkflow } from "../server/src/workflow-runner.mjs";
+import { executeWorkflow } from "../server/src/features/workflow/workflow-runner.mjs";
 const node = (id, type, params = {}) => ({ id, type, params });
 const edge = (from, to, branch = "next") => ({ from, to, branch });
 const graph = {

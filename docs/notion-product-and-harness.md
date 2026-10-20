@@ -217,10 +217,10 @@ register("camera.transform", {
 | `capture` | 浏览器 viewport | `() → dataURL`，抓一帧 Program 画面 |
 | `recorder` | 浏览器 viewport | `start(take, shot)` / `stop(id)`，录白模代理视频 |
 | `generation` | `adapters/ark.mjs` | `submit(job, update)`；不认识的 provider 落回模拟队列 |
-| `film` | `server/src/film.mjs` | `assemble` / `frames` / `toMp4` / `lastFrame`，ffmpeg |
+| `film` | `server/src/features/editing/film.mjs` | `assemble` / `frames` / `toMp4` / `lastFrame`，ffmpeg |
 | `judge` | `adapters/judge.mjs` | 抽帧 + 多模态比对新旧两版，出验收结论 |
 | `reference` | `adapters/reference.mjs` | 图 / 视频 → 结构化拍摄参数 + 一句可建场的 brief |
-| `fetcher` | `server/src/fetch.mjs` | `probe` / `download`，链接 → 本地素材（yt-dlp） |
+| `fetcher` | `server/src/features/assets/fetch.mjs` | `probe` / `download`，链接 → 本地素材（yt-dlp） |
 | `planner` | `server/src/host.mjs` | `build(brief)`，自然语言 → Action 计划并执行 |
 
 **`planner` 是这次新加的，意义最大**：规划器从此也是一个可替换的能力，而不是只有界面能调的特例。编排型 Action（如 `reference.replicate`）通过它去建场，换掉 planner 那条链照样成立。
@@ -256,7 +256,7 @@ options: [
 建出不同的场，还出现过一步不建（`BUILD_SAID_NOTHING_DONE`）；24mm 写成「约 24mm」，
 模型顺手给 35mm，没人会发现。
 
-**`core/reference-plan.js` 把这一段换成编译**：分析 → Action 计划，纯函数，不碰 store、
+**`core/features/reference/reference-plan.js` 把这一段换成编译**：分析 → Action 计划，纯函数，不碰 store、
 不调模型。空间参数走编译，语言走模型。
 
 | | 散文 → 规划器 | 编译器 |
@@ -313,7 +313,7 @@ options: [
 
 1. 在 `core/actions.js` 注册 Action：`doc` / `params` / `required` / `validate` / `undoable` / 状态机。慢操作按「建任务 + 异步推进」写。
 2. 要外部能力就加 hook，别在 core 里 import 环境。
-3. 宿主注入实现（`server/src/host.mjs` 或 `web/js/viewport.js`）。
+3. 宿主注入实现（`server/src/host.mjs` 或 `web/js/features/stage/viewport.js`）。
 4. Shell 接一个入口——按钮或菜单项，落到同一个 Action。
 5. `tests/` 加一条无 UI 验收；`npm test && npm run test:api` 必须绿。
 
