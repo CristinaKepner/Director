@@ -5,7 +5,7 @@
 // 写成什么句式、什么顺序、哪些词放前面，Seedance 出来的东西差很远。那是几百条验证过的案例才总结得出的，
 // 不是这个仓库该自己拍脑袋定的。
 //
-// 所以引入 awesome-seedance（MIT，见 core/features/generation/seedance-library.js 顶部的 commit）：
+// 所以引入 awesome-seedance（MIT，见 core/features/template-recommendations/seedance-library.js 顶部的 commit）：
 // 它把 460 多条对照过原帖的案例蒸馏成 25 个模板，每个模板带 structure（块怎么排）、
 // guidance（每块怎么写）、pitfalls（写错会怎样）。
 //

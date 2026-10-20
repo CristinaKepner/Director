@@ -47,7 +47,7 @@
 | `scene.demo` | 载入示例工程：city-edge / fast-pursuit | name | 否 |
 | `scene.environment` | 修改环境：bg 背景色, fog 雾密度, ambient 环境光, sky/ground 半球色, exposure 曝光, wet 湿地面 | — | 是 |
 | `scene.pad-select` | 切到某一块台（场景）：视口只画这块、自检和 Agent 上下文只看这块。id 省略 / null = 整台 | — | 否 |
-| `scene.pads` | 把台面分成几块（每块一个场景）：pads=[{id,name,index,x,z,w,d}]；clear=true 拆掉分块。1/3/6/9 宫格由 core/features/reference/reference-plan.js 的 padGrid 算 | — | 是 |
+| `scene.pads` | 把台面分成几块（每块一个场景）：pads=[{id,name,index,x,z,w,d}]；clear=true 拆掉分块。1/3/6/9 宫格由 core/features/reference-replication/reference-plan.js 的 padGrid 算 | — | 是 |
 | `scene.preset` | 套用灯光预设：softbox-studio/hard-side/noon-daylight/night-neon/sunset/cold-studio/silhouette/three-point/moonlight/noir/daylight。替换预设灯，保留 practical 灯 | preset | 是 |
 | `scene.room` | 摄影棚房间：width/depth/height 米，pattern standard/plain/calibration（棋盘 / 纯白 / 校准图案），spacing 格距，walls 后墙+侧墙，cyc 圆角回幕；clear=true 拆掉 | — | 是 |
 

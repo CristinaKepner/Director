@@ -10,10 +10,12 @@
 | [Agent 规划与任务协作](agent/README.md) | 自然语言计划、协作确认、逐步执行和任务进度；规则规划与配置后的 LLM 共存。 |
 | [当前对话与历史版本](conversation/README.md) | 当前消息分组、历史检查点/整合档案、对话导出、版本选择和只读气泡。 |
 | [素材、身份参考与公网媒体](assets/README.md) | 素材登记/批准、实体关联、网页媒体获取、公网媒体发布与隧道。 |
-| [参考分析与复刻规划](reference/README.md) | 抽样帧分析、主体/机位/光照/运镜描述，参考结果编译为可编辑场景计划。 |
+| [复刻参照](reference-replication/README.md) | 抽样帧分析、主体/机位/光照/运镜描述，参考结果编译为可编辑场景计划。 |
+| [角色库](character-library/README.md) | 角色卡、定妆生成、批准参考、身份用途与出场镜头。 |
+| [模板推荐](template-recommendations/README.md) | 自动推荐理由、镜头/工程固定模板、撤销与提示词结构。 |
 | [3D 舞台、实体、相机与灯光](stage/README.md) | Three.js 舞台，自由/Program/对照视图，实体变换、姿态、走位、机位和灯光控制。 |
 | [分镜、运镜、故事版与 Take](shots/README.md) | 镜头创建/修改/复制/排序/拆分，帧区间与运动关键帧，白模 Take 和故事版。 |
-| [提示词、图像与视频生成](generation/README.md) | 提示词编译和模板库，Ark/MossHub 适配器、模型目录、任务提交/查询/重试与版本候选。 |
+| [提示词、图像与视频生成](generation/README.md) | 提示词编译，Ark/MossHub 适配器、模型目录、任务提交/查询/重试与版本候选。 |
 | [创作分支与音画预演](journey/README.md) | 检查点、分支选择/恢复、分镜草图、临时配音与配乐预演。 |
 | [时间线、字幕、声音与成片导出](editing/README.md) | 镜头裁切/速度/排序，字幕、原声静音/音量，独立旁白/音乐/音效片段，FFmpeg 导出。 |
 | [检查、证据与有预算修复](quality/README.md) | 镜头约束检查、抽样视觉判定、验收运行、问题定位、修复候选、复查与采用。 |
@@ -37,3 +39,5 @@
 [迁移说明及验证](migration.md) · [机器可读清单](catalog.json)
 
 新增功能先更新清单，再补功能规则、源码和测试链接。不要把规划内容写成已上线功能；不要复制个人工程、密钥或用户对话作为示例。
+
+操作归属以 `catalog.json` 的 `actionNames` 精确匹配优先，其次 `actionPrefixes`；例如 `generation.reference` 属于角色库，其他生成操作属于生成功能。

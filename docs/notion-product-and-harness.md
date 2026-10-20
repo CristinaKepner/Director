@@ -256,7 +256,7 @@ options: [
 建出不同的场，还出现过一步不建（`BUILD_SAID_NOTHING_DONE`）；24mm 写成「约 24mm」，
 模型顺手给 35mm，没人会发现。
 
-**`core/features/reference/reference-plan.js` 把这一段换成编译**：分析 → Action 计划，纯函数，不碰 store、
+**`core/features/reference-replication/reference-plan.js` 把这一段换成编译**：分析 → Action 计划，纯函数，不碰 store、
 不调模型。空间参数走编译，语言走模型。
 
 | | 散文 → 规划器 | 编译器 |

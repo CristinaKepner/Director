@@ -18,3 +18,5 @@
 - Keep `docs/features/catalog.json` and each feature implementation list aligned when moving or adding modules/Actions. Run `npm run test:features`; browser import tests now recurse through feature directories. Migration and verified limits are in `docs/features/migration.md`.
 
 - Skills are maintained in `skills-library/installed`; `.agents/skills` is a compatible discovery mirror. After edits run `npm run skills:sync`, and verify with `npm run check:skills`. Read `docs/features/skills/README.md` before changing `skills.*` Harness calls. Skills provide planning context, not permission to run scripts or bypass generation confirmation/budgets.
+
+- Character library, reference replication, and template recommendations own their implementations under `character-library`, `reference-replication`, and `template-recommendations`. Register their actions in the shared registry; exact `actionNames` in the feature catalog override prefix ownership. Do not re-inline panels or duplicate project state.

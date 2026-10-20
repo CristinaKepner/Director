@@ -12,7 +12,7 @@ import * as R from "../../core/index.js";
 import { PROVIDERS } from "../../core/schema.js";
 import { createFilmAssembler } from "./features/editing/film.mjs";
 import { createJudge } from "./features/quality/judge.mjs";
-import { createReferenceReader } from "./features/reference/reference.mjs";
+import { createReferenceReader } from "./features/reference-replication/reference.mjs";
 import { createFetcher } from "./features/assets/fetch.mjs";
 import { createJourneyRenderer } from './features/journey/journey.mjs';
 import { createHarnessRunner } from './features/quality/harness.mjs';

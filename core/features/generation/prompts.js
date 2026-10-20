@@ -3,7 +3,7 @@
 import { store } from "../../store.js";
 import { SHOT_SIZES, MOTION_TYPES, LIGHT_PRESETS, heightWord, inferShotSize, hexToKelvin, kelvinWord, deg, LOCK_ASPECTS} from "../../schema.js";
 import { cameraStateAt, V } from "../shots/motion.js";
-import { templateFor, timelineBlock, promptNotes, templateTitle } from "./seedance.js";
+import { templateFor, timelineBlock, promptNotes, templateTitle } from "../template-recommendations/seedance.js";
 import { coveragePrompt } from "../stage/coverage.js";
 
 export const COMPILER_VERSION = "prompt-compiler/0.4"; // 0.4：按 awesome-seedance 的验证结构排版，分拍进提示词
@@ -131,7 +131,7 @@ export function compileShot(shotId, opts = {}) {
   //   全局（时长/画幅/帧率/风格）→ 固定（全片不变的人、光、场）→ 时间轴（一段一拍）→ 约束（负向清单）
   // 最要紧的是约束放在时间轴**之后**，以及分拍必须真的写成 `[00:00-00:04]` 的段 ——
   // 声明了时长却不分段的那一半案例，六秒之后明显漂移。导演台本来就有 shot.beats，
-  // 以前只用来切分段续拍，从没进过提示词。见 core/features/generation/seedance.js。
+  // 以前只用来切分段续拍，从没进过提示词。见 core/features/template-recommendations/seedance.js。
   const picked = opts.template === null ? null : templateFor(shot, d);
   const tpl = picked?.template || null;
   const beatsEn = tpl ? timelineBlock(shot, d, "en") : [];

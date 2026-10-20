@@ -1,3 +1,6 @@
+import { createReferencePanel } from "./features/reference-replication/panel.js";
+import { createTemplatePanel } from "./features/template-recommendations/panel.js";
+import { createCharacterPanel } from "./features/character-library/panel.js";
 import { syncConversationPicker } from './features/conversation/conversation-picker.js';
 import { showConversationArchive } from './features/conversation/conversation-archive.js';
 // UI binding layer — minimal by default, progressive by use.
@@ -6,9 +9,8 @@ import { showConversationArchive } from './features/conversation/conversation-ar
 import { exportConversation, conversationFilename } from "../../core/features/conversation/conversation-export.js";
 import { store, persistable, historyInfo } from "../../core/store.js";
 import { timecode, getHooks, referencesForShot, padOf, shotPad, shotSourceSpan, padSummary } from "../../core/actions.js";
-import { templateList, templateFor, CATEGORIES as SEEDANCE_CATEGORIES, TEMPLATES as SEEDANCE_TEMPLATES } from "../../core/features/generation/seedance.js";
+import { templateList, templateFor, CATEGORIES as SEEDANCE_CATEGORIES } from "../../core/features/template-recommendations/seedance.js";
 import { DEMOS } from "../../core/features/projects/demo.js";
-import { REPLICATE_MODES } from "../../core/features/reference/reference-plan.js";
 import { threadItems } from "./features/conversation/thread.js";
 import { physicalInfo, fmt as pf } from "./features/stage/phys.js";
 import { STATE_MACHINE, ASPECTS, POSES, JOINT_NAMES, JOINT_LIMITS, MOTION_TYPES, MOTION_TYPE_LIST, SHOT_SIZES, COVERAGE_ANGLES, LIGHT_PRESETS, LIGHT_TYPES, CAMERA_RIGS, PROVIDERS, GEN_MODES, SEMANTIC_PROXY, MODEL_LIBRARY, ROOM_PATTERNS } from "../../core/schema.js";
@@ -582,9 +584,9 @@ function renderLight(d) {
 function render(d) {
   lastFullRender = performance.now();
   renderModels(d);
-  renderLibrary(d);
-  renderTemplatePanel(d);
-  renderRefPanel(d);
+  renderLibrary(d, ui.left === "library");
+  renderTemplatePanel(d, ui.left === "templates");
+  renderRefPanel(d, ui.left === "ref");
   if (document.activeElement !== $("projectName")) $("projectName").value = d.project.name;
   $("fidelity").value = d.project.fidelity;
   $("shading").value = d.project.shading || "shaded";
@@ -1675,141 +1677,13 @@ function hideGuide() {
   } catch {}
 }
 
-// ---------- bottom drawer ----------
-// 参照：随时能复刻一条。
-//
-// 放在剪辑区而不是只放在首屏，是因为复刻不是一次性的开场动作 —— 片子做到一半想换个运镜、
-// 想照着另一条的打光重来一遍，都该是随手一贴。这里和首屏调的是同一个 Action，
-// Agent 说"复刻这条链接"走的也是它，所以三个入口不会各自长歪。
-// 上次选的复刻模式。不进工程状态：这是「这台机器上的这个人这次想干什么」，不是作品的一部分。
-let refMode = "motion";
-
-// ---------- 参照（左栏自己的面板，轨道上紧挨着角色库） ----------
-// 进料口和详情合成一个面板：贴链接 / 拖文件 → 读出来的参数 → 两条路（先走草片 / 直接照原片生成）→ 怎么建出来的。
-// 窄栏里排成一列。只在这一块关心的东西变了才重画：每帧整块重写的话，输入框里打到一半的字会被冲掉。
-let refKey = "";
+// Feature panels share shell services; each panel owns its rendering and interaction.
 export function openRef() {
   ui.left = "ref";
   saveUi();
   applyUi();
   render(store.get());
 }
-function renderRefPanel(d) {
-  const el = $("refPanel");
-  const jobs = (d.jobs || []).filter((j) => ["replicate", "reference-fetch", "reference-read"].includes(j.kind)).slice().reverse();
-  const running = jobs.find((j) => ["queued", "running"].includes(j.status));
-  const cur = d.project.reference, a = cur?.analysis;
-  const shot = d.shots.find((s) => s.id === d.project.currentShotId);
-  const seg = shot ? shotSourceSpan(d, shot) : null;
-  if ($("refState")) $("refState").textContent = running ? `${running.progress || 0}%` : cur ? "已读" : "";
-  // 面板没开的时候，轨道上的图标替它报进度：读参照要一两分钟，人不会一直开着这一栏
-  const rb = $("refBadge");
-  if (rb) { rb.textContent = running ? `${running.progress || 0}` : ""; rb.classList.toggle("on", !!running); }
-  if (!el || ui.left !== "ref") { refKey = ""; return; }
-  const plan = jobs.find((j) => j.kind === "replicate" && j.result?.steps?.length)?.result;
-  const key = JSON.stringify([jobs.slice(0, 8).map((j) => [j.id, j.status, j.progress, j.note, (j.phases || []).map((p) => p.state + (p.note || ""))]), cur?.ref, cur?.model, a?.brief || a?.summary, d.shots.length, shot?.id, seg, d.scene.pads?.length, refMode, plan?.summary]);
-  if (key === refKey && el.firstChild) return;
-  refKey = key;
-  const keep = { url: $("refUrl")?.value || "", hint: $("refHint")?.value || "", focus: el.contains(document.activeElement) ? document.activeElement.id : null, open: [...el.querySelectorAll("details[data-k]")].filter((x) => x.open).map((x) => x.dataset.k) };
-  const dis = running ? "disabled" : "";
-  const rows = a ? [["景别", `${a.camera?.shotSize || "—"} · ${a.camera?.angle || "—"}`],
-    ["机位", `${a.camera?.heightMeters ?? "—"} m · ${a.camera?.focalMm ?? "—"} mm · f/${a.camera?.aperture ?? "—"}`],
-    ["构图", a.camera?.framing || "—"],
-    ["光", `${a.lighting?.keyDirection || "—"} · ${a.lighting?.ratio || "—"} · ${a.lighting?.colorTemp || "—"}`],
-    ["运镜", `${a.motion?.type || "—"}${a.motion?.description ? " · " + a.motion.description : ""}`],
-    ["主体", (a.subjects || []).map((x) => x.displayName).join("、") || "—"],
-    ["拍", (a.beats || []).map((b, i) => `${i + 1}) ${b.seconds}s ${b.text}`).join("　") || "—"]] : [];
-  el.innerHTML = `
-    <div class="ref-in">
-      <input id="refUrl" type="url" placeholder="贴一条视频链接：抖音 / B站 / YouTube…" spellcheck="false" ${dis}>
-      <div class="rep-row">
-        <select id="refMode" title="复刻它的哪一部分" ${dis}>${Object.entries(REPLICATE_MODES).map(([k, v]) => `<option value="${k}"${k === refMode ? " selected" : ""}>${esc(v.zh)}</option>`).join("")}<option value=""${refMode ? "" : " selected"}>先问我</option></select>
-        <button id="refGo" class="primary" ${dis}>复刻</button>
-      </div>
-      <input id="refHint" type="text" placeholder="另外补充（可留空，例：主体换成一罐冷萃咖啡）" spellcheck="false" ${dis}>
-      <div class="ref-drop" id="refDrop"><input type="file" id="refFile" accept="image/*,video/*" hidden><span>或把本地图片 / 视频拖进来</span></div>
-      ${running ? `<div class="ref-live">${(running.phases || []).map((ph) => `<div class="fr-step ${ph.state === "run" ? "run" : ph.state}"><span>${ph.state === "done" ? "✓" : ph.state === "run" ? "◠" : ph.state === "fail" ? "✗" : "·"}</span><b>${esc(ph.label)}</b><i>${esc(ph.note || (ph.state === "run" ? (running.progress || 0) + "%" : ""))}</i></div>`).join("") || `<div class="fr-step run"><span>◠</span><b>${esc(running.note || "处理中")}</b><i>${running.progress || 0}%</i></div>`}</div>` : ""}
-    </div>
-    ${a ? `<div class="ref-read">
-      <div class="ref-head"><b>读到的参照</b><span>${esc(cur.model || "")} · ${cur.frames || 1} 帧${cur.from != null ? ` · ${cur.from}s–${cur.to ?? "末"}s` : ""}${d.scene.pads?.length ? ` · ${d.scene.pads.length} 场` : ""}</span></div>
-      <p class="ref-brief">${esc(a.brief || a.summary || "")}</p>
-      <dl class="ref-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-      ${seg ? `<div class="rep-note">这一镜取原片 ${seg.from}–${seg.to}s</div>` : ""}
-      <div class="ref-paths">
-        <div class="ref-path">
-          <b>先走草片</b><span>在 3D 里把机位走位搭出来，和原片并排对齐，改到满意再花钱生成。</span>
-          <div class="actions"><button id="refRebuild" class="primary">按这份参数建场</button>${d.shots.length ? `<button id="refCompare">和原片并排</button>` : ""}</div>
-        </div>
-        <div class="ref-path">
-          <b>直接照着原片生成</b><span>整条原片当参考视频交给 Seedance，主体换成已批准的定妆照。快，计费；运镜是原片的。</span>
-          <div class="actions"><button id="refDirect" ${d.shots.length ? "" : "disabled title='先建场，才有镜头可生成'"}>用原片生成这一镜</button>${cur.ref ? `<button data-preview="${esc(cur.ref)}" data-kind="video">看原片</button>` : ""}</div>
-        </div>
-      </div>
-      ${shot ? `<button id="refCov" class="ref-cov" data-tip="多机位覆盖" data-tip-sub="一条素材，同一瞬间换 N 个机位再拍一遍，原声不动">多机位覆盖这一镜</button>` : ""}
-    </div>` : `<div class="ref-empty">还没读过参照。贴条链接或拖个文件进来，它会读出机位、光和节奏，再把场建出来。</div>`}
-    ${plan ? `<details class="ref-plan" data-k="plan"><summary>这一场是怎么建出来的 · ${esc(plan.summary || "")}</summary>
-      <ol>${plan.steps.map((st) => `<li><code>${esc(st.action)}</code><span>${esc(st.why || "")}</span></li>`).join("")}</ol>
-      ${(plan.warnings || []).length ? `<div class="ref-warn">${plan.warnings.map((w) => `<div>⚠ ${esc(w)}</div>`).join("")}</div>` : ""}
-      ${plan.refined ? `<div class="ref-warn"><div>${plan.refined.ok ? `按你的补充又调了 ${plan.refined.steps} 步` : `补充那句没调动：${esc(plan.refined.reply || "")}`}</div></div>` : ""}
-    </details>` : ""}
-    ${jobs.length ? `<details class="ref-plan" data-k="jobs"><summary>最近 ${Math.min(8, jobs.length)} 次读参照</summary>
-      <div class="ref-jobs">${jobs.slice(0, 8).map((j) => `<div class="ref-job"><span title="${esc(j.prompt || "")}">${esc((j.inputs?.title || j.prompt || j.id).slice(0, 40))}</span>${badge(j.status)}${j.status === "running" ? ` ${j.progress || 0}%` : ""}<i>${esc(j.result?.shots ? j.result.shots + " 个镜头" : j.result?.url ? "素材已就位" : j.hint || j.error || j.note || "")}</i>${j.result?.ref || j.result?.url ? `<button data-preview="${esc(j.result.ref || j.result.url)}" data-kind="video">看</button>` : ""}</div>`).join("")}</div>
-    </details>` : ""}`;
-
-  const urlIn = $("refUrl"), hintIn = $("refHint");
-  urlIn.value = keep.url;
-  hintIn.value = keep.hint;
-  for (const k of keep.open) el.querySelector(`details[data-k="${k}"]`)?.setAttribute("open", "");
-  if (keep.focus && $(keep.focus) && !$(keep.focus).disabled) $(keep.focus).focus();
-  $("refMode").onchange = (ev) => { refMode = ev.target.value; };
-  const go = () => {
-    const u = urlIn.value.trim();
-    if (!u) return toast("先贴一条链接", true);
-    urlIn.value = "";
-    report(dispatch("reference.replicate", { url: u, mode: refMode || undefined, hint: hintIn.value.trim() || undefined }));
-  };
-  $("refGo").onclick = go;
-  urlIn.onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); go(); } };
-  const drop = $("refDrop"), file = $("refFile");
-  drop.onclick = () => file.click();
-  file.onchange = () => file.files[0] && uploadRef(file.files[0], hintIn.value.trim(), refMode);
-  drop.ondragover = (ev) => { ev.preventDefault(); drop.classList.add("over"); };
-  drop.ondragleave = () => drop.classList.remove("over");
-  drop.ondrop = (ev) => {
-    ev.preventDefault();
-    drop.classList.remove("over");
-    const t = ev.dataTransfer?.getData("text/uri-list") || ev.dataTransfer?.getData("text/plain");
-    const f = ev.dataTransfer?.files?.[0];
-    if (f) return uploadRef(f, hintIn.value.trim(), refMode);
-    if (t && /^https?:\/\//i.test(t.trim())) { urlIn.value = t.trim(); go(); }
-  };
-  $("refRebuild")?.addEventListener("click", () => report(dispatch("reference.replicate", { ref: cur.ref, from: cur.from ?? undefined, to: cur.to ?? undefined, mode: refMode || undefined, hint: hintIn.value.trim() || undefined })));
-  $("refCompare")?.addEventListener("click", () => dispatch("project.set-view", { mode: "compare" }));
-  $("refDirect")?.addEventListener("click", () => report(dispatch("generation.submit", { mode: "v2v", provider: selectedGeneration(store.get(), "video"), reference: "origin" })));
-  $("refCov")?.addEventListener("click", async () => {
-    const r = await dispatch("shot.coverage", { shotId: shot.id });
-    report(r);
-    if (r.ok) { await dispatch("generation.prompt", { shotId: shot.id }); toast(`排了 ${r.count} 个机位，在生成面板里看`); openDrawer("gen"); }
-  });
-  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "参照")));
-}
-
-async function uploadRef(f, hint, mode) {
-  const kind = f.type.startsWith("video") ? "video" : f.type.startsWith("image") ? "image" : null;
-  if (!kind) return toast("只认图片和视频", true);
-  if (!client.base) return toast("要连上后端才能读参照", true);
-  toast(`上传 ${f.name}…`);
-  try {
-    const r = await fetch(new URL(`upload?label=${kind}`, client.base), { method: "POST", headers: { "content-type": f.type }, body: f });
-    const out = await r.json();
-    if (!out.ok) throw new Error(out.error || "上传失败");
-    report(dispatch("reference.replicate", { ref: out.url, mode: mode || undefined, hint: hint || undefined }));
-  } catch (err) {
-    toast(String(err.message || err), true);
-  }
-}
-
-
 // 建场自检面板：录之前把「这一镜画面里有没有东西」摆在导演面前，并且每条都能当场改。
 //
 // 这一屏存在的理由很具体：实测 astra 规划的一条 10 分钟片子，66 镜全部录完、报 ok、
@@ -2422,88 +2296,6 @@ function renderModels(d) {
   };
 }
 
-// ---- 左抽屉：角色库 ----
-// 以前「资产」是底部第九个 tab，而且只列已经生成过的图 —— 想给谁定妆得先去属性面板里找按钮。
-// 定妆是「人物跨镜不变样」的前提，不该是个要翻三层才找得到的功能。
-// 搬到左边和场景并排：场景回答「场里有什么」，角色库回答「它们长什么样」。
-const LIB_GROUPS = [["角色", ["character"]], ["物品", ["prop", "vehicle", "weapon"]]];
-
-// ---------- 左栏第二块：模板库 ----------
-// 提示词的结构从哪来（awesome-seedance，MIT）。摆在角色库下面是因为这两件事是连着用的：
-// 定完谁在演，接着就是这一镜的话怎么写。点一行 = 把当前镜钉在那个模板上，再点一次放开。
-function renderTemplatePanel(d) {
-  const el = $("templates");
-  if (!el || ui.left !== "templates") return;
-  const shot = d.shots.find((s) => s.id === d.project.currentShotId);
-  const cur = shot ? templateFor(shot, d) : null;
-  const fixed = shot?.promptTemplate || "";
-  $("tplCount").textContent = `${SEEDANCE_TEMPLATES.length}`;
-  if (!shot) { el.innerHTML = emptyState("还没有镜头。建一镜之后这里会自动挑一个结构。"); return; }
-  const list = templateList("zh");
-  el.innerHTML = SEEDANCE_CATEGORIES.map((c) => {
-    const items = list.filter((t) => t.category === c.id);
-    if (!items.length) return "";
-    return `<div class="tpl-cat">${esc(c.title?.zh || c.id)}</div>` + items.map((t) => {
-      const on = fixed ? t.id === fixed : cur?.template?.id === t.id;
-      return `<div class="tpl-row${on ? " on" : ""}" data-tpl-pick="${esc(t.id)}" data-tip="${esc(t.title)}" data-tip-sub="${esc(t.useWhen.slice(0, 120))}">
-        <b>${esc(t.title)}</b><span>${on ? (fixed ? "已钉住" : "自动选中") : ""}</span></div>`;
-    }).join("");
-  }).join("") + (cur ? `<div class="rep-note">${esc(cur.why)}</div>` : "");
-  el.querySelectorAll("[data-tpl-pick]").forEach((b) => (b.onclick = async () => {
-    const id = b.dataset.tplPick;
-    await dispatch("prompt.template", id === fixed ? { shotId: shot.id, clear: true } : { id, shotId: shot.id });
-    report(await dispatch("generation.prompt", { shotId: shot.id }));
-  }));
-}
-
-// ---------- 左栏第三块：复刻 ----------
-// 参照原来在底部「更多」里，和角色库、模板库隔着半个界面 —— 而它们是同一件事的三步：
-// 照着哪条片子、谁在演、话怎么写。这里放进料口和状态，展开的详情仍在底部抽屉。
-function renderLibrary(d) {
-  const el = $("library");
-  const assets = d.assets || [];
-  const pending = assets.filter((a) => !a.approved).length;
-  const badge = $("libBadge");
-  if (badge) { badge.textContent = pending || ""; badge.classList.toggle("on", pending > 0); }
-  if (!el || ui.left !== "library") return;
-
-  const activePad = d.project.activePadId && d.scene.pads?.some((p) => p.id === d.project.activePadId) ? d.project.activePadId : null;
-  const inScope = (e) => !activePad || !padOf(d, e) || padOf(d, e) === activePad;
-  const padTag = (e) => { const q = padOf(d, e); const p = q && d.scene.pads.find((x) => x.id === q); return p && !activePad ? `<span class="pad-tag" data-tip="${esc(p.index + " " + p.name)}" data-tip-sub="在这块台上">${p.index}</span>` : ""; };
-  const groups = LIB_GROUPS.map(([name, types]) => [name, d.entities.filter((e) => types.includes(e.semanticType) && inScope(e))]).filter(([, list]) => list.length);
-  const done = d.entities.filter((e) => assets.some((a) => a.entityId === e.id && a.approved)).length;
-  const total = groups.reduce((n, [, list]) => n + list.length, 0);
-  $("libCount").textContent = total ? `${done}/${total}` : "";
-  if (!total) { el.innerHTML = emptyState("场里还没有人物或物品。"); return; }
-
-  el.innerHTML = groups.map(([name, list]) => `<div class="lib-group"><h3><span>${name}</span><span>${list.length}</span></h3>${list.map((e) => {
-    const mine = assets.filter((a) => a.entityId === e.id);
-    const ok = mine.some((a) => a.approved);
-    const job = d.jobs.find((j) => j.kind === "reference" && j.entityId === e.id && ["queued", "running"].includes(j.status));
-    const shots = d.shots.filter((sh) => (sh.targetIds || []).includes(e.id));
-    return `<div class="lib-card${d.project.selectedId === e.id ? " sel" : ""}">
-      <div class="lib-head" data-locate="${esc(e.id)}" data-tip="${esc(e.displayName)}" data-tip-sub="点一下在场里找到它">
-        <span class="sw" style="background:${esc(e.proxy?.color || "#8a7a5a")}"></span><b>${esc(e.displayName)}</b>${padTag(e)}
-        <span class="st${ok ? " ok" : ""}">${ok ? `<svg class="gi"><use href="#i-check"/></svg>定了` : mine.length ? "待批" : "没定妆"}</span>
-      </div>
-      <div class="lib-thumbs">
-        ${mine.map((a) => `<div class="lib-thumb${a.approved ? " ok" : ""}" ${dragAttr({ kind: "asset", id: a.id, entityId: e.id, url: a.url })} data-tip="拖到时间线的镜头段上" data-tip-sub="那一镜生成时就会带上这张">${a.mediaKind === "video" ? `<video data-preview="${esc(a.url)}" data-kind="video" src="${esc(mediaHref(a.url))}" muted loop playsinline></video>` : `<img data-preview="${esc(a.url)}" data-kind="image" src="${esc(mediaHref(a.url))}" alt="" />`}
-          <button class="tk" data-approve="${a.id}" data-on="${a.approved ? 1 : 0}" data-tip="${a.approved ? "已批准" : "批准这张"}" data-tip-sub="${a.approved ? "它出现的每一镜都会自动带上这张。再点一下取消" : `批准后，${esc(e.displayName)}出现的每一镜生成时都会带上它 · ${esc(a.model || a.kind || "")}`}"><svg class="gi"><use href="#i-check"/></svg></button>
-          <button class="rm" data-del="${a.id}" data-tip="删掉这张">×</button></div>`).join("")}
-        <button class="lib-add${job ? " busy" : ""}" data-more="${esc(e.id)}" ${job ? "disabled" : ""} data-tip="${job ? "正在出" : mine.length ? "再来一张" : "定妆"}" data-tip-sub="${job ? "定妆照生成中" : "出一张定妆照。这一步计费"}">${job ? `${job.progress || 0}%` : `<svg class="gi"><use href="#i-plus"/></svg>`}</button>
-      </div>
-      ${shots.length ? `<div class="lib-shots">${shots.slice(0, 12).map((sh) => `<button data-goshot="${esc(sh.id)}" data-tip="${esc(sh.index + " " + sh.title)}" data-tip-sub="这一镜拍到了${esc(e.displayName)}">${esc(sh.index)}</button>`).join("")}${shots.length > 12 ? `<button disabled>+${shots.length - 12}</button>` : ""}</div>` : ""}
-    </div>`;
-  }).join("")}</div>`).join("");
-
-  el.querySelectorAll("[data-approve]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); report(dispatch("asset.approve", { id: b.dataset.approve, approved: b.dataset.on !== "1" })); }));
-  el.querySelectorAll("[data-del]").forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); confirm("删掉这张定妆照？") && dispatch("asset.delete", { id: b.dataset.del }); }));
-  el.querySelectorAll("[data-more]").forEach((b) => (b.onclick = () => { const e = store.get().entities.find((x) => x.id === b.dataset.more); report(dispatch("generation.reference", { entityId: b.dataset.more, view: e?.semanticType === "character" ? "front" : "three-quarter" })); }));
-  el.querySelectorAll("[data-locate]").forEach((n) => (n.onclick = () => locate(n.dataset.locate)));
-  el.querySelectorAll("[data-goshot]").forEach((b) => (b.onclick = () => report(dispatch("shot.select", { id: b.dataset.goshot }))));
-  el.querySelectorAll("[data-preview]").forEach((n) => (n.onclick = () => showPreview(n.dataset.preview, n.dataset.kind, "定妆照")));
-}
-
 // ---- 舞台右上角：这一镜此刻的物理参数 ----
 // 骨架只搭一次，之后每帧只改数字。整块重画的话，鼠标停在上面时气泡会跟着闪。
 const PHYS_ROWS = [
@@ -2559,3 +2351,8 @@ function renderHealth(el, d) {
   const kv = [["FPS", h.fps], ["Draw calls", h.drawCalls], ["Triangles", h.triangles], ["Last command", `${h.lastCommandMs ?? 0} ms`], ["Backend", `${h.bridge}${isOnline() ? " · " + client.base : ""}`], ["Agent", d.agent.backend], ["Generation", client.generation?.name || "simulated"], ["Recorder", h.recorder], ["Undo / Redo", `${hi.undo} / ${hi.redo}`], ["State", d.project.currentState], ["Version", d.project.version], ["Objects", `${d.entities.length} · ${d.cameras.length} cam · ${d.lights.length} light`], ["Shots / Takes / Jobs", `${d.shots.length} / ${d.takes.length} / ${d.jobs.length}`], ["Events", d.events.length]];
   el.innerHTML = `<div class="kv">${kv.map(([k, v]) => `<div><b>${k}</b><span>${esc(v ?? "—")}</span></div>`).join("")}</div>`;
 }
+
+// Initialize panels after shared UI helpers.
+const renderLibrary = createCharacterPanel({ esc, dragAttr, emptyState, report, mediaHref, locate, showPreview });
+const renderTemplatePanel = createTemplatePanel({ esc, emptyState, report });
+const renderRefPanel = createReferencePanel({ esc, badge, report, toast, selectedGeneration, openDrawer, showPreview });

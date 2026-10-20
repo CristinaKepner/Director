@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// 把 awesome-seedance 的模板库取回来，生成 core/features/generation/seedance-library.js。
+// 把 awesome-seedance 的模板库取回来，生成 core/features/template-recommendations/seedance-library.js。
 //
-//   node tools/sync-seedance.mjs [--ref main|<commit>] [--out core/features/generation/seedance-library.js]
+//   node tools/sync-seedance.mjs [--ref main|<commit>] [--out core/features/template-recommendations/seedance-library.js]
 //
 // 为什么要同步进来，而不是运行时去拉：
 //   · 导演台是桌面应用，断网也要能用；提示词模板是编译提示词的输入，不能是一次网络请求
@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const arg = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const REPO = "LearnPrompt/awesome-seedance";
 const ref = arg("--ref", "main");
-const out = path.resolve(root, arg("--out", "core/features/generation/seedance-library.js"));
+const out = path.resolve(root, arg("--out", "core/features/template-recommendations/seedance-library.js"));
 
 // 运行时真正用得上的字段。案例正文、图片、多语言里的日文这些不带进来 ——
 // 生成物是要跟着安装包发的，带不用的东西只是让每台机器多存几百 KB。
@@ -116,7 +116,7 @@ const body = `// 由 tools/sync-seedance.mjs 生成，别手改。改了下一�
 // 取回时间：${data.source.fetchedAt}
 //
 // 这是 ${templates.length} 个 Seedance 提示词模板的结构、写法和坑，按 ${categories.length} 个分类组织。
-// 用它的是 core/features/generation/seedance.js（选模板、按结构排版）和 core/features/generation/prompts.js（编译提示词）。
+// 用它的是 core/features/template-recommendations/seedance.js（选模板、按结构排版）和 core/features/generation/prompts.js（编译提示词）。
 export const SEEDANCE_LIBRARY = ${JSON.stringify(data, null, 1)};
 export default SEEDANCE_LIBRARY;
 `;

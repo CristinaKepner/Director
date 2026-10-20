@@ -29,16 +29,23 @@ test("迁移目标存在且旧私有实现已移除，避免两套实现漂移",
   }
 });
 
-test("每个已注册操作前缀唯一归属一个功能，操作说明可定位", () => {
+test("每个已注册操作唯一归属一个功能，操作说明可定位", () => {
   for (const action of capabilities()) checkAction(action);
 });
 function checkAction(action) {
-  const owners = catalog.features.filter((f) =>
-    f.actionPrefixes.includes(action.name.split(".")[0]),
-  );
+  const owners = actionOwners(action.name);
   assert.equal(owners.length, 1, action.name);
   const doc = read(`docs/features/${owners[0].id}/implementation.md`);
   assert.ok(doc.includes(`\`${action.name}\``));
+}
+function actionOwners(name) {
+  const exact = catalog.features.filter((f) =>
+    f.actionNames?.includes(name),
+  );
+  if (exact.length) return exact;
+  return catalog.features.filter((f) =>
+    f.actionPrefixes.includes(name.split(".")[0]),
+  );
 }
 
 test("功能文档中的本地相对链接全部存在", () => {

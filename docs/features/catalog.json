@@ -144,11 +144,13 @@
       ]
     },
     {
-      "id": "reference",
-      "title": "参考分析与复刻规划",
+      "id": "reference-replication",
+      "title": "复刻参照",
       "modules": [
-        "core/features/reference/reference-plan.js",
-        "server/src/features/reference/reference.mjs"
+        "core/features/reference-replication/reference-plan.js",
+        "server/src/features/reference-replication/reference.mjs",
+        "core/features/reference-replication/actions.js",
+        "web/js/features/reference-replication/panel.js"
       ],
       "tests": [
         "tests/reference-plan.test.mjs",
@@ -221,8 +223,6 @@
       "title": "提示词、图像与视频生成",
       "modules": [
         "core/features/generation/prompts.js",
-        "core/features/generation/seedance.js",
-        "core/features/generation/seedance-library.js",
         "server/src/features/generation/ark.mjs",
         "server/src/features/generation/mosshub.mjs",
         "server/src/features/generation/routing.mjs",
@@ -384,6 +384,43 @@
         "docs/backend-api.md",
         "docs/harness.md"
       ]
+    },
+    {
+      "id": "character-library",
+      "title": "角色库",
+      "modules": [
+        "core/features/character-library/actions.js",
+        "core/features/character-library/references.js",
+        "web/js/features/character-library/panel.js"
+      ],
+      "tests": [
+        "tests/runtime.test.mjs"
+      ],
+      "actionPrefixes": [],
+      "actionNames": [
+        "context.character",
+        "generation.reference"
+      ],
+      "docs": []
+    },
+    {
+      "id": "template-recommendations",
+      "title": "模板推荐",
+      "modules": [
+        "core/features/template-recommendations/actions.js",
+        "core/features/template-recommendations/seedance.js",
+        "core/features/template-recommendations/seedance-library.js",
+        "web/js/features/template-recommendations/panel.js"
+      ],
+      "tests": [
+        "tests/seedance.test.mjs"
+      ],
+      "actionPrefixes": [],
+      "actionNames": [
+        "context.templates",
+        "prompt.template"
+      ],
+      "docs": []
     }
   ],
   "moves": {
@@ -423,8 +460,8 @@
     "server/src/fetch.mjs": "server/src/features/assets/fetch.mjs",
     "server/src/publish.mjs": "server/src/features/assets/publish.mjs",
     "server/src/tunnel.mjs": "server/src/features/assets/tunnel.mjs",
-    "core/reference-plan.js": "core/features/reference/reference-plan.js",
-    "server/src/adapters/reference.mjs": "server/src/features/reference/reference.mjs",
+    "core/reference-plan.js": "core/features/reference-replication/reference-plan.js",
+    "server/src/adapters/reference.mjs": "server/src/features/reference-replication/reference.mjs",
     "core/spatial.js": "core/features/stage/spatial.js",
     "core/coverage.js": "core/features/stage/coverage.js",
     "web/js/viewport.js": "web/js/features/stage/viewport.js",
@@ -435,8 +472,8 @@
     "web/js/eval-panel.js": "web/js/features/stage/eval-panel.js",
     "core/motion.js": "core/features/shots/motion.js",
     "core/prompts.js": "core/features/generation/prompts.js",
-    "core/seedance.js": "core/features/generation/seedance.js",
-    "core/seedance-library.js": "core/features/generation/seedance-library.js",
+    "core/seedance.js": "core/features/template-recommendations/seedance.js",
+    "core/seedance-library.js": "core/features/template-recommendations/seedance-library.js",
     "server/src/adapters/ark.mjs": "server/src/features/generation/ark.mjs",
     "server/src/adapters/mosshub.mjs": "server/src/features/generation/mosshub.mjs",
     "server/src/adapters/routing.mjs": "server/src/features/generation/routing.mjs",
@@ -455,6 +492,10 @@
     "web/js/harness-panel.js": "web/js/features/quality/harness-panel.js",
     "server/src/harness.mjs": "server/src/features/quality/harness.mjs",
     "server/src/harness-inspector.mjs": "server/src/features/quality/harness-inspector.mjs",
-    "server/src/adapters/judge.mjs": "server/src/features/quality/judge.mjs"
+    "server/src/adapters/judge.mjs": "server/src/features/quality/judge.mjs",
+    "core/features/generation/seedance.js": "core/features/template-recommendations/seedance.js",
+    "core/features/generation/seedance-library.js": "core/features/template-recommendations/seedance-library.js",
+    "core/features/reference/reference-plan.js": "core/features/reference-replication/reference-plan.js",
+    "server/src/features/reference/reference.mjs": "server/src/features/reference-replication/reference.mjs"
   }
 }

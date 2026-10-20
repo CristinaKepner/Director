@@ -8,7 +8,7 @@ import * as R from "../core/index.js";
 
 const { compileReference, normalizeShotSize, normalizeMotion, normalizeCoverage, pickLightPreset, dispatch, store, SHOT_SIZES, MOTION_TYPES } = R;
 
-// 一份真实形状的分析（字段照 server/src/features/reference/reference.mjs 里那份 SYS 提示词）
+// 一份真实形状的分析（字段照 server/src/features/reference-replication/reference.mjs 里那份 SYS 提示词）
 const ANALYSIS = {
   summary: "黄昏天台，女孩背对城市抽烟",
   brief: "黄昏的天台，一个女孩背对城市天际线，手里夹着烟，逆光",

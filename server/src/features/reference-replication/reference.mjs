@@ -171,7 +171,7 @@ export function createReferenceReader(opts = {}) {
           sg.to = i === list.length - 1 ? Math.max(Number(sg.to) || 0, Math.round(end * 10) / 10) : Number(sg.to) || sg.from;
           if (sg.to <= sg.from) sg.to = sg.from + 1;
           // 人数：模型偶尔把它写成「7 人」这样的字符串，或者填了 count 却漏了合计。
-          // 两个数都收拾一遍再存 —— 建场那一步照着它摆人（见 core/features/reference/reference-plan.js 的 expandSubjects）。
+          // 两个数都收拾一遍再存 —— 建场那一步照着它摆人（见 core/features/reference-replication/reference-plan.js 的 expandSubjects）。
           for (const sub of Array.isArray(sg.subjects) ? sg.subjects : []) {
             const n = Number(String(sub.count ?? "").match(/\d{1,2}/)?.[0]);
             sub.count = Number.isFinite(n) && n >= 1 ? n : 1;

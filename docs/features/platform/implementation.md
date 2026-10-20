@@ -24,7 +24,6 @@
 | --- | --- | --- | --- |
 | `context.assets` | 资产清单：每个实体已批准 / 待批准的参考 | — | 否 |
 | `context.capabilities` | 列出全部 Action 及参数、状态机许可（Agent 工具清单） | — | 否 |
-| `context.character` | 角色卡：一个角色（或产品）的身份字段、按用途分组的参考资产、以及它出现在哪些镜头 | — | 否 |
 | `context.entity` | 实体详情 | id | 否 |
 | `context.events` | 最近事件 | — | 否 |
 | `context.history` | 撤销栈信息 | — | 否 |
@@ -35,7 +34,6 @@
 | `context.schema` | 词汇表：语义类型、姿态、运镜、景别、灯光预设、供应商 | — | 否 |
 | `context.sequence` | 镜头序列时间布局 | — | 否 |
 | `context.shot` | 镜头详情：参数、起止机位状态、提示词 | — | 否 |
-| `context.templates` | Seedance 提示词模板清单：25 个模板分 6 类，每个说清什么时候用它。来自 awesome-seedance（MIT） | — | 否 |
 | `context.trajectory` | 这一镜机位实际走出来的轨迹：逐帧位置/朝向/焦段、运动学（路程、速度、加加速度）、按轨迹判出来的运镜类型（和镜头声明的对不对得上），以及主体在画面里的位置、占幅、有没有被挡 | — | 否 |
 | `health.report` | 运行健康：fps、draw calls、命令延迟、录像器、桥接 | — | 否 |
 

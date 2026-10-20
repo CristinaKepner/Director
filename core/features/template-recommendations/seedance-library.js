@@ -5,7 +5,7 @@
 // 取回时间：2026-09-23T08:54:51.141Z
 //
 // 这是 25 个 Seedance 提示词模板的结构、写法和坑，按 6 个分类组织。
-// 用它的是 core/features/generation/seedance.js（选模板、按结构排版）和 core/features/generation/prompts.js（编译提示词）。
+// 用它的是 core/features/template-recommendations/seedance.js（选模板、按结构排版）和 core/features/generation/prompts.js（编译提示词）。
 export const SEEDANCE_LIBRARY = {
  "source": {
   "repo": "LearnPrompt/awesome-seedance",
