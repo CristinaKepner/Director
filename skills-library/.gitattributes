@@ -1,2 +1,3 @@
 # Preserve upstream snapshots byte-for-byte for SOURCE.json checksums.
 **/source/** -text
+installed/** -text

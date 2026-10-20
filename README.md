@@ -2,7 +2,7 @@
 
 当前 0.9.19 的功能拆分从 [功能索引](docs/features/README.md) 开始：16 个功能文件夹，包含说明、流程、源码与测试入口。[目录迁移说明](docs/features/migration.md) 记录运行兼容性与验证。下文保留原产品介绍，其中旧版本独立画布入口以功能索引为准。
 
-独立的 [代码视频技能库](skills-library/README.md) 收录 Lemo-Opuscar、Opus 成片提示词合集、PDoomVideo 和中文提示词案例。
+统一的 [技能库](skills-library/README.md) 收录 135 个原有项目技能及四个代码视频参考库，应用内 Agent 通过 `skills.list/files/read/invoke` 接入技能 Harness。
 
 <p align="center">
   <img src="desktop/build/icon.png" width="104" alt="导演台图标" />

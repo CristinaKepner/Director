@@ -1,4 +1,8 @@
 const reads = new Set([
+  "skills.list",
+  "skills.files",
+  "skills.read",
+  "skills.invoke",
   "workflow.read",
   "creation.context",
   "context.assets",

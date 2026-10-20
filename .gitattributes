@@ -1,0 +1,2 @@
+# Discovery mirrors retain the same bytes as skills-library/installed on every platform.
+.agents/skills/** -text

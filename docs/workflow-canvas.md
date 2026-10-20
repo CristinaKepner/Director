@@ -61,7 +61,7 @@ If 条件成立走 true（例如面部修复），不成立走 false（跳过修
 
 ## 项目 skills
 
-`.agents/skills/moss-desktop-development` 完整保留用户提供的开发 skill。133 个 `flova-*` 目录将用户提供的 Markdown 包装为可发现的项目 skill，保留 `reference.md`、作者与封面；清单在 `docs/flova-skills.json`。Flova 的工具名仍是原平台术语，入口说明要求先映射真实可用能力，不伪造调用。skills 也随 DMG 复制到 `Resources/app-src/.agents/skills`。
+`.agents/skills/moss-desktop-development` 完整保留用户提供的开发 skill。133 个 `flova-*` 目录将用户提供的 Markdown 包装为可发现的项目 skill，保留 `reference.md`、作者与封面；清单在 `docs/flova-skills.json`。Flova 的工具名仍是原平台术语，入口说明要求先映射真实可用能力，不伪造调用。这些技能的维护来源现统一为 `skills-library/installed/`，`.agents/skills` 是兼容发现副本；两者随新 DMG 分发。应用内 Agent 已通过 `skills.list/files/read/invoke` 读取真实技能内容并续接规划，具体调用和校验规则见 [技能 Harness](features/skills/README.md)。此调用不直接执行脚本或视频生成。
 
 现有应用保持原生 ES modules / Node tests / 静态 CSS，仅节点视图使用严格 TypeScript 与 React Flow。新增模块通过 `npm run check:creation` 检查函数上限、类型和打包；领域回归通过 `npm run test:all`。新增领域测试在 `tests/creation.test.mjs`；既有 workflow 测试继续保护连线、图校验与撤销。既有 ui.js、host.mjs 和 actions.js 大函数仅做必要接线，未做全仓重构。
 

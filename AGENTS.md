@@ -16,3 +16,5 @@
 
 - Feature ownership and documentation: read `docs/features/README.md` and the relevant feature folder before changes. Domain/server/browser implementations live under `core/features/<id>`, `server/src/features/<id>`, and `web/js/features/<id>`; keep the single store and shared registration/assembly entry points.
 - Keep `docs/features/catalog.json` and each feature implementation list aligned when moving or adding modules/Actions. Run `npm run test:features`; browser import tests now recurse through feature directories. Migration and verified limits are in `docs/features/migration.md`.
+
+- Skills are maintained in `skills-library/installed`; `.agents/skills` is a compatible discovery mirror. After edits run `npm run skills:sync`, and verify with `npm run check:skills`. Read `docs/features/skills/README.md` before changing `skills.*` Harness calls. Skills provide planning context, not permission to run scripts or bypass generation confirmation/budgets.

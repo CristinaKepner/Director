@@ -1,3 +1,4 @@
+import {createSkillHarness} from "./features/skills/harness.mjs";
 import {planWithReads} from './features/agent/planner-reads.mjs';
 import {createWorkflowService} from './features/workflow/workflow-service.mjs';
 import {createWorkflowJudge} from './features/workflow/workflow-judge.mjs';
@@ -38,6 +39,7 @@ export function createHost(opts = {}) {
   const mediaDir = path.resolve(opts.mediaDir || (projectFile ? path.join(path.dirname(projectFile), "media") : "data/media"));
   const autosaveMs = opts.autosaveMs ?? 500;
   const log = opts.log || (() => {});
+  R.setHooks({skills:createSkillHarness({root:opts.skillsRoot,capabilities})});
   const subscribers = new Set();
   const recordingWatch = new Map(); // takeId → timer
   let saveTimer = null;

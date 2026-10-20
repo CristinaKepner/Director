@@ -336,12 +336,20 @@
       "title": "创作 Skills 与题材模板",
       "modules": [
         ".agents/skills",
-        "docs/flova-skills.json"
+        "docs/flova-skills.json",
+        "core/features/skills/skills-actions.js",
+        "server/src/features/skills/harness.mjs",
+        "server/src/features/skills/library.mjs",
+        "skills-library/catalog.json",
+        "tools/sync-skills.mjs"
       ],
       "tests": [
-        "tests/seedance.test.mjs"
+        "tests/seedance.test.mjs",
+        "tests/skills-harness.test.mjs"
       ],
-      "actionPrefixes": [],
+      "actionPrefixes": [
+        "skills"
+      ],
       "docs": [
         "docs/workflow-canvas.md",
         "docs/creative-journey.md"

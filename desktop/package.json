@@ -65,6 +65,10 @@
       {
         "from": "../.agents/skills",
         "to": "app-src/.agents/skills"
+      },
+      {
+        "from": "../skills-library",
+        "to": "app-src/skills-library"
       }
     ],
     "mac": {

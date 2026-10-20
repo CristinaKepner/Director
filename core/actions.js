@@ -1,3 +1,4 @@
+import {registerSkillActions} from "./features/skills/skills-actions.js";
 import {registerWorkflowRuntime} from './features/workflow/workflow-runtime-actions.js';
 // Action Registry — the single command surface shared by the Web UI, the CLI, the Agent and the HTTP bridge.
 // Nothing here touches the DOM or Three.js. Every mutation of the Source of Truth goes through dispatch().
@@ -3461,3 +3462,5 @@ registerJourneyActions({register,store,hooks,dispatch,uid,clearHistory});
 registerWorkflowActions({register,store,uid});
 registerWorkflowRuntime({register,store,hooks});
 registerCreationActions({register,store,uid});
+
+registerSkillActions({register,hooks});

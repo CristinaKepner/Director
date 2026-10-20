@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createSkillHarness} from "../src/features/skills/harness.mjs";
 // director — command-line client of the Director Runtime.
 //   Local mode  (default): loads a project JSON, runs the action in-process (core runtime), saves it back. No server needed.
 //   Remote mode (--remote URL): sends the action to the Director backend (POST /api/actions). No browser needed.
@@ -116,6 +117,7 @@ process.exit(result && result.ok === false ? 1 : 0);
 async function runLocal(action, payload) {
   const R = await import(path.join(here, "..", "..", "core", "index.js"));
   if (action === "__help") return help(R, positional[0]);
+  R.setHooks({skills:createSkillHarness({capabilities:R.capabilities})});
   const meta = { source, actorId: actor, dryRun, idempotencyKey: argvFlag("idempotency-key") };
   let loaded = false;
   if (fs.existsSync(projectFile)) {
@@ -129,7 +131,7 @@ async function runLocal(action, payload) {
   const r = R.dispatch(action, payload, meta);
   // give simulated generation jobs a moment so `generation.submit` can report progress in --json
   if (action === "generation.submit" && r.ok) await new Promise((res) => setTimeout(res, 50));
-  const writes = !action.startsWith("context.") && action !== "health.report" && action !== "agent.plan" && !dryRun && !(action === "storyboard.export") && !(action === "project.export");
+  const writes = !action.startsWith("skills.") && !action.startsWith("context.") && action !== "health.report" && action !== "agent.plan" && !dryRun && !(action === "storyboard.export") && !(action === "project.export");
   if (writes && r.ok !== false) {
     fs.mkdirSync(path.dirname(projectFile), { recursive: true });
     fs.writeFileSync(projectFile, JSON.stringify(R.persistable(), null, 2));
