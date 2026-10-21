@@ -1,6 +1,8 @@
 # 功能文档与源码导航
 
-当前 0.9.19 的功能拆分从 [功能索引](docs/features/README.md) 开始：18 个功能文件夹，包含说明、流程、源码与测试入口。[目录迁移说明](docs/features/migration.md) 记录运行兼容性与验证。下文保留原产品介绍，其中旧版本独立画布入口以功能索引为准。
+0.9.20：[v2v 修复、分发要求与验证边界](docs/releases/0.9.20.md)。新 DMG 要求 macOS 15+，内置媒体连接工具；尚不等于只填 key 即可稳定使用 v2v 的托管版本。
+
+0.9.19 建立的功能拆分从 [功能索引](docs/features/README.md) 开始：18 个功能文件夹，包含说明、流程、源码与测试入口。[目录迁移说明](docs/features/migration.md) 记录运行兼容性与验证。下文保留原产品介绍，其中旧版本独立画布入口以功能索引为准。
 
 统一的 [技能库](skills-library/README.md) 收录 135 个原有项目技能及四个代码视频参考库，应用内 Agent 通过 `skills.list/files/read/invoke` 接入技能 Harness。
 
