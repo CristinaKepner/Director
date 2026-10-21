@@ -1,6 +1,11 @@
+import { sendReference } from "../assets/reference-transfer.js";
 import { api, client } from "../../client.js";
 import { store } from "../../../../core/store.js";
 export async function uploadCreationMedia(file) {
+  if (/^(image|video)\//.test(file.type)) return sendReference(file);
+  return uploadAudio(file);
+}
+async function uploadAudio(file) {
   const kind = validateFile(file);
   const project = store.get().project.id;
   const result = await api.post(`upload?label=${kind}`, file, {

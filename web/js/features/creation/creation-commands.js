@@ -23,6 +23,7 @@ function clickCreation(state, event) {
 }
 function clickProjectItem(state, event) {
   clickOutput(state, event);
+  selectReference(state, event);
   const shot = event.target.closest("[data-shot]");
   if (shot) void openShot(state, shot.dataset.shot);
   const asset = event.target.closest("[data-attach]");
@@ -146,4 +147,23 @@ function clickOutput(state, event) {
       Number(candidate.dataset.useOutput),
       store.get().project.workflowRun,
     );
+}
+
+function selectReference(state, event) {
+  const button = event.target.closest("[data-reference-use]");
+  if (!button) return;
+  const asset = store
+    .get()
+    .assets.find((a) => a.id === button.dataset.referenceUse);
+  if (!asset) return;
+  showReference(state, asset.url);
+}
+function showReference(state, url) {
+  state.options.openLeft("ref");
+  const input = document.getElementById("refUrl");
+  if (input) {
+    input.value = url;
+    input.focus();
+  }
+  state.status("已选择参照；点击复刻面板的开始按钮后才会进行分析。");
 }

@@ -1,7 +1,7 @@
 {
   "name": "director-console-desktop",
   "productName": "导演台",
-  "version": "0.9.20",
+  "version": "0.9.21",
   "private": true,
   "type": "module",
   "description": "Director Console · 导演台 — macOS client. Wraps the same core runtime, backend and web console in a native window.",
@@ -15,8 +15,8 @@
     "bin": "node ../tools/fetch-ffmpeg.mjs --arch both && node ../tools/fetch-cloudflared.mjs"
   },
   "devDependencies": {
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
   },
   "build": {
     "appId": "io.directorconsole.mac",

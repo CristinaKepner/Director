@@ -190,7 +190,8 @@ export function createReferencePanel({
       urlIn.value = "";
       report(
         dispatch("reference.replicate", {
-          url: u,
+          url: u.startsWith("/media/") ? undefined : u,
+          ref: u.startsWith("/media/") ? u : undefined,
           mode: refMode || undefined,
           hint: hintIn.value.trim() || undefined,
         }),

@@ -20,3 +20,16 @@
 | `asset.delete` | 删除资产 | id | 是 |
 
 操作清单来自迁移时的 `core/index.js` capabilities；执行仍须经过状态机、预算、配置与权限校验。这里只展示注册声明，不替代服务端前置条件。
+
+## 参考上传（0.9.21）
+
+| 操作 | 用途 | 必填参数 | 可撤销 |
+| --- | --- | --- | --- |
+| `asset.import` | 登记已校验的本地参考素材，固定待批准；按工程和请求标识去重 | projectId、url、mediaKind、requestId、width、height、bytes | 是 |
+
+- [core/features/assets/import-actions.js](../../../core/features/assets/import-actions.js)
+- [server/src/features/assets/reference-upload.mjs](../../../server/src/features/assets/reference-upload.mjs)
+- [server/src/features/assets/reference-inspect.mjs](../../../server/src/features/assets/reference-inspect.mjs)
+- [web/js/features/assets/reference-transfer.js](../../../web/js/features/assets/reference-transfer.js)
+- [web/js/features/assets/reference-uploader.js](../../../web/js/features/assets/reference-uploader.js)
+- [web/js/features/assets/reference-cards.js](../../../web/js/features/assets/reference-cards.js)

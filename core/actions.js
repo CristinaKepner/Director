@@ -1,3 +1,4 @@
+import { registerAssetImports } from "./features/assets/import-actions.js";
 import { referencesForShot } from "./features/character-library/references.js";
 export { referencesForShot };
 import { registerTemplateActions } from "./features/template-recommendations/actions.js";
@@ -3025,3 +3026,5 @@ registerCharacterActions({ register, store, hooks, updateJob, simulatedAdapter }
 registerReferenceActions({ register, store, hooks, updateJob, batch, dispatch });
 
 registerTemplateActions({ register, store });
+
+registerAssetImports({ register, store, uid });

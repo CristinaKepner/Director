@@ -128,13 +128,20 @@
         "server/src/features/assets/fetch.mjs",
         "server/src/features/assets/publish.mjs",
         "server/src/features/assets/tunnel.mjs",
-        "server/src/api.mjs"
+        "server/src/api.mjs",
+        "core/features/assets/import-actions.js",
+        "server/src/features/assets/reference-upload.mjs",
+        "server/src/features/assets/reference-inspect.mjs",
+        "web/js/features/assets/reference-transfer.js",
+        "web/js/features/assets/reference-uploader.js",
+        "web/js/features/assets/reference-cards.js"
       ],
       "tests": [
         "server/tests/fetch.test.mjs",
         "server/tests/tunnel.test.mjs",
         "tests/runtime.test.mjs",
-        "server/tests/tunnel-validation.test.mjs"
+        "server/tests/tunnel-validation.test.mjs",
+        "server/tests/reference-upload.test.mjs"
       ],
       "actionPrefixes": [
         "asset"
