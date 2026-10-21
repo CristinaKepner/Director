@@ -108,7 +108,14 @@ async function startTunnel() {
     log(`--tunnel ${TUNNEL} 不认识；目前只支持 cloudflared`);
     return;
   }
-  tunnel = createMediaTunnel({ mediaDir: host.mediaDir, bin: process.env.CLOUDFLARED || null, log });
+  tunnel = createMediaTunnel({ mediaDir: host.mediaDir, bin: process.env.CLOUDFLARED || null, log,
+    onDisconnect: () => {
+      publicUrl = null;
+      tunnelState = "failed";
+      tunnelError = { code: "TUNNEL_EXITED", message: "公网媒体连接已断开，请在偏好设置保存以重新连接" };
+      host.announceHealth();
+    },
+  });
   try {
     publicUrl = await tunnel.start({ onAttempt: (n) => { tunnelState = `starting:${n}`; host.announceHealth(); } });
     tunnelState = tunnel.verified ? "up" : "unverified";

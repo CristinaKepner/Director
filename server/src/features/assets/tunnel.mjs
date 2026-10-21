@@ -92,7 +92,7 @@ export function createMediaTunnel(opts = {}) {
     // 1×1 transparent PNG
     fs.writeFileSync(probe, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
     try {
-      const deadline = Date.now() + 40_000;
+      const deadline = Date.now() + (opts.verifyTimeoutMs ?? 40_000);
       let last = 0;
       let everHttp = false; // 边缘答过话（哪怕是 404 / 530）—— 这条隧道确实在公网上存在
       let why = "";
@@ -101,13 +101,14 @@ export function createMediaTunnel(opts = {}) {
           const r = await fetch(`${url}/media/${name}`, { signal: AbortSignal.timeout(12_000) });
           last = r.status;
           everHttp = true;
-          if (r.ok) return { ok: true };
+          const bytes = Buffer.from(await r.arrayBuffer());
+          if (r.ok && bytes.equals(fs.readFileSync(probe))) return { ok: true };
         } catch (err) {
           last = err.name === "TimeoutError" ? 408 : 0;
           why = err.cause?.message || err.message || err.name;
         }
         if (Date.now() > deadline) return { ok: false, status: last, everHttp, why };
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, opts.verifyDelayMs ?? 3000));
       }
     } finally {
       fs.rmSync(probe, { force: true });
@@ -158,14 +159,6 @@ export function createMediaTunnel(opts = {}) {
         return publicUrl;
       } catch (err) {
         last = err;
-        // 最后一轮、而且失败原因是「本机判不了」：保留这条隧道用下去，别把本机代理
-        // 的毛病变成「v2v 用不了」。会明确标成未验证，出问题时日志里说得清。
-        if (lastRound && err.unverifiable) {
-          publicUrl = err.url;
-          verified = false;
-          log(`media tunnel: ${publicUrl}/media/  ⚠️ 本机验证不过，按「已建立但未验证」用下去。若 Ark 报取不到视频，多半是本机代理在拦 trycloudflare.com：${diagnose()}`);
-          return publicUrl;
-        }
         try { child?.kill("SIGTERM"); } catch {}
         child = null;
         if (lastRound || !RETRYABLE.has(err.code)) break;
@@ -224,7 +217,12 @@ export function createMediaTunnel(opts = {}) {
         // 退出原因只有 cloudflared 自己知道（限流、被拦、参数不对）。不带上它的最后几行，
         // 日志里就只剩一句「退出（code 1）」，等于什么也没说。
         if (!settled) done(Object.assign(new Error(`cloudflared 退出（code ${code}）。${diagnose()}`), { code: "TUNNEL_EXITED", cloudflared: tail() }));
-        else if (!stopping && !abandoned) log(`media tunnel: cloudflared 退出（code ${code}）；v2v 会退回 NO_PUBLIC_MEDIA_URL`);
+        else if (!stopping && !abandoned) {
+          publicUrl = null;
+          verified = false;
+          opts.onDisconnect?.();
+          log(`media tunnel: cloudflared 退出（code ${code}）；v2v 已停止接受新任务`);
+        }
       });
     });
   }
@@ -232,6 +230,8 @@ export function createMediaTunnel(opts = {}) {
   let stopping = false;
   function stop() {
     stopping = true;
+    publicUrl = null;
+    verified = false;
     try { child?.kill("SIGTERM"); } catch {}
     try { server?.close(); } catch {}
   }

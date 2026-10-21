@@ -4,6 +4,8 @@
 
 ## 源码入口
 
+- [server/src/features/generation/ark-reference.mjs](../../../server/src/features/generation/ark-reference.mjs)
+
 - [core/features/generation/prompts.js](../../../core/features/generation/prompts.js)
 - [server/src/features/generation/ark.mjs](../../../server/src/features/generation/ark.mjs)
 - [server/src/features/generation/mosshub.mjs](../../../server/src/features/generation/mosshub.mjs)

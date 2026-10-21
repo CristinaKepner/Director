@@ -205,7 +205,7 @@ async function startBackend() {
     "--demo", "none", ...keyArgs()];
   const child = spawn(process.execPath, args, {
     cwd: ROOT,
-    env: { ...process.env, PATH: toolPath(), ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production" },
+    env: { ...process.env, ...(fs.existsSync(path.join(ROOT, "bin/cloudflared")) ? { CLOUDFLARED: path.join(ROOT, "bin/cloudflared") } : {}), PATH: toolPath(), ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const tap = (buf) => {
@@ -692,7 +692,7 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
 <div id="trialQuota" class="hint"></div>
 <label>火山引擎 Ark 密钥 <span id="arkState"></span></label>
 <input id="ark" placeholder="ark-… （留空表示不改动）" autocomplete="off" spellcheck="false">
-<div class="hint">给 Seedance 2.5 / 2.0 出视频、Seedream 5.0 出图与参考图。没有它这些供应商走可观察的模拟队列。</div>
+<div class="hint">请使用火山方舟 Ark API key，并在方舟开通对应模型和额度。视频生视频还需要下面的公网媒体连接；key 本身不托管参考视频。没有 key 时不会真实出片。</div>
 <label>Agent 规划密钥（GPT‑6 Astra / AIGW） <span id="llmState"></span></label>
 <input id="llm" placeholder="sk-… （留空表示不改动）" autocomplete="off" spellcheck="false">
 <div class="hint">让 Agent Director 由大模型规划，而不是内置规则规划器。</div>
@@ -706,11 +706,11 @@ const PREFS_HTML = `<!doctype html><meta charset="utf-8"><title>偏好设置</ti
 <label style="margin-top:18px">视频生视频（v2v）</label>
 <div style="display:flex;align-items:center;gap:8px;margin:2px 0 5px">
   <input type="checkbox" id="tunnel" style="width:auto;margin:0">
-  <label for="tunnel" style="margin:0;color:#e8e8ea">把草片视频只读放到公网，让 Seedance 能取到</label>
+  <label for="tunnel" style="margin:0;color:#e8e8ea">允许通过 Cloudflare 只读提供参考视频给 Seedance</label>
 </div>
-<div class="hint">只放开 /media 的只读读取，地址随机；控制接口始终留在本机。需要 cloudflared（brew install cloudflared）。不开就只能用 i2v / t2v。</div>
+<div class="hint">只放开 /media 的只读读取，地址随机；控制接口始终留在本机。应用已内置连接工具，无需安装 Homebrew。需允许网络访问 Cloudflare；开关开启不代表连接成功，必须通过公网读取验证。</div>
 <input id="publicUrl" placeholder="或：自己的公网地址 https://…（填了就不开隧道）" autocomplete="off" spellcheck="false" style="margin-top:8px">
-<div class="hint">已经有能从公网访问到本机 /media 的地址（自建反代、内网穿透、云主机）就填这里 —— 不依赖 cloudflared，也绕开本机代理拦截。留空则按上面的开关走隧道。</div>
+<div class="hint">已有能读取本机 /media 文件的公网域名地址才填这里，不能填写 Ark API 地址。提交前会检查实际 MP4 文件；i2v 只参考首帧，不会替代整段视频参考。</div>
 <label style="margin-top:18px">更新</label>
 <div style="display:flex;align-items:center;gap:8px;margin:2px 0 5px">
   <input type="checkbox" id="auto" style="width:auto;margin:0">

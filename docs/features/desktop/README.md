@@ -31,3 +31,7 @@ desktop 配置、应用 userData 与用户工程目录；preload 暴露受限桥
 ## 相关原文
 
 - [docs/distribution.md](../../distribution.md)
+
+## 0.9.20 修复与验证边界
+
+[v2v 媒体准备、隧道依赖与发布说明](../../releases/0.9.20.md)。

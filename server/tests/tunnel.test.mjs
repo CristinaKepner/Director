@@ -65,7 +65,7 @@ setInterval(()=>{},1000);
 `, { mode: 0o755 });
   t.mock.method(globalThis, 'fetch', async (url) => {
     assert.match(url, /^https:\/\/director-test\.trycloudflare\.com\/.+\/media\/tunnel-probe-.+\.png$/);
-    return new Response('probe', { status: 200 });
+    return new Response(fs.readFileSync(path.join(dir, path.basename(new URL(url).pathname))), { status: 200 });
   });
   const tunnel = createMediaTunnel({mediaDir: dir, bin});
   try {

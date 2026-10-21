@@ -34,3 +34,7 @@ assets、entity 参考、/media 文件；服务持有媒体目录和隧道生命
 
 - [docs/backend-api.md](../../backend-api.md)
 - [docs/revision.md](../../revision.md)
+
+## 0.9.20 修复与验证边界
+
+[v2v 媒体准备、隧道依赖与发布说明](../../releases/0.9.20.md)。

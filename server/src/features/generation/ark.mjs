@@ -6,6 +6,7 @@
 // Results are downloaded into mediaDir (signed TOS links expire) and exposed as /media/<file>.
 import fs from "node:fs";
 import path from "node:path";
+import { prepareArkReference, referenceFailure } from "./ark-reference.mjs";
 
 export const ARK_DEFAULTS = {
   baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
@@ -127,31 +128,17 @@ export function createArkAdapter(opts = {}) {
     if (hasImage) content.push({ type: "image_url", image_url: { url: toDataUrl(job.inputs.image, "image/png") || job.inputs.image }, role: "first_frame" });
     for (const r of refs) content.push({ type: "image_url", image_url: { url: r.data }, role: "reference_image" });
     if (job.mode === "v2v") {
-      // Ark only accepts a web URL for reference_video (no data URLs): local take proxies need a public base URL
-      const ref = job.inputs?.video;
-      if (!ref) throw Object.assign(new Error("no circled take video for this shot"), { code: "NO_REFERENCE_VIDEO" });
-      // Ark 不收 webm：先把白模代理转成 mp4，再把那个文件的公网地址给它
-      // 参考来自原片时只送这一镜那一段（videoSpan 由 generation.submit 按台面分块算出来）
-      const span = job.inputs?.videoFrom === "origin" ? job.inputs?.videoSpan || null : null;
-      const usable = typeof opts.toMp4 === "function" ? await opts.toMp4(ref, span) : null;
-      if (!usable) throw Object.assign(new Error("参考视频尚未完成 30 fps MP4 转码，未提交生成；请检查 ffmpeg"), { code: "REFERENCE_TRANSCODE_FAILED" });
-      const m = String(usable).match(/\/media\/([^/?#]+)/);
-      let url = null;
-      const pub = publicUrl();
-      if (m && pub) url = `${pub}/media/${m[1]}`;
-      else if (!m && /^https?:\/\//.test(usable) && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(usable)) url = usable;
-      else if (m && publisher?.enabled) {
-        const abs = resolveLocal(usable);
-        if (!abs || !fs.existsSync(abs)) throw Object.assign(new Error("reference video file missing on the backend"), { code: "NO_REFERENCE_VIDEO" });
-        update(job.id, { progress: 3, adapter: { name: "ark", model, publishing: publisher.kind } });
-        url = (await publisher.publish(abs)).url;
-      }
-      if (!url) throw Object.assign(new Error("v2v needs a web-reachable reference video: start the backend with --public-url https://<host>, or --publish feishu --feishu-token-file FILE (uploads the take to your own Feishu Drive and uses its temporary download link)"), { code: "NO_PUBLIC_MEDIA_URL" });
-      content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
+      update(job.id, { status: "running", progress: 2, adapter: { name: "ark", model, referenceMode: "video", stage: "preparing-reference" } });
+      try {
+        content.push(await prepareArkReference(job, { ...opts, publicUrl }, () => !cancelled(job.id)));
+      } catch (err) { throw referenceFailure(err); }
     }
-    update(job.id, { status: "running", progress: 5, result: null, adapter: { name: "ark", model, seconds, ratio, requested: wanted, references: refs.length, referenceMode: refs.length ? "identity (first frame skipped)" : hasImage ? "first frame" : "text" } });
+    update(job.id, { status: "running", progress: 5, result: null, adapter: { name: "ark", model, seconds, ratio, requested: wanted, references: refs.length, referenceMode: job.mode === "v2v" ? "video" : refs.length ? "identity (first frame skipped)" : hasImage ? "first frame" : "text" } });
+    if (cancelled(job.id)) return;
     const created = await call("/contents/generations/tasks", { model, content });
     const taskId = created.id;
+    if (!taskId) throw Object.assign(new Error("服务未返回任务 ID；请先在方舟控制台确认是否已创建任务，再决定是否重试，避免重复计费"), { code: "ARK_TASK_ID_MISSING" });
+    if (cancelled(job.id)) { await call(`/contents/generations/tasks/${taskId}`, null, "DELETE"); return; }
     log(`ark task ${taskId} ← ${job.id} (${model}, ${seconds}s ${ratio})`);
     update(job.id, { progress: 10, adapter: { name: "ark", model, taskId, seconds, ratio } });
     return pollVideo(job,update,{taskId,model,seconds,ratio});
@@ -191,7 +178,7 @@ export function createArkAdapter(opts = {}) {
       return {
         ok: false,
         error: "V2V_NEEDS_PUBLIC_MEDIA",
-        hint: "v2v 要把白模视频交给 Ark 抓取，它只收公网地址。三选一：启动加 --tunnel cloudflared（只读放开 /media）、--public-url https://<你的地址>、或 --publish feishu。现在可以先用 i2v：拿故事版关键帧当首帧，同样跟着白模的构图走。",
+        hint: "v2v 使用整段参考视频，需要可访问的公网媒体地址。请在偏好设置开启公网媒体连接并等待验证通过，或填写有效的自有媒体地址。仅填 Ark key 不提供媒体托管；i2v 只参考首帧，不会替代 v2v。",
       };
     },
     models,

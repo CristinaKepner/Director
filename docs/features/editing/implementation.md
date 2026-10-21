@@ -4,6 +4,8 @@
 
 ## 源码入口
 
+- [server/src/features/editing/reference-video.mjs](../../../server/src/features/editing/reference-video.mjs)
+
 - [core/features/editing/cut.js](../../../core/features/editing/cut.js)
 - [web/js/features/editing/film.js](../../../web/js/features/editing/film.js)
 - [web/js/features/editing/audio-cues.js](../../../web/js/features/editing/audio-cues.js)

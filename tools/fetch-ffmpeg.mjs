@@ -34,7 +34,7 @@ const wanted = arg("--arch", "both") === "both" ? Object.keys(ARCHES) : [arg("--
 const force = args.includes("--force");
 
 const lock = (() => { try { return JSON.parse(fs.readFileSync(lockFile, "utf8")); } catch { return { pin: PIN, sha256: {} }; } })();
-if (lock.pin !== PIN) { lock.pin = PIN; lock.sha256 = {}; } // 换版本 = 换校验和
+if (lock.pin !== PIN) { lock.pin = PIN; lock.sha256 = {}; lock.installedSha256 = {}; } // 换版本 = 换校验和
 
 const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 
@@ -43,8 +43,8 @@ async function grab(arch) {
   const dest = path.join(dir, "ffmpeg");
   if (!force && fs.existsSync(dest) && fs.statSync(dest).size > 1e6) {
     const have = sha256(fs.readFileSync(dest));
-    if (!lock.sha256[arch] || lock.sha256[arch] === have) {
-      lock.sha256[arch] = have;
+    if (lock.installedSha256?.[arch] === have || lock.sha256[arch] === have) {
+      // Preserve the official download digest; signing changes the installed bytes.
       console.log(`ffmpeg ${arch}: 已在 ${path.relative(root, dest)}（${(fs.statSync(dest).size / 1e6).toFixed(0)} MB）`);
       return;
     }
@@ -71,6 +71,9 @@ async function grab(arch) {
     const sign = spawnSync("codesign", ["--force", "--sign", "-", dest], { encoding: "utf8" });
     if (sign.status !== 0) console.warn(`  codesign 没成（${(sign.stderr || "").trim().slice(0, 120)}）—— 在 Apple Silicon 上可能起不来`);
   }
+
+  lock.installedSha256 ||= {};
+  lock.installedSha256[arch] = sha256(fs.readFileSync(dest));
 
   // 只有和本机同架构的那一份能当场验；另一份交给那台机器
   if (arch === process.arch) {

@@ -133,7 +133,8 @@
       "tests": [
         "server/tests/fetch.test.mjs",
         "server/tests/tunnel.test.mjs",
-        "tests/runtime.test.mjs"
+        "tests/runtime.test.mjs",
+        "server/tests/tunnel-validation.test.mjs"
       ],
       "actionPrefixes": [
         "asset"
@@ -226,12 +227,14 @@
         "server/src/features/generation/ark.mjs",
         "server/src/features/generation/mosshub.mjs",
         "server/src/features/generation/routing.mjs",
-        "server/src/features/generation/model-catalog.mjs"
+        "server/src/features/generation/model-catalog.mjs",
+        "server/src/features/generation/ark-reference.mjs"
       ],
       "tests": [
         "tests/seedance.test.mjs",
         "tests/workflow-service.test.mjs",
-        "server/tests/model-routing.test.mjs"
+        "server/tests/model-routing.test.mjs",
+        "server/tests/ark-v2v.test.mjs"
       ],
       "actionPrefixes": [
         "generation",
@@ -271,12 +274,14 @@
         "web/js/features/editing/film.js",
         "web/js/features/editing/audio-cues.js",
         "web/js/features/editing/timeline-editor.js",
-        "server/src/features/editing/film.mjs"
+        "server/src/features/editing/film.mjs",
+        "server/src/features/editing/reference-video.mjs"
       ],
       "tests": [
         "tests/cut.test.mjs",
         "server/tests/film-edit.test.mjs",
-        "tests/stage-workspace.test.mjs"
+        "tests/stage-workspace.test.mjs",
+        "server/tests/seedance-media.test.mjs"
       ],
       "actionPrefixes": [
         "audio",
@@ -321,7 +326,8 @@
         "desktop/main.mjs",
         "desktop/preload.cjs",
         "desktop/update.mjs",
-        "web/js/desktop.js"
+        "web/js/desktop.js",
+        "tools/fetch-cloudflared.mjs"
       ],
       "tests": [
         "tests/shell.test.mjs"

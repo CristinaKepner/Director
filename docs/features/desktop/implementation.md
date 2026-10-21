@@ -4,6 +4,8 @@
 
 ## 源码入口
 
+- [tools/fetch-cloudflared.mjs](../../../tools/fetch-cloudflared.mjs)
+
 - [desktop/main.mjs](../../../desktop/main.mjs)
 - [desktop/preload.cjs](../../../desktop/preload.cjs)
 - [desktop/update.mjs](../../../desktop/update.mjs)

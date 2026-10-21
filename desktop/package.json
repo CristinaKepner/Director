@@ -1,7 +1,7 @@
 {
   "name": "director-console-desktop",
   "productName": "导演台",
-  "version": "0.9.19",
+  "version": "0.9.20",
   "private": true,
   "type": "module",
   "description": "Director Console · 导演台 — macOS client. Wraps the same core runtime, backend and web console in a native window.",
@@ -9,10 +9,10 @@
   "scripts": {
     "start": "electron .",
     "icon": "node build/make-icon.mjs && ./build/make-icns.sh",
-    "pack": "node ../tools/fetch-ffmpeg.mjs --arch both && electron-builder --mac --dir",
-    "dist": "node ../tools/fetch-ffmpeg.mjs --arch both && electron-builder --mac",
+    "pack": "node ../tools/fetch-ffmpeg.mjs --arch both && node ../tools/fetch-cloudflared.mjs && electron-builder --mac --dir",
+    "dist": "node ../tools/fetch-ffmpeg.mjs --arch both && node ../tools/fetch-cloudflared.mjs && electron-builder --mac",
     "manifest": "node ../tools/make-update-manifest.mjs --dist dist",
-    "bin": "node ../tools/fetch-ffmpeg.mjs --arch both"
+    "bin": "node ../tools/fetch-ffmpeg.mjs --arch both && node ../tools/fetch-cloudflared.mjs"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -75,14 +75,14 @@
       "category": "public.app-category.video",
       "icon": "build/icon.icns",
       "darkModeSupport": true,
-      "minimumSystemVersion": "11.0",
+      "minimumSystemVersion": "15.0",
       "identity": null,
       "gatekeeperAssess": false,
       "extendInfo": {
         "CFBundleName": "导演台",
         "CFBundleDisplayName": "导演台",
         "NSHumanReadableCopyright": "Director Console",
-        "LSMinimumSystemVersion": "11.0"
+        "LSMinimumSystemVersion": "15.0"
       },
       "target": [
         {

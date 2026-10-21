@@ -34,3 +34,7 @@ FFmpeg 是外部依赖；已知背景混音测试在当前环境可能阻塞，�
 
 - [docs/creative-journey.md](../../creative-journey.md)
 - [docs/technical-reference.md](../../technical-reference.md)
+
+## 0.9.20 修复与验证边界
+
+[v2v 媒体准备、隧道依赖与发布说明](../../releases/0.9.20.md)。

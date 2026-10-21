@@ -35,3 +35,7 @@ jobs、生成配置和模板；适配器不成为工程的第二份状态。
 - [docs/backend-api.md](../../backend-api.md)
 - [docs/capability-test.md](../../capability-test.md)
 - [docs/tvc/README.md](../../tvc/README.md)
+
+## 0.9.20 修复与验证边界
+
+[v2v 媒体准备、隧道依赖与发布说明](../../releases/0.9.20.md)。

@@ -60,7 +60,7 @@ export function createHost(opts = {}) {
       },
       getJob: (id) => store.get().jobs.find((j) => j.id === id) || null,
       publicUrl: opts.publicUrl || null,
-      toMp4: (ref, span) => film.toMp4(ref, span), // v2v 参考视频必须是 mp4；span 给了就只切这一镜那一段
+      toMp4: (ref, span, limits) => film.toMp4(ref, span, limits), // v2v 参考视频必须是 mp4；span 给了就只切这一镜那一段
       publisher: opts.publisher || null,
       fallback: R.simulatedAdapter,
       log,
