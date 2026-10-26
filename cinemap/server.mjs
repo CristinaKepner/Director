@@ -204,12 +204,27 @@ export async function servicesFromEnv({ log = () => {}, mediaDir = path.join(DAT
   if (mossKey) {
     let chat = [], list = [];
     try {
-      const r = await fetch(`${mossBase.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${mossKey}` }, signal: AbortSignal.timeout(15000) });
+      // a flaky first connection should not demote the planner to rules for the whole session
+      let r;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          r = await fetch(`${mossBase.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${mossKey}` }, signal: AbortSignal.timeout(15000) });
+          break;
+        } catch (err) {
+          if (attempt >= 3) throw err;
+          log(`mosshub: /models attempt ${attempt} failed (${err.message}); retrying`);
+          await new Promise((res) => setTimeout(res, 2000 * attempt));
+        }
+      }
       list = (await r.json()).data || [];
       chat = list.filter((m) => (m.protocols || []).includes('chat_completions') || (m.supported_endpoints || []).includes('/chat/completions')).map((m) => m.id);
       log(`mosshub: chat ${chat.join(', ') || '-'} · media ${list.filter((m) => !chat.includes(m.id)).map((m) => m.id).join(', ') || '-'}`);
     } catch (err) {
-      log(`mosshub: model discovery failed (${err.message}); using defaults`);
+      // the gateway was unreachable at boot: fall back to the known table so generation still
+      // works, and leave chat empty (the planner then stays on rules until a restart)
+      const { MOSSHUB_KNOWN } = await import('./harness/adapters/mosshub.mjs');
+      list = Object.keys(MOSSHUB_KNOWN).map((id) => ({ id, protocols: [MOSSHUB_KNOWN[id].kind === 'video' ? 'videos' : 'images_generations'] }));
+      log(`mosshub: model discovery failed (${err.message}); using the built-in table`);
     }
     // default planning model: the one the user asked for, else the first Claude, else the first chat model
     const preferred = process.env.LLM_MODEL || argOf('--llm-model') || chat.find((m) => /^claude/.test(m)) || chat[0];
