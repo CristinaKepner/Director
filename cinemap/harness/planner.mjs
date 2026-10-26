@@ -4,7 +4,7 @@
 //           model's reasoning and the steps it is writing, negotiating vendor parameter quirks
 // The model only proposes; every step still goes through dispatch (validation, state machine,
 // event log, undo) exactly like a human click.
-export const PLANNABLE = /^(world\.|context\.|project\.(undo|redo|undo-to)$|asset\.place$)/;
+export const PLANNABLE = /^(world\.|context\.|project\.(undo|redo|undo-to)$|asset\.place$|generation\.(submit|cancel)$)/;
 const ROLE_OF = (a) => ({ world: 'scene-builder', context: 'director-planner', project: 'director-planner', asset: 'scene-builder' })[a.split('.')[0]] || 'director-planner';
 const KIND_WORDS = [
   [/灯塔|lighthouse/i, 'lighthouse'],
@@ -72,16 +72,23 @@ export function rulesPlan(text, ctx = {}) {
     break;
   }
   if (/撤销|undo/i.test(t)) step('project.undo', {}, zh ? '撤销上一步' : 'undo');
+  if (/出片|出一张|渲染|生成(一段|一条|视频|图)|render|generate (a |an )?(video|image|clip)/i.test(t)) {
+    const video = /视频|短片|片|video|clip/i.test(t);
+    const providers = ctx.generation || [];
+    const provider = video ? providers.find((p) => /seedance|minimax/.test(p)) : providers.find((p) => /seedream|image/.test(p));
+    if (provider) step('generation.submit', { provider, prompt: `A white-model 3D ${video ? 'camera move over' : 'view of'} a small town, soft daylight, paper-white buildings, clean renders`, seconds: video ? 5 : undefined }, zh ? `用 ${provider} ${video ? '出一条短片' : '出一张图'}` : `${video ? 'video' : 'image'} with ${provider}`);
+    else notes.push(zh ? '没有配置生成模型' : 'no generation provider configured');
+  }
   const asking = !steps.length && /[?？]|什么|多少|哪里|how many|what|where/i.test(t);
   if (asking) step('context.world', {}, zh ? '读取当前世界' : 'read the world');
-  const needsConfirm = steps.some((s) => s.action === 'world.clear' && s.payload.kind === 'all') || steps.reduce((n, s) => n + (s.payload?.count || 0), 0) > 12;
+  const needsConfirm = steps.some((s) => (s.action === 'world.clear' && s.payload.kind === 'all') || s.action === 'generation.submit') || steps.reduce((n, s) => n + (s.payload?.count || 0), 0) > 12;
   const reply = steps.length ? (zh ? '好，按这个做：' : 'On it:') + steps.map((s) => s.label).join(zh ? '；' : '; ') : zh ? '我没听出要摆什么。试试「在湖边放三棵树和一栋小房子」。' : 'I could not tell what to place. Try "three trees and a cabin by the lake".';
   if (!steps.length) notes.push(zh ? '规则规划器只认构件 / 数量 / 位置 / 时间 / 天气' : 'rules planner only knows kinds, counts, places, time and weather');
   const suggest = zh ? ['在路边放两盏路灯', '把时间拨到黄昏', '清掉所有树'] : ['two lamps along the road', 'set time to dusk', 'clear the trees'];
   return { steps, notes, reply, needsConfirm, ask: [], suggest, model: 'rules' };
 }
 
-export const LLM_DEFAULTS = { baseUrl: 'https://aigw.sotatts.online/v1', model: 'gpt-5.6-sol', models: ['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-6-astra', 'claude-opus-5', 'claude-sonnet-4-6', 'deepseek-v4-flash', 'deepseek-v4-chat'], timeoutMs: 120000, maxTokens: 6000, temperature: 0.2 };
+export const LLM_DEFAULTS = { baseUrl: 'https://aigw.sotatts.online/v1', model: 'gpt-5.6-sol', models: ['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-6-astra', 'claude-opus-5', 'claude-sonnet-4-6', 'deepseek-v4-flash', 'deepseek-v4-chat'], timeoutMs: 120000, maxTokens: 8000, temperature: 0.2 };
 
 export function createLlmPlanner(opts = {}) {
   if (!opts.apiKey) throw new Error('llm planner needs apiKey');
@@ -196,6 +203,7 @@ export function createLlmPlanner(opts = {}) {
 - 纯提问（"场景里有什么"）用 context.world / context.items 读，再在 reply 里回答。
 - 批量删除（world.clear kind=all）或一次放超过 12 个东西时 needsConfirm=true。
 - 只在不同选择会导出明显不同结果、且无法从上下文判断时才 ask；能合理默认的直接做，把假设写进 notes。
+- 用户要「出一张图 / 出片 / 渲染 / 生成视频」时用 generation.submit：provider 从 context.generation 里挑（image 用 seedream-5 或 mosshub-seedream-pro，video 用 seedance-2.5 或 minimax-h3），prompt 用英文写清楚画面：白模 3D 场景、镜头、时间、天气；它会自动带上当前画面。这是付费操作，needsConfirm=true。
 - suggest 永远给 2-3 条；label 用用户的语言。
 可用 Action：
 ${caps.filter((c) => PLANNABLE.test(c.name)).map((c) => `${c.name} ${JSON.stringify(c.params || {})}${c.required?.length ? ` required=${c.required.join(',')}` : ''} — ${c.doc}`).join('\n')}

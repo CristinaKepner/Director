@@ -52,6 +52,7 @@ const state = {
   items: snap.items,
   assets,
   invoke,
+  snap: () => snap,
   world: () => ({ size: snap.size, settings: snap.settings, items: snap.items }),
 };
 stage.buildGround(state.env, state.settings);
@@ -75,6 +76,7 @@ function apply(next) {
   }
   ui?.paintClock();
   ui?.refreshSelection();
+  ui?.paintJobs();
 }
 const es = new EventSource(`/api/projects/${projectId}/events`);
 es.onmessage = (e) => {
@@ -115,7 +117,7 @@ ui = mountUI({
     return invoke(action, { [key]: value });
   },
   onAsk: Object.assign((text) => up({ type: 'cm:agent-open', text }), { setLang: (l) => setLang(l) }),
-  onVoice: (text) => up({ type: 'cm:voice', text }),
+  onVoice: (text) => up({ type: 'cm:voice', text, frame: ui?.captureFrame?.(960) }),
   saveNow: async () => up({ type: 'cm:save', state: 'saved' }),
 });
 window.__cm = { stage, state, invoke, snap: () => snap };

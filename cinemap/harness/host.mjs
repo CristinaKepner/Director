@@ -4,7 +4,7 @@
 import { createWorldRuntime } from './world.mjs';
 import { rulesPlan } from './planner.mjs';
 
-export function createHost({ store, planner = null, assets = () => [], log = () => {} }) {
+export function createHost({ store, planner = null, generation = null, mediaDir = null, assets = () => [], log = () => {} }) {
   const runtimes = new Map(); // projectId -> { rt, subs:Set<fn>, seq, saveTimer }
   const CONFIRM_MODES = { lead: 'lead', collaborative: 'collaborative', manual: 'manual' };
 
@@ -12,7 +12,7 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
     if (runtimes.has(projectId)) return runtimes.get(projectId);
     const project = store.get(projectId);
     if (!project) return null;
-    const rt = createWorldRuntime({ project, assets });
+    const rt = createWorldRuntime({ project, assets, generation, mediaDir });
     const entry = { rt, subs: new Set(), seq: 0, saveTimer: null, projectId };
     rt.store.subscribe((d, info) => {
       broadcast(entry, { snapshot: rt.snapshot() });
@@ -37,7 +37,7 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
   };
   const save = (entry) => {
     const d = entry.rt.store.get();
-    store.update(entry.projectId, { world: entry.rt.persistable(), conversation: d.agent.messages.slice(-120), agent: { mode: d.agent.mode, backend: d.agent.backend } });
+    store.update(entry.projectId, { world: entry.rt.persistable(), conversation: d.agent.messages.slice(-120), agent: { mode: d.agent.mode, backend: d.agent.backend }, jobs: d.jobs.filter((j) => j.status !== 'queued' && j.status !== 'running').slice(-40) });
   };
   const emitThinking = (entry, thinking) => broadcast(entry, { thinking });
 
@@ -47,7 +47,8 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
     const results = [];
     rt.R.batch(p.label || p.text || 'agent plan', (m) => {
       for (const step of p.steps) {
-        const r = rt.dispatch(step.action, step.payload, { ...m, source: 'agent', actorId: step.role });
+        const payload = step.action === 'generation.submit' && entry.frame && !step.payload.frame ? { ...step.payload, frame: entry.frame } : step.payload;
+        const r = rt.dispatch(step.action, payload, { ...m, source: 'agent', actorId: step.role });
         results.push({ step, result: r });
         toolCard(entry, step, r);
       }
@@ -83,9 +84,10 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
     return { ...out, pending: false };
   }
 
-  async function runAgent(projectId, { text, mode, backend, force = false, lang = 'zh' }) {
+  async function runAgent(projectId, { text, mode, backend, force = false, lang = 'zh', frame = null }) {
     const entry = open(projectId);
     if (!entry) return { ok: false, error: 'PROJECT_NOT_FOUND' };
+    if (frame) entry.frame = frame; // the editor's current view, used when a plan submits generation
     const { rt } = entry;
     text = String(text || '').trim();
     if (!text) return { ok: false, error: 'MISSING_PARAM', missing: ['text'] };
@@ -112,12 +114,12 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
           model,
           onDelta: (x) => emitThinking(entry, { model, phase: 'planning', reasoning: x.reasoning ? x.reasoning.slice(-4000) : '', steps: x.steps || [], chars: (x.content || '').length }),
         });
-      } else p = rulesPlan(text, { lang, assets: assets() });
+      } else p = rulesPlan(text, { lang, assets: assets(), generation: generation ? Object.keys(generation.models) : [] });
     } catch (err) {
       log(`llm failed (${err.code || ''} ${err.message}); falling back to rules`);
       emitThinking(entry, { model, phase: 'failed', error: String(err.message).slice(0, 200) });
       rt.say('agent', `模型（${model}）调用失败：${String(err.message).slice(0, 160)}。改用内置规则规划器。`);
-      p = { ...rulesPlan(text, { lang, assets: assets() }), fallback: true, error_llm: err.message };
+      p = { ...rulesPlan(text, { lang, assets: assets(), generation: generation ? Object.keys(generation.models) : [] }), fallback: true, error_llm: err.message };
     }
     rt.store.patch((s) => {
       s.agent.busy = false;
@@ -199,7 +201,7 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
     if (action === 'agent.confirm') return confirm(projectId, payload);
     if (action === 'agent.cancel') return cancel(projectId);
     if (action === 'agent.run-step') return runStep(projectId, payload);
-    if (action === 'agent.plan') return { ok: true, ...rulesPlan(payload.text, { assets: assets() }) };
+    if (action === 'agent.plan') return { ok: true, ...rulesPlan(payload.text, { assets: assets(), generation: generation ? Object.keys(generation.models) : [] }) };
     return entry.rt.dispatch(action, payload, meta);
   }
   const AGENT_CAPS = [
@@ -210,7 +212,7 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
     { name: 'agent.plan', doc: '只规划不执行（规则规划器）', params: { text: 'string' }, required: ['text'], undoable: false, allowedIn: ['EDIT'], group: 'agent' },
   ];
   function capabilities(projectId) {
-    const rt = projectId ? open(projectId)?.rt : createWorldRuntime({ project: { starter: 'blank', seed: 1 }, assets });
+    const rt = projectId ? open(projectId)?.rt : createWorldRuntime({ project: { starter: 'blank', seed: 1 }, assets, generation, mediaDir });
     return [...(rt?.capabilities() || []), ...AGENT_CAPS];
   }
   function subscribe(projectId, fn) {
@@ -246,6 +248,6 @@ export function createHost({ store, planner = null, assets = () => [], log = () 
     context,
     close,
     flush,
-    health: () => ({ projects: runtimes.size, llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models } : { name: 'rules', models: [], model: 'rules' }, assets: assets().length }),
+    health: () => ({ projects: runtimes.size, llm: planner ? { name: planner.name, baseUrl: planner.baseUrl, model: planner.model, models: planner.models } : { name: 'rules', models: [], model: 'rules' }, generation: generation ? { name: generation.name, providers: Object.keys(generation.models) } : null, assets: assets().length }),
   };
 }

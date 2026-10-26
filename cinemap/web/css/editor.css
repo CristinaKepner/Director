@@ -150,3 +150,18 @@ kbd{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radi
 .tile.asset{height:88px;padding:4px}
 .tile.asset img{width:48px;height:48px;object-fit:contain;border-radius:8px;background:#fff}
 .tile.asset img:not([src]),.tile.asset img[src=""]{display:none}
+
+.ex-prompt{display:grid;gap:6px;margin-top:10px;color:var(--cm-sub)}
+.ex-prompt textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--cm-ink);resize:vertical}
+#ex-provider{grid-column:2/4;height:30px;border-radius:10px;border:1px solid var(--line);font:inherit;background:#fff}
+.jobs{display:grid;gap:8px;margin-top:12px}
+.job{padding:8px 10px;border-radius:12px;background:var(--cm-tile)}
+.job .line{display:flex;align-items:center;gap:8px;font-size:var(--cm-fs-sm)}
+.job .line b{font-weight:600}
+.job .line .st{color:var(--cm-sub);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job.failed .line .st{color:var(--cm-danger);white-space:normal}
+.job .bar{height:4px;margin:6px 0;border-radius:2px;background:var(--cm-track);overflow:hidden}
+.job .bar i{display:block;height:100%;background:var(--cm-ink);transition:width .4s}
+.job.failed .bar{display:none}
+.job .out img,.job .out video{display:block;width:100%;border-radius:8px;margin-top:4px}
+.job .out a{display:inline-block;margin-top:4px;font-size:var(--cm-fs-sm);color:var(--cm-sub);text-decoration:underline}

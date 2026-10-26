@@ -19,6 +19,8 @@ const VENDOR_THREE = [path.join(ROOT, 'vendor', 'three'), path.join(ROOT, '..', 
 import { TEMPLATES, coverSvg } from './templates.mjs';
 import { createHost } from './harness/host.mjs';
 import { createLlmPlanner, rulesPlan } from './harness/planner.mjs';
+import { createArkAdapter } from './harness/adapters/ark.mjs';
+import { createMosshubAdapter, routeGeneration } from './harness/adapters/mosshub.mjs';
 import { listAssets, importAsset, catalog as simreadyCatalog, assetDir } from './tools/simready.mjs';
 const SHARED = path.join(ROOT, 'shared');
 
@@ -81,7 +83,7 @@ function json(res, status, body, headers = {}) {
   res.end(text);
 }
 
-function readBody(req, limit = 1 << 20) {
+function readBody(req, limit = 8 << 20) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
@@ -182,19 +184,61 @@ export const planAgentTurn = ({ prompt = '', lang = 'zh' } = {}) => {
   return { ok: true, steps: p.steps.map((st, i) => ({ i, ...st })), say: p.reply, cost: 0 };
 };
 
-export function llmFromEnv({ log = () => {} } = {}) {
+// Keys come from files or env, never from the command line itself; nothing here is logged.
+const readKey = (envName, flag) => {
   const args = process.argv.slice(2);
-  const arg = (k) => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
-  const key = process.env.CINEMAP_LLM_KEY || process.env.AIGW_API_KEY || process.env.LLM_API_KEY || (arg('--llm-key-file') && fs.readFileSync(arg('--llm-key-file'), 'utf8').trim()) || null;
-  if (!key) return null;
-  return createLlmPlanner({ apiKey: key, baseUrl: process.env.LLM_BASE_URL || arg('--llm-base') || undefined, model: process.env.LLM_MODEL || arg('--llm-model') || undefined, log });
+  const file = args.includes(flag) ? args[args.indexOf(flag) + 1] : null;
+  return process.env[envName] || (file && fs.readFileSync(file.replace(/^~/, process.env.HOME || ''), 'utf8').trim()) || null;
+};
+const argOf = (flag) => {
+  const args = process.argv.slice(2);
+  return args.includes(flag) ? args[args.indexOf(flag) + 1] : null;
+};
+export async function servicesFromEnv({ log = () => {}, mediaDir = path.join(DATA, 'media') } = {}) {
+  const out = { planner: null, generation: null };
+  const mossKey = readKey('MOSSHUB_API_KEY', '--mosshub-key-file');
+  const mossBase = process.env.MOSSHUB_BASE_URL || argOf('--mosshub-base') || 'https://api.mosshub.cn/v1';
+  const aigwKey = readKey('AIGW_API_KEY', '--llm-key-file') || process.env.CINEMAP_LLM_KEY || process.env.LLM_API_KEY || null;
+  const arkKey = readKey('ARK_API_KEY', '--ark-key-file');
+  const adapters = [];
+  if (mossKey) {
+    let chat = [], media = [];
+    try {
+      const r = await fetch(`${mossBase.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${mossKey}` }, signal: AbortSignal.timeout(15000) });
+      const list = (await r.json()).data || [];
+      chat = list.filter((m) => (m.protocols || []).includes('chat_completions') || (m.supported_endpoints || []).includes('/chat/completions')).map((m) => m.id);
+      media = list.filter((m) => !chat.includes(m.id)).map((m) => m.id);
+      log(`mosshub: chat ${chat.join(', ') || '-'} · media ${media.join(', ') || '-'}`);
+    } catch (err) {
+      log(`mosshub: model discovery failed (${err.message}); using defaults`);
+    }
+    if (chat.length) out.planner = createLlmPlanner({ apiKey: mossKey, baseUrl: mossBase, model: process.env.LLM_MODEL || argOf('--llm-model') || chat[0], models: chat, log });
+    adapters.push(createMosshubAdapter({ apiKey: mossKey, baseUrl: mossBase, mediaDir, log, available: media.length ? media : null, getJob: (id) => jobLookup(id) }));
+  }
+  if (!out.planner && aigwKey) out.planner = createLlmPlanner({ apiKey: aigwKey, baseUrl: process.env.LLM_BASE_URL || argOf('--llm-base') || undefined, model: process.env.LLM_MODEL || argOf('--llm-model') || undefined, log });
+  if (arkKey) adapters.push(createArkAdapter({ apiKey: arkKey, baseUrl: process.env.ARK_BASE_URL || argOf('--ark-base') || undefined, mediaDir, log, getJob: (id) => jobLookup(id) }));
+  out.generation = routeGeneration(adapters);
+  return out;
+}
+let jobLookup = () => null;
+export function llmFromEnv(opts = {}) {
+  return servicesFromEnv(opts).then((s) => s.planner);
 }
 
-export function createApp({ config = createConfig(), dataDir = DATA, webDir = WEB, planner = null, log = () => {} } = {}) {
+export function createApp({ config = createConfig(), dataDir = DATA, webDir = WEB, planner = null, generation = null, log = () => {} } = {}) {
   const sessions = new Map(); // sid -> user
   const pending = new Map(); // sso state -> { returnTo, mode, createdAt }
   const store = new ProjectStore(path.join(dataDir, 'projects.json'));
-  const host = createHost({ store, planner, assets: listAssets, log });
+  const mediaDir = path.join(dataDir, 'media');
+  const host = createHost({ store, planner, generation, mediaDir, assets: listAssets, log });
+  jobLookup = (id) => {
+    for (const p of store.projects.values()) {
+      const ctx = host.context(p.id);
+      const j = ctx?.jobs?.find((x) => x.id === id);
+      if (j) return j;
+    }
+    return null;
+  };
   const importJobs = new Map(); // id -> { id, status, log: [], meta, error }
   const mockUser = {
     id: 'u_local_demo',
@@ -400,7 +444,7 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
         }
         if (m[2] === 'agent' && method === 'POST') {
           const body = await readBody(req);
-          return json(res, 200, await host.runAgent(id, { text: body.text ?? body.prompt, mode: body.mode, backend: body.backend, force: body.force === true, lang: body.lang || 'zh' }));
+          return json(res, 200, await host.runAgent(id, { text: body.text ?? body.prompt, mode: body.mode, backend: body.backend, force: body.force === true, lang: body.lang || 'zh', frame: typeof body.frame === 'string' && body.frame.startsWith('data:image/') ? body.frame : null }));
         }
         return json(res, 405, { error: 'method' });
       }
@@ -438,6 +482,16 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
         return json(res, 200, { total: cat.ids.length, license: cat.license, source: cat.source, fetchedAt: cat.fetchedAt, ids: ids.slice(0, 200) });
       } catch (err) {
         return json(res, 502, { error: err.message });
+      }
+    }
+    {
+      const m = /^\/media\/([\w.-]+\.(?:png|jpg|mp4|webp))$/.exec(p);
+      if (m) {
+        if (!session) return json(res, 401, { error: 'unauthorized' });
+        const file = path.join(mediaDir, m[1]);
+        if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
+        res.writeHead(200, { 'Content-Type': m[1].endsWith('.mp4') ? 'video/mp4' : m[1].endsWith('.png') ? 'image/png' : m[1].endsWith('.webp') ? 'image/webp' : 'image/jpeg', 'Cache-Control': 'private, max-age=3600', 'Content-Length': fs.statSync(file).size });
+        return fs.createReadStream(file).pipe(res);
       }
     }
     {
@@ -536,15 +590,17 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
   return { server, sessions, store, config, host };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+const __main = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (__main) await (async () => {
   const args = process.argv.slice(2);
   const portIdx = args.indexOf('--port');
   const port = Number(portIdx >= 0 ? args[portIdx + 1] : process.env.PORT || 5180);
   const log = (m) => console.log(`[cinemap] ${m}`);
-  const planner = llmFromEnv({ log });
-  const { server } = createApp({ planner, log });
+  const { planner, generation } = await servicesFromEnv({ log });
+  const { server } = createApp({ planner, generation, log });
   server.listen(port, '127.0.0.1', () => {
     console.log(`cinemap replica listening on http://localhost:${port}/login`);
-    console.log(planner ? `agent planner: ${planner.name} @ ${planner.baseUrl} default ${planner.model}` : 'agent planner: rules (set CINEMAP_LLM_KEY / AIGW_API_KEY or --llm-key-file for a model)');
+    console.log(planner ? `agent planner: ${planner.name} @ ${planner.baseUrl} default ${planner.model} (${planner.models.join(', ')})` : 'agent planner: rules (set MOSSHUB_API_KEY / AIGW_API_KEY or --mosshub-key-file / --llm-key-file for a model)');
+    console.log(generation ? `generation: ${generation.name} → ${Object.keys(generation.models).join(', ')}` : 'generation: none (set ARK_API_KEY / MOSSHUB_API_KEY or --ark-key-file / --mosshub-key-file)');
   });
-}
+})();

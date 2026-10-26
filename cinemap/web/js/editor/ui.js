@@ -25,7 +25,7 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onS
     actor: () => listPanel(t('Actor', '人'), [[t('Pick a person, then give them a line', '点一个人，给他排戏'), 'E']], t('Click a person on the stage to select them.', '点场景里的人来选中。')),
     path: () => listPanel(t('Path', '动线'), [[t('Click the ground to add waypoints', '点地面加路点'), 'E'], [t('Finish', '完成'), 'Enter']], t('Paths are drawn as a sketch here.', '这里的动线只画示意。')),
     camera: () => listPanel(t('Camera', '机位'), [[t('Place a camera', '放一台'), ''], [t('Follow a person', '跟拍一个人'), ''], [t('Handheld walk', '手持走一条'), '']], t('Click the ground to place, press E to finish; click a building, person or car to film it; Shift-drag for an aerial.', '点地面放，接着点 = 动线，E 完成；点楼、人、车 = 拍它；Shift 拖 = 航拍。')),
-    export: () => listPanel(t('Export', '出片'), [[t('Still frame (PNG)', '静帧 PNG'), ''], [t('Turntable clip', '环绕镜头'), t('soon', '即将')], [t('World file (JSON)', '世界文件 JSON'), '']], t('Downloads happen in your browser; nothing leaves this machine.', '下载都在浏览器里完成，不会上传。'), (i) => i === 0 ? exportPng() : i === 2 ? exportJson() : say(t('Not in this replica yet.', '复刻版还没做这个。'))),
+    export: () => exportPanel(),
     more: () => listPanel(t('More', '更多'), [[t('Reset camera', '回到世界'), ''], [t('Hide chrome', '隐藏界面'), 'H'], [t('About this replica', '关于这个复刻'), '']], '', (i) => i === 0 ? stage.recentre(state.env.size) : i === 1 ? document.body.classList.toggle('bare') : say(t('Rebuilt from scratch on Director; the generator and kits are our own.', '在 Director 上从零重建；生成器与构件都是自制的。'))),
   };
   rail.addEventListener('click', (e) => {
@@ -96,6 +96,90 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onS
       };
       tiles.append(b);
     }
+  }
+  // ---- 出片: capture the view, send it with a prompt to a generation model through the harness
+  function captureFrame(maxW = 1280) {
+    const src = stage.renderer.domElement;
+    stage.renderer.render(stage.scene, stage.camera);
+    const scale = Math.min(1, maxW / src.width);
+    const c = document.createElement('canvas');
+    c.width = Math.round(src.width * scale);
+    c.height = Math.round(src.height * scale);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.85);
+  }
+  function scenePrompt() {
+    const s = state.settings;
+    const counts = {};
+    for (const it of state.items) counts[it.kind] = (counts[it.kind] || 0) + 1;
+    const things = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, n]) => `${n} ${k}`).join(', ');
+    const tod = s.hour < 8 ? 'early morning light' : s.hour < 16 ? 'soft midday light' : s.hour < 19.5 ? 'golden dusk light' : 'night';
+    return `Cinematic render of a white-model 3D ${state.env.water ? 'seaside ' : ''}town, matching this view exactly: ${things}. ${tod}, ${s.weather} weather. Paper-white buildings with soft shadows, clean architectural visualization, no text.`;
+  }
+  function exportPanel() {
+    $('#d5-title').textContent = t('Export', '出片');
+    const gen = (state.snap?.() || {}).generation || [];
+    const ready = gen.filter((p) => p.ready);
+    body.innerHTML = `<p class="hint">${t('Send the current view to a model. Images are quick; a video takes a few minutes and costs credits.', '把当前画面交给模型。出图很快；短片要等几分钟，会消耗额度。')}</p>
+      <div class="seg" id="ex-kind"><button data-k="image" class="on">${t('Still (image)', '静帧')}</button><button data-k="video">${t('Clip (video)', '短片')}</button></div>
+      <div class="row"><label>${t('Model', '模型')}</label><select id="ex-provider"></select></div>
+      <div class="row" id="ex-seconds-row"><label>${t('Seconds', '秒数')}</label><input type="range" id="ex-seconds" min="4" max="12" step="1" value="5"><output id="ex-seconds-o">5 s</output></div>
+      <label class="ex-prompt">${t('Prompt', '提示词')}<textarea id="ex-prompt" rows="4"></textarea></label>
+      <div class="actions"><button type="button" class="chip" id="ex-reset">${t('From scene', '按场景生成')}</button><button type="button" class="chip" id="ex-png">${t('PNG only', '只存 PNG')}</button><button type="button" class="chip" id="ex-json">JSON</button><span class="sp"></span><button type="button" class="chip on" id="ex-go">${t('Generate', '生成')}</button></div>
+      <div id="ex-jobs" class="jobs"></div>`;
+    const sel = $('#ex-provider');
+    let kind = 'image';
+    const fill = () => {
+      const list = ready.filter((p) => p.kind === kind);
+      sel.replaceChildren(...list.map((p) => Object.assign(document.createElement('option'), { value: p.id, textContent: p.name })));
+      if (!list.length) sel.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: t('No model configured', '没有配置模型') }));
+      $('#ex-seconds-row').hidden = kind !== 'video';
+      const P = list.find((p) => p.id === sel.value);
+      if (P) {
+        $('#ex-seconds').min = P.min;
+        $('#ex-seconds').max = P.max;
+      }
+    };
+    $('#ex-kind').onclick = (e) => {
+      const b = e.target.closest('[data-k]');
+      if (!b) return;
+      kind = b.dataset.k;
+      for (const x of $('#ex-kind').children) x.classList.toggle('on', x === b);
+      fill();
+    };
+    sel.onchange = fill;
+    fill();
+    $('#ex-seconds').oninput = () => ($('#ex-seconds-o').textContent = `${$('#ex-seconds').value} s`);
+    $('#ex-prompt').value = scenePrompt();
+    $('#ex-reset').onclick = () => ($('#ex-prompt').value = scenePrompt());
+    $('#ex-png').onclick = exportPng;
+    $('#ex-json').onclick = exportJson;
+    $('#ex-go').onclick = async () => {
+      if (!sel.value) return say(t('Configure --ark-key-file or --mosshub-key-file first.', '先配置 --ark-key-file 或 --mosshub-key-file。'));
+      $('#ex-go').disabled = true;
+      const r = await state.invoke('generation.submit', { provider: sel.value, prompt: $('#ex-prompt').value.trim(), seconds: kind === 'video' ? +$('#ex-seconds').value : undefined, frame: captureFrame() });
+      $('#ex-go').disabled = false;
+      if (r.ok) say(t('Submitted — progress shows below.', '已提交，下面看进度。'));
+    };
+    paintJobs();
+  }
+  function paintJobs() {
+    const box = $('#ex-jobs');
+    if (!box) return;
+    const jobs = (state.snap?.() || {}).jobs || [];
+    box.replaceChildren(...jobs.slice(-6).reverse().map((j) => {
+      const el = document.createElement('div');
+      el.className = `job ${j.status}`;
+      el.innerHTML = `<div class="line"><b></b><span class="st"></span><button type="button" class="chip-sm" data-cancel hidden>${t('Cancel', '取消')}</button></div><div class="bar"><i></i></div><div class="out"></div>`;
+      el.querySelector('b').textContent = `${j.provider} · ${j.mode}${j.seconds ? ` · ${j.seconds}s` : ''}`;
+      el.querySelector('.st').textContent = j.status === 'failed' ? j.error : j.status === 'done' ? t('done', '完成') : `${j.status} ${Math.round(j.progress || 0)}%`;
+      el.querySelector('.bar i').style.width = `${j.status === 'done' ? 100 : j.progress || 0}%`;
+      const cancel = el.querySelector('[data-cancel]');
+      cancel.hidden = !['queued', 'running'].includes(j.status);
+      cancel.onclick = () => state.invoke('generation.cancel', { id: j.id });
+      if (j.result?.url) el.querySelector('.out').innerHTML = j.result.kind === 'video' ? `<video src="${j.result.url}" controls muted playsinline></video><a href="${j.result.url}" download>${t('Download', '下载')}</a>` : `<img src="${j.result.url}" alt=""><a href="${j.result.url}" download>${t('Download', '下载')}</a>`;
+      return el;
+    }));
   }
   const ICON = { house: 'ic-house', shed: 'ic-export', tower: 'ic-house', lighthouse: 'ic-house', lamp: 'ic-sun', bench: 'ic-ground', tree: 'ic-terrain', pine: 'ic-terrain', rock: 'ic-ground', bush: 'ic-terrain', boat: 'ic-path', person: 'ic-actor', car: 'ic-camera' };
   function listPanel(title, rows, hint, onPick) {
@@ -405,5 +489,5 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onS
     a.click();
   }
   paintClock();
-  return { paintClock, select, setTool, cancelPlacing, closeAll, setHour, setWeather, setBackdrop, refreshSelection };
+  return { paintClock, select, setTool, cancelPlacing, closeAll, setHour, setWeather, setBackdrop, refreshSelection, paintJobs, captureFrame };
 }

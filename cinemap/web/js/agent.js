@@ -72,7 +72,7 @@ function diffOf(before, after) {
 function render() {
   if (!snap) return;
   const msgs = snap.agent.messages || [];
-  const key = JSON.stringify([msgs.map((m) => m.id + (m.pending ? 'p' : '') + (m.confirmed ? 'c' : '') + (m.cancelled ? 'x' : '')), thinking, [...skipped], [...openThinking], [...openCards], snap.agent.suggest]);
+  const key = JSON.stringify([msgs.map((m) => m.id + (m.pending ? 'p' : '') + (m.confirmed ? 'c' : '') + (m.cancelled ? 'x' : '')), thinking, [...skipped], [...openThinking], [...openCards], snap.agent.suggest, (snap.jobs || []).map((j) => j.id + j.status + Math.round(j.progress || 0))]);
   if (key === lastRendered) return;
   lastRendered = key;
   const html = [];
@@ -94,6 +94,7 @@ function render() {
       const open = openCards.has(m.id);
       const summary = rows.length ? `${esc(rows[0][0])} ${esc(rows[0][1])} → ${esc(rows[0][2])}${rows.length > 1 ? ` · +${rows.length - 1}` : ''}` : tl.ids?.length ? `${tl.ids.length} ${T('placed', '个已放置')}` : '';
       html.push(`<div class="ag-tool ${tl.ok ? 'ok' : 'err'}" data-card="${m.id}"><div class="line"><span class="k">${tl.ok ? '✓' : '!'}</span><span class="t">${esc(m.text)}</span><code>${esc(tl.action)}</code><span class="ms">${tl.ms ?? ''}${tl.ms != null ? ' ms' : ''}</span></div>${tl.ok ? `<div class="sub">${summary}${tl.eventId ? `<button class="ag-link" data-undo-to="${tl.eventId}">${T('Undo to here', '撤到这里')}</button>` : ''}<span class="chev">${open ? '▾' : '▸'}</span></div>` : `<div class="sub err">${esc(tl.error)}${tl.hint ? ` · ${esc(tl.hint)}` : ''}</div>`}${open ? `<table class="diff">${rows.map(([k, a, b]) => `<tr><td>${esc(k)}</td><td>${esc(a)}</td><td>→</td><td>${esc(b)}</td></tr>`).join('') || `<tr><td colspan="4">${T('No field changed', '没有字段变化')}</td></tr>`}</table><details><summary>${T('Raw payload', '原始参数')}</summary><pre>${esc(JSON.stringify(tl.payload, null, 1))}</pre></details>` : ''}</div>`);
+    } else if (m.role === 'tool' && false) {
     } else if (m.role === 'ask') {
       html.push(`<div class="ag-say final ask">${esc(m.text)}${(m.ask || []).map((a) => `<div class="q"><b>${esc(a.question)}</b>${a.why ? `<div class="why">${esc(a.why)}</div>` : ''}<div class="opts">${a.options.map((o) => `<button class="ag-link opt${o.recommended ? ' rec' : ''}" data-opt="${esc(o.label)}" title="${esc(o.detail)}">${esc(o.label)}</button>`).join('')}</div></div>`).join('')}</div>`);
     }
@@ -102,6 +103,9 @@ function render() {
     const steps = (thinking.steps || []).slice(-6);
     html.push(`<div class="ag-think live"><div class="line"><span class="k spin">◠</span><b>${esc(thinking.model)} ${thinking.phase === 'executing' ? T('is executing', '在执行') : thinking.phase === 'failed' ? T('failed', '失败了') : T('is planning', '正在规划')}</b>${thinking.chars ? `<span class="ms">${thinking.chars} ${T('chars', '字')}</span>` : ''}</div>${thinking.reasoning ? `<div class="body">${esc(thinking.reasoning.slice(-900))}</div>` : ''}${steps.length ? `<ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}${thinking.error ? `<div class="ag-notes">${esc(thinking.error)}</div>` : ''}</div>`);
   }
+  const running = (snap.jobs || []).filter((j) => ['queued', 'running'].includes(j.status));
+  for (const j of running) html.push(`<div class="ag-think live"><div class="line"><span class="k spin">◠</span><b>${esc(j.provider)} ${T('generating', '生成中')}</b><span class="ms">${Math.round(j.progress || 0)}%</span></div></div>`);
+  for (const j of (snap.jobs || []).filter((x) => x.status === 'done' && x.result?.url).slice(-2)) html.push(`<div class="ag-media">${j.result.kind === 'video' ? `<video src="${esc(j.result.url)}" controls muted playsinline></video>` : `<img src="${esc(j.result.url)}" alt="">`}<small>${esc(j.provider)} · ${esc(j.mode)}</small></div>`);
   const sug = snap.agent.suggest || [];
   if (sug.length && !snap.agent.pendingPlan) html.push(`<div class="ag-suggest">${sug.map((s) => `<button class="ag-link" data-suggest="${esc(s)}">${esc(s)}</button>`).join('')}</div>`);
   feed.innerHTML = html.join('');
@@ -215,7 +219,7 @@ function addFiles(files) {
     thumbs.append(t);
   }
 }
-async function run(text) {
+async function run(text, frame = null) {
   if (!text || running) return;
   running = true;
   textarea.value = '';
@@ -224,7 +228,7 @@ async function run(text) {
   attachments = [];
   thumbs.replaceChildren();
   try {
-    const out = await api(`/api/projects/${projectId}/agent`, { text, lang: lang(), force: $('[data-k=force]')?.checked || false });
+    const out = await api(`/api/projects/${projectId}/agent`, { text, lang: lang(), force: $('[data-k=force]')?.checked || false, frame });
     if (out.usage?.total_tokens) {
       cost += out.usage.total_tokens;
       $('.ag-cost').textContent = `${T('This session', '本次会话')} ${cost} tok`;
@@ -244,6 +248,6 @@ addEventListener('message', (e) => {
   if (d.type === 'cm:agent-open') {
     setOpen(true);
     if (d.text) run(d.text);
-  } else if (d.type === 'cm:voice') run(d.text);
+  } else if (d.type === 'cm:voice') run(d.text, d.frame || null);
   else if (['cm:ready', 'cm:save', 'cm:toast', 'cm:activity'].includes(d.type)) up(d);
 });

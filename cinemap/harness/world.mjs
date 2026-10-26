@@ -1,5 +1,7 @@
 // The authoritative world for one project and the actions that may change it. The editor,
 // the CLI and the agent all go through `dispatch`; the store broadcasts full snapshots.
+import fs from 'node:fs';
+import path from 'node:path';
 import { createRegistry, createStore } from './registry.mjs';
 import { generate, groundY } from '../shared/worldgen.js';
 import { spotsFor } from '../shared/spots.js';
@@ -10,7 +12,17 @@ const WEATHERS = ['clear', 'cloudy', 'overcast', 'rain', 'storm', 'snow', 'fog']
 const BACKDROPS = ['auto', 'grass', 'forest', 'sand', 'clay', 'snow', 'water', 'city', 'warm', 'white', 'grey'];
 const uid = (p) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-export function createWorldRuntime({ project, assets = () => [] }) {
+export const PROVIDERS = {
+  'seedream-5': { name: 'Seedream 5.0 (Ark)', kind: 'image', modes: ['t2i', 'i2i'] },
+  'seedance-2.5': { name: 'Seedance 2.5 (Ark)', kind: 'video', modes: ['t2v', 'i2v'], min: 4, max: 30 },
+  'seedance-2': { name: 'Seedance 2.0 (Ark)', kind: 'video', modes: ['t2v', 'i2v'], min: 4, max: 12 },
+  'mosshub-seedream-pro': { name: 'Seedream 5.0 Pro (MossHub)', kind: 'image', modes: ['t2i', 'i2i'] },
+  'mosshub-gemini-image': { name: 'Gemini 3 Pro Image (MossHub)', kind: 'image', modes: ['t2i', 'i2i'] },
+  'minimax-h3': { name: 'MiniMax H3 (MossHub)', kind: 'video', modes: ['t2v', 'i2v'], min: 4, max: 15 },
+  'minimax-h3-max': { name: 'MiniMax H3 Max (MossHub)', kind: 'video', modes: ['t2v', 'i2v'], min: 5, max: 15 },
+};
+
+export function createWorldRuntime({ project, assets = () => [], generation = null, mediaDir = null }) {
   const saved = project.world || {};
   const size = saved.size || 512;
   const base = generate(project.starter, project.seed || 1, size);
@@ -31,6 +43,7 @@ export function createWorldRuntime({ project, assets = () => [] }) {
     items,
     removed: [...removed],
     agent: { mode: project.agent?.mode || 'lead', backend: project.agent?.backend || 'rules', messages: project.conversation || [], pendingPlan: null, suggest: [], busy: false },
+    jobs: project.jobs || [],
     events: [],
   });
   const R = createRegistry({ store });
@@ -219,6 +232,70 @@ export function createWorldRuntime({ project, assets = () => [] }) {
     undoable: false,
     handler: () => ({ ok: true, assets: assets().map((a) => ({ id: a.id, name: a.name, kind: `asset:${a.id}`, size: a.meta?.bbox ? [+(a.meta.bbox.max[0] - a.meta.bbox.min[0]).toFixed(2), +(a.meta.bbox.max[1] - a.meta.bbox.min[1]).toFixed(2), +(a.meta.bbox.max[2] - a.meta.bbox.min[2]).toFixed(2)] : null })) }),
   });
+  // ---- generation: slow, paid, async. submit returns a job id at once; the adapter pushes
+  // progress into the job record; every change broadcasts a snapshot. The frame comes from the
+  // editor as a data URL and is kept on disk so the record stays small.
+  const providerOf = (p) => PROVIDERS[p];
+  const ready = (p) => !!generation?.supports?.(p);
+  register('generation.submit', {
+    doc: '出片：把当前画面（或纯文字）交给生成模型。provider 见 context.generation；image 出一张静帧，video 出一条 4–30 s 短片。付费操作，需要确认',
+    params: { provider: `string (${Object.keys(PROVIDERS).join('|')})`, prompt: 'string', mode: 't2i|i2i|t2v|i2v（默认按 provider 的种类，带画面就是 i2*）', seconds: 'number (video, 4–30)', aspect: '16:9|9:16|1:1', frame: 'string (data:image/png;base64 — 编辑器当前画面，可选)' },
+    required: ['provider', 'prompt'],
+    undoable: false,
+    allowedIn: ['EDIT'],
+    label: (p) => `出片 ${p.provider}`,
+    validate: ({ provider, mode, seconds }) => (!providerOf(provider) ? { error: 'UNKNOWN_PROVIDER', hint: Object.keys(PROVIDERS).join(', ') } : !ready(provider) ? { error: 'PROVIDER_NOT_CONFIGURED', hint: `${PROVIDERS[provider].name} 没有配置密钥（--ark-key-file / --mosshub-key-file）` } : mode && !providerOf(provider).modes.includes(mode) ? { error: 'BAD_MODE', hint: providerOf(provider).modes.join('/') } : seconds && providerOf(provider).kind === 'video' && (seconds < providerOf(provider).min || seconds > providerOf(provider).max) ? { error: 'BAD_SECONDS', hint: `${providerOf(provider).min}–${providerOf(provider).max}` } : null),
+    handler({ provider, prompt, mode, seconds, aspect = '16:9', frame }, meta) {
+      const P = providerOf(provider);
+      const id = uid('job');
+      let image = null;
+      if (frame && /^data:image\/(png|jpeg|webp);base64,/.test(frame)) {
+        if (mediaDir) {
+          const ext = /png/.test(frame.slice(0, 20)) ? 'png' : 'jpg';
+          fsWrite(`${id}-frame.${ext}`, Buffer.from(frame.split(',')[1], 'base64'));
+          image = frame; // adapters take the data URL; the file is for the record
+        } else image = frame;
+      }
+      const finalMode = mode || (P.kind === 'image' ? (image ? 'i2i' : 't2i') : image ? 'i2v' : 't2v');
+      const job = { id, provider, model: P.name, kind: P.kind, mode: finalMode, prompt: String(prompt).slice(0, 2000), seconds: P.kind === 'video' ? Math.max(P.min, Math.min(P.max, Number(seconds) || 5)) : 0, aspect, status: 'queued', progress: 0, result: null, error: null, source: meta.source, actorId: meta.actorId, createdAt: Date.now(), frame: image ? `/media/${id}-frame.${/png/.test(image.slice(0, 20)) ? 'png' : 'jpg'}` : null };
+      store.patch((s) => {
+        s.jobs.push(job);
+        s.jobs = s.jobs.slice(-40);
+      });
+      const update = (jobId, patch) => store.patch((s) => {
+        const j = s.jobs.find((x) => x.id === jobId);
+        if (j && j.status !== 'cancelled') Object.assign(j, patch, { updatedAt: Date.now() });
+      });
+      generation.submit({ ...job, inputs: image ? { image } : {} }, update);
+      return { ok: true, id, job: { id, provider, mode: finalMode, seconds: job.seconds } };
+    },
+  });
+  register('generation.cancel', {
+    doc: '取消一个还没完成的生成任务',
+    params: { id: 'string' },
+    required: ['id'],
+    undoable: false,
+    handler({ id }) {
+      const j = D().jobs.find((x) => x.id === id);
+      if (!j) return { ok: false, error: 'NOT_FOUND' };
+      if (!['queued', 'running'].includes(j.status)) return { ok: false, error: 'NOT_RUNNING' };
+      store.patch((s) => Object.assign(s.jobs.find((x) => x.id === id), { status: 'cancelled' }));
+      return { ok: true, id };
+    },
+  });
+  register('context.generation', {
+    doc: '可用的生成模型（出图 / 出片）和最近的任务',
+    undoable: false,
+    handler: () => ({ ok: true, providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p, ready: ready(id) })), jobs: D().jobs.slice(-10).map(({ id, provider, mode, status, progress, error, result, prompt }) => ({ id, provider, mode, status, progress, error, result: result ? { kind: result.kind, url: result.url } : null, prompt: prompt.slice(0, 80) })) }),
+  });
+  const fsWrite = (name, buf) => {
+    try {
+      fs.mkdirSync(mediaDir, { recursive: true });
+      fs.writeFileSync(path.join(mediaDir, name), buf);
+    } catch {
+      /* media dir unavailable */
+    }
+  };
   register('agent.set-mode', {
     doc: '设置助手工作模式：lead 直接执行 / collaborative 出方案再确认 / manual 只出方案逐条执行',
     params: { mode: 'lead|collaborative|manual' },
@@ -273,6 +350,8 @@ export function createWorldRuntime({ project, assets = () => [] }) {
       state: d.state,
       undo: R.historyInfo(),
       assets: assets().map((a) => `asset:${a.id} (${a.name})`),
+      generation: Object.keys(PROVIDERS).filter(ready),
+      jobs: D().jobs.filter((j) => ['queued', 'running'].includes(j.status)).length,
     };
   }
   const persistable = () => {
@@ -281,7 +360,7 @@ export function createWorldRuntime({ project, assets = () => [] }) {
   };
   const snapshot = () => {
     const d = D();
-    return { version: store.version, state: d.state, size: d.size, env: d.env, settings: d.settings, items: d.items, agent: d.agent, events: d.events.slice(-120), history: R.historyInfo() };
+    return { version: store.version, state: d.state, size: d.size, env: d.env, settings: d.settings, items: d.items, agent: d.agent, jobs: d.jobs.slice(-40), events: d.events.slice(-120), history: R.historyInfo(), generation: Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p, ready: ready(id) })) };
   };
   return { store, R, dispatch, capabilities: R.capabilities, say, summarize, persistable, snapshot, groundY: (x, z) => groundY(x, z, D().env) };
 }

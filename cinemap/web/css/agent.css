@@ -114,3 +114,7 @@ body.ag-running .ag-btn.stop{display:inline-block}
 .ag-say.ask .opt.rec{background:#282a2e;color:#fff}
 .ag-suggest{display:flex;flex-wrap:wrap;gap:4px;padding:4px 0}
 .ag-suggest .ag-link{background:var(--ag-well);color:var(--ag-ink)}
+
+.ag-media{margin:4px 0}
+.ag-media img,.ag-media video{display:block;width:100%;border-radius:10px;box-shadow:var(--ag-lift)}
+.ag-media small{display:block;margin-top:3px;color:var(--ag-faint)}

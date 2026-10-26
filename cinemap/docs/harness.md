@@ -100,3 +100,27 @@ node cinemap/tools/simready.mjs import bin_waste_a01   # 根 USD + payloads（�
 应用 xform，Z-up 转 Y-up，按 metersPerUnit 换算，平面法线，写二进制 glTF。编辑器用 GLTFLoader 读入、
 统一白模材质；`kind=asset:<id>` 对助手和 CLI 同样可用（`context.assets` 列出）。首页「素材」页可以搜目录并一键导入。
 SimReady 没有场景模板，只有单体资产和物理变体（PhysX / MuJoCo / Newton），所以模板那半无从复刻。
+
+## 出片：生成模型
+
+`generation.submit {provider, prompt, mode?, seconds?, aspect?, frame?}` 是付费的慢操作：立刻返回 job id，
+适配器异步推进，进度写回 `jobs[]`，每次变化推一帧快照；`generation.cancel {id}` 取消；`context.generation`
+列出可用模型和最近任务。编辑器「出片」面板把当前画面抓成 JPEG 一起提交（i2i / i2v），助手规划出片时也会带上
+当前画面（`POST …/agent` 的 `frame`）。生成是 needsConfirm 的步骤，任何模式都先确认。
+
+| provider | 上游 | 种类 |
+|---|---|---|
+| `seedream-5` | 火山 Ark `doubao-seedream-5-0-260128` | 图（2560×1440） |
+| `seedance-2.5` / `seedance-2` | 火山 Ark `doubao-seedance-2-5-260628` / `2-0` | 视频 4–30 s / 4–12 s，720p |
+| `mosshub-seedream-pro` | MossHub `doubao-seedream-5-0-pro-260628` | 图（2K） |
+| `minimax-h3` / `minimax-h3-max` | MossHub hailuo `MiniMax-H3` / `-Max` | 视频 4–15 s，768P |
+
+密钥只从文件或环境变量读，不进日志：
+
+```bash
+node cinemap/server.mjs --mosshub-key-file ~/.mosshub-key --ark-key-file ~/.ark-key
+# 或 MOSSHUB_API_KEY / ARK_API_KEY / AIGW_API_KEY（--llm-key-file）
+```
+
+MossHub 启动时会读 `/v1/models`：有 `chat_completions` 协议的模型进规划器下拉（当前是 gemini-3.1-pro-preview），
+其余按 id 归到出图 / 出片。结果文件存在 `cinemap/data/media/`，经 `/media/<file>` 提供给已登录的页面。
