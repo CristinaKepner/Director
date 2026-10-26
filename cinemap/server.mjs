@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.join(ROOT, 'web');
 const DATA = path.join(ROOT, 'data');
-const VENDOR_THREE = path.join(ROOT, '..', 'web', 'vendor', 'three');
+// Three.js (MIT) ships with the replica so it runs outside the Director checkout too
+const VENDOR_THREE = [path.join(ROOT, 'vendor', 'three'), path.join(ROOT, '..', 'web', 'vendor', 'three')].find((d) => fs.existsSync(path.join(d, 'three.module.js'))) || path.join(ROOT, 'vendor', 'three');
 import { TEMPLATES, coverSvg } from './templates.mjs';
 import { createHost } from './harness/host.mjs';
 import { createLlmPlanner, rulesPlan } from './harness/planner.mjs';
