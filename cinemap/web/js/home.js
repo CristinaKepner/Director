@@ -69,7 +69,7 @@ menu.addEventListener('click', async (e) => {
     case 'projects': return openAll('projects');
     case 'new': return startCreate('blank', '');
     case 'templates': return openAll('templates');
-    case 'assets': return toast(T('Asset library is empty in this replica.', '这个复刻版的素材库是空的。'));
+    case 'assets': return openAll('assets');
     case 'feedback': return $('feedbackDialog').showModal();
     case 'switch':
     case 'logout': {
@@ -91,7 +91,7 @@ $('tutorialLink').onclick = (e) => {
 };
 $('assetsLink').onclick = (e) => {
   e.preventDefault();
-  toast(T('Asset library is empty in this replica.', '这个复刻版的素材库是空的。'));
+  openAll('assets');
 };
 
 // ---- beta card
@@ -245,6 +245,7 @@ $('allBack').onclick = closeAll;
 document.addEventListener('keydown', (e) => e.key === 'Escape' && !all.hidden && closeAll());
 $('allSearch').oninput = () => {
   query = $('allSearch').value.trim().toLowerCase();
+  if (allMode === 'assets') return searchCatalog(query);
   renderAll();
 };
 $('listView').onclick = () => setView('list');
@@ -257,8 +258,89 @@ function setView(v) {
   $('gridView').setAttribute('aria-pressed', String(v === 'grid'));
   $('allItems').className = `hz-all-items ${v}`;
 }
+let importedAssets = [];
+let catalogHits = null;
+async function renderAssets() {
+  const items = $('allItems');
+  $('allTitle').textContent = T('Assets', '素材');
+  $('allSearch').placeholder = T('Search SimReady (e.g. bench, cart, lamp)', '搜索 SimReady（如 bench、cart、lamp）');
+  $('allFilters').hidden = true;
+  importedAssets = (await api('/api/assets').catch(() => ({ assets: [] }))).assets;
+  $('allCount').textContent = importedAssets.length;
+  items.className = 'hz-all-items grid';
+  items.replaceChildren();
+  $('allEmpty').hidden = true;
+  const head = document.createElement('li');
+  head.className = 'hz-all-sec-head';
+  head.innerHTML = `<h3>${T('Imported', '已导入')}</h3><p>${T('NVIDIA SimReady assets (CC-BY-4.0), converted to white-model GLB. Geometry only; textures are not downloaded.', 'NVIDIA SimReady 资产（CC-BY-4.0），已转成白模 GLB。只取几何，不下载贴图。')}</p>`;
+  items.append(head);
+  for (const a of importedAssets) {
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="hz-all-card asset"><span class="th"><img alt=""></span><span class="nm"><span></span></span><span class="ds"></span><span class="meta"></span></div>`;
+    li.querySelector('img').src = a.thumb || '';
+    li.querySelector('.nm span').textContent = a.name;
+    li.querySelector('.ds').textContent = `${a.id} · ${a.meta?.triangles ? `${a.meta.triangles} tris` : ''}`;
+    li.querySelector('.meta').textContent = a.license;
+    items.append(li);
+  }
+  if (!importedAssets.length) {
+    const li = document.createElement('li');
+    li.className = 'hz-all-note';
+    li.textContent = T('Nothing imported yet. Search the catalog below and import one.', '还没有导入。在下面搜索目录并导入一个。');
+    items.append(li);
+  }
+  const cat = document.createElement('li');
+  cat.className = 'hz-all-sec-head';
+  cat.innerHTML = `<h3>${T('SimReady catalog', 'SimReady 目录')}</h3><p id="catalogNote">${T('Type in the search box to look up the 2,575 assets on Hugging Face.', '在搜索框里输入关键词，查找 Hugging Face 上的 2,575 个资产。')}</p>`;
+  items.append(cat);
+  if (catalogHits) {
+    for (const id of catalogHits.ids.slice(0, 40)) {
+      const li = document.createElement('li');
+      const done = importedAssets.some((a) => a.id === id);
+      li.innerHTML = `<div class="hz-all-card asset cat"><span class="nm"><span></span></span><span class="ds"></span><span class="acts"><button type="button" data-import="${id}">${done ? T('Imported', '已导入') : T('Import', '导入')}</button></span></div>`;
+      li.querySelector('.nm span').textContent = id.replace(/_[a-z]\d{2}$/i, '').replace(/_/g, ' ');
+      li.querySelector('.ds').textContent = id;
+      const b = li.querySelector('button');
+      b.disabled = done;
+      b.onclick = () => importAsset(id, b);
+      items.append(li);
+    }
+    $('catalogNote').textContent = `${catalogHits.ids.length} / ${catalogHits.total} · ${catalogHits.license}`;
+  }
+}
+async function importAsset(id, btn) {
+  btn.disabled = true;
+  btn.textContent = T('Importing…', '导入中…');
+  const r = await api('/api/assets/import', { method: 'POST', body: JSON.stringify({ id }) });
+  if (!r.job) {
+    btn.textContent = r.error || 'failed';
+    return;
+  }
+  const poll = async () => {
+    const { job } = await api(`/api/assets/jobs/${id}`);
+    btn.textContent = job.log.at(-1) || job.status;
+    if (job.status === 'running') return setTimeout(poll, 1500);
+    toast(job.status === 'done' ? T(`Imported ${id} (${job.meta.triangles} triangles)`, `已导入 ${id}（${job.meta.triangles} 个三角面）`) : `${id}: ${job.error}`);
+    renderAssets();
+  };
+  setTimeout(poll, 1200);
+}
+let catalogTimer;
+function searchCatalog(q) {
+  clearTimeout(catalogTimer);
+  if (!q) {
+    catalogHits = null;
+    return renderAssets();
+  }
+  catalogTimer = setTimeout(async () => {
+    catalogHits = await api(`/api/simready/catalog?q=${encodeURIComponent(q)}`).catch(() => ({ ids: [], total: 0, license: '' }));
+    renderAssets();
+  }, 350);
+}
 function renderAll() {
+  if (allMode === 'assets') return renderAssets();
   const isT = allMode === 'templates';
+  $('allFilters').hidden = !isT;
   $('allTitle').textContent = isT ? T('All templates', '全部模板') : T('All projects', '全部项目');
   $('allSearch').placeholder = isT ? T('Search templates', '搜索模板') : T('Search your projects', '搜索项目');
   const filters = $('allFilters');
@@ -377,5 +459,6 @@ $('pvEnter').onclick = () => {
 // deep links: #templates / #projects / #tutorial
 if (location.hash === '#templates') openAll('templates');
 else if (location.hash === '#projects') openAll('projects');
+else if (location.hash === '#assets') openAll('assets');
 else if (location.hash === '#tutorial') startCreate('tutorial', '');
 document.documentElement.dataset.homeReady = '';

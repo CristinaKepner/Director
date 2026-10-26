@@ -167,3 +167,14 @@ html[data-home=horizon] body{background:var(--cm-ground);-webkit-font-smoothing:
 .menu-lang .lang-seg button[aria-pressed=true]{background:var(--cm-paper);color:var(--cm-ink);box-shadow:var(--cm-raise)}
 @media(max-width:760px){.hz-mon{width:92vw;top:12%}.hz-say{bottom:6%}.beta-card{top:auto;bottom:0;right:0;left:0;width:auto;border-radius:20px 20px 0 0}}
 @media(prefers-reduced-motion:reduce){.hz-plus,.hz-attend .hz-caret,.hz-attend #createWorld,.hz-label:hover .hz-chev path{animation:none}}
+
+.hz-all-sec-head{grid-column:1/-1;margin-top:8px}
+.hz-all-sec-head h3{margin:0 0 4px;font:var(--cm-fw-bold) var(--cm-fs-xl)/1.3 var(--font-ui)}
+.hz-all-sec-head p{margin:0;color:var(--cm-text);font-size:var(--cm-fs-sm)}
+.hz-all-note{grid-column:1/-1;color:var(--cm-faint);font-size:var(--cm-fs-md)}
+.hz-all-card.asset{cursor:default}
+.hz-all-card.asset .th{aspect-ratio:1;background:#fff;border-radius:12px}
+.hz-all-card.asset .th img{object-fit:contain;padding:8%}
+.hz-all-card.asset.cat{padding:10px 12px;border-radius:12px;background:var(--cm-tile)}
+.hz-all-card.asset.cat .acts button{background:var(--cm-ink);color:#fff}
+.hz-all-card.asset.cat .acts button:disabled{background:var(--cm-track);color:var(--cm-sub);cursor:default}

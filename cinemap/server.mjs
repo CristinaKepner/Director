@@ -16,6 +16,10 @@ const WEB = path.join(ROOT, 'web');
 const DATA = path.join(ROOT, 'data');
 const VENDOR_THREE = path.join(ROOT, '..', 'web', 'vendor', 'three');
 import { TEMPLATES, coverSvg } from './templates.mjs';
+import { createHost } from './harness/host.mjs';
+import { createLlmPlanner, rulesPlan } from './harness/planner.mjs';
+import { listAssets, importAsset, catalog as simreadyCatalog, assetDir } from './tools/simready.mjs';
+const SHARED = path.join(ROOT, 'shared');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -172,53 +176,25 @@ class ProjectStore {
   }
 }
 
-// A tiny local stand-in for the assistant: it turns a sentence into editor actions so the
-// workspace feels alive without any model. Real deployments route this to a model gateway.
-const KINDS = [
-  { re: /灯塔|lighthouse/i, kind: 'lighthouse', zh: '灯塔', en: 'lighthouse' },
-  { re: /房子|房屋|小屋|house|cabin|home/i, kind: 'house', zh: '房子', en: 'house' },
-  { re: /树|tree/i, kind: 'tree', zh: '树', en: 'tree' },
-  { re: /船|boat|ship/i, kind: 'boat', zh: '船', en: 'boat' },
-  { re: /(?<!灯)塔(?!楼?灯)|(?<!light)tower/i, kind: 'tower', zh: '塔', en: 'tower' },
-  { re: /人|居民|person|people|character/i, kind: 'person', zh: '人', en: 'person' },
-  { re: /路灯|lamp/i, kind: 'lamp', zh: '路灯', en: 'lamp' },
-  { re: /石头|岩石|rock|stone/i, kind: 'rock', zh: '石头', en: 'rock' },
-];
-const hhmm = (h) => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
-const NUM = { 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 几: 3 };
-export function planAgentTurn({ prompt = '', lang = 'zh', world = null } = {}) {
-  const text = String(prompt).slice(0, 2000);
-  const actions = [];
-  for (const k of KINDS) {
-    if (!k.re.test(text)) continue;
-    const at = text.search(k.re);
-    const before = text.slice(Math.max(0, at - 8), at);
-    const m = /(\d+|[一两二三四五六七八九十几])\s*(?:棵|座|栋|个|艘|盏|块|名|位)?\s*[^\s，,。；;]{0,3}$/.exec(before);
-    const n = Math.min(12, m ? (Number(m[1]) || NUM[m[1]] || 1) : 1);
-    const near = /湖|水|岸|海|lake|shore|sea|water/i.test(text) ? 'water' : /路|街|road|street/i.test(text) ? 'road' : /山|坡|hill|mountain/i.test(text) ? 'hill' : 'open';
-    actions.push({ op: 'place', kind: k.kind, count: n, near });
-  }
-  if (/删|去掉|清空|remove|clear|delete/i.test(text)) actions.unshift({ op: 'clear', kind: KINDS.find((k) => k.re.test(text))?.kind ?? 'all' });
-  if (/(早上|清晨|morning)/i.test(text)) actions.push({ op: 'time', hour: 7 });
-  if (/(中午|正午|noon)/i.test(text)) actions.push({ op: 'time', hour: 12 });
-  if (/(黄昏|傍晚|日落|sunset|dusk)/i.test(text)) actions.push({ op: 'time', hour: 18.5 });
-  if (/(晚上|夜|night)/i.test(text)) actions.push({ op: 'time', hour: 22 });
-  if (/(雨|rain)/i.test(text)) actions.push({ op: 'weather', value: 'rain' });
-  if (/(雪|snow)/i.test(text)) actions.push({ op: 'weather', value: 'snow' });
-  if (/(雾|fog)/i.test(text)) actions.push({ op: 'weather', value: 'fog' });
-  const zh = lang === 'zh';
-  const summary = actions.length
-    ? actions.map((a) => (a.op === 'place' ? `${zh ? '放' : 'Place'} ${a.count} ${zh ? KINDS.find((k) => k.kind === a.kind).zh : KINDS.find((k) => k.kind === a.kind).en}${a.near !== 'open' ? (zh ? `（${{ water: '靠水边', road: '沿路', hill: '在坡上' }[a.near]}）` : ` near ${a.near}`) : ''}` : a.op === 'time' ? (zh ? `把时间拨到 ${hhmm(a.hour)}` : `Set time to ${hhmm(a.hour)}`) : a.op === 'weather' ? (zh ? `天气换成${{ rain: '雨', snow: '雪', fog: '雾' }[a.value]}` : `Weather: ${a.value}`) : zh ? '清掉' : 'Clear')).join(zh ? '；' : '; ')
-    : zh
-      ? '我没听出要摆什么。试试「在湖边放三棵树和一栋小房子」。'
-      : 'I could not tell what to place. Try "three trees and a cabin by the lake".';
-  return { ok: true, steps: actions.map((a, i) => ({ i, ...a })), say: summary, cost: 0 };
+export const planAgentTurn = ({ prompt = '', lang = 'zh' } = {}) => {
+  const p = rulesPlan(prompt, { lang });
+  return { ok: true, steps: p.steps.map((st, i) => ({ i, ...st })), say: p.reply, cost: 0 };
+};
+
+export function llmFromEnv({ log = () => {} } = {}) {
+  const args = process.argv.slice(2);
+  const arg = (k) => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
+  const key = process.env.CINEMAP_LLM_KEY || process.env.AIGW_API_KEY || process.env.LLM_API_KEY || (arg('--llm-key-file') && fs.readFileSync(arg('--llm-key-file'), 'utf8').trim()) || null;
+  if (!key) return null;
+  return createLlmPlanner({ apiKey: key, baseUrl: process.env.LLM_BASE_URL || arg('--llm-base') || undefined, model: process.env.LLM_MODEL || arg('--llm-model') || undefined, log });
 }
 
-export function createApp({ config = createConfig(), dataDir = DATA, webDir = WEB } = {}) {
+export function createApp({ config = createConfig(), dataDir = DATA, webDir = WEB, planner = null, log = () => {} } = {}) {
   const sessions = new Map(); // sid -> user
   const pending = new Map(); // sso state -> { returnTo, mode, createdAt }
   const store = new ProjectStore(path.join(dataDir, 'projects.json'));
+  const host = createHost({ store, planner, assets: listAssets, log });
+  const importJobs = new Map(); // id -> { id, status, log: [], meta, error }
   const mockUser = {
     id: 'u_local_demo',
     name: 'Local Creator',
@@ -385,10 +361,92 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
         return json(res, 200, { ok: true });
       }
     }
+    // ---------- Harness: capabilities, actions, agent, snapshots (SSE)
+    if (p === '/api/health') return json(res, 200, { ok: true, version: 'cinemap-replica/0.3', ...host.health(), signedIn: !!session });
+    if (p === '/api/capabilities') return json(res, 200, host.capabilities(url.searchParams.get('project') || undefined));
+    {
+      const m = /^\/api\/capabilities\/([a-z.-]+)$/.exec(p);
+      if (m) {
+        const c = host.capabilities().find((x) => x.name === m[1]);
+        return c ? json(res, 200, c) : json(res, 404, { error: 'UNKNOWN_ACTION' });
+      }
+    }
+    {
+      const m = /^\/api\/projects\/([\w-]{1,80})\/(actions|agent|events|context)$/.exec(p);
+      if (m) {
+        if (!session) return json(res, 401, { error: 'unauthorized' });
+        const project = store.get(m[1]);
+        if (!project || project.ownerId !== session.user.id) return json(res, 404, { error: 'not found', code: 'PROJECT_NOT_FOUND' });
+        const id = m[1];
+        if (m[2] === 'context' && method === 'GET') return json(res, 200, host.context(id));
+        if (m[2] === 'events' && method === 'GET') {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+          res.write(': hello\n\n');
+          const off = host.subscribe(id, (frame) => res.write(`data: ${JSON.stringify(frame)}\n\n`));
+          const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+          req.on('close', () => {
+            clearInterval(ping);
+            off?.();
+          });
+          return;
+        }
+        if (m[2] === 'actions' && method === 'POST') {
+          const body = await readBody(req);
+          if (!body.action) return json(res, 400, { ok: false, error: 'MISSING_ACTION' });
+          if (body.action === 'agent.run') return json(res, 200, await host.runAgent(id, { ...body.payload, lang: body.payload?.lang || req.headers['x-cinemap-lang'] || 'zh' }));
+          const meta = { ...(body.meta || {}), source: body.meta?.source || (req.headers['x-cinemap-source'] === 'cli' ? 'cli' : 'human'), actorId: body.meta?.actorId || session.user.name };
+          return json(res, 200, host.invoke(id, body.action, body.payload || {}, meta));
+        }
+        if (m[2] === 'agent' && method === 'POST') {
+          const body = await readBody(req);
+          return json(res, 200, await host.runAgent(id, { text: body.text ?? body.prompt, mode: body.mode, backend: body.backend, force: body.force === true, lang: body.lang || 'zh' }));
+        }
+        return json(res, 405, { error: 'method' });
+      }
+    }
     if (p === '/api/agent' && method === 'POST') {
       if (!session) return json(res, 401, { error: 'unauthorized' });
       const body = await readBody(req);
+      if (body.projectId) return json(res, 200, await host.runAgent(body.projectId, { text: body.prompt ?? body.text, mode: body.mode, backend: body.backend, lang: body.lang }));
       return json(res, 200, planAgentTurn(body));
+    }
+    // ---------- Assets (SimReady imports)
+    if (p === '/api/assets' && method === 'GET') return json(res, 200, { assets: listAssets() });
+    if (p === '/api/assets/import' && method === 'POST') {
+      if (!session) return json(res, 401, { error: 'unauthorized' });
+      const body = await readBody(req);
+      const id = String(body.id || '');
+      if (!/^[\w.-]{1,120}$/.test(id)) return json(res, 400, { error: 'bad id' });
+      const job = { id, status: 'running', log: [], startedAt: Date.now() };
+      importJobs.set(id, job);
+      importAsset(id, { log: (m) => job.log.push(m) })
+        .then((meta) => Object.assign(job, { status: 'done', meta }))
+        .catch((err) => Object.assign(job, { status: 'failed', error: String(err.message) }));
+      return json(res, 202, { job });
+    }
+    {
+      const m = /^\/api\/assets\/jobs\/([\w.-]+)$/.exec(p);
+      if (m) return importJobs.has(m[1]) ? json(res, 200, { job: importJobs.get(m[1]) }) : json(res, 404, { error: 'no job' });
+    }
+    if (p === '/api/simready/catalog') {
+      if (!session) return json(res, 401, { error: 'unauthorized' });
+      try {
+        const cat = await simreadyCatalog({ refresh: url.searchParams.has('refresh') });
+        const q = (url.searchParams.get('q') || '').toLowerCase();
+        const ids = q ? cat.ids.filter((x) => x.toLowerCase().includes(q)) : cat.ids;
+        return json(res, 200, { total: cat.ids.length, license: cat.license, source: cat.source, fetchedAt: cat.fetchedAt, ids: ids.slice(0, 200) });
+      } catch (err) {
+        return json(res, 502, { error: err.message });
+      }
+    }
+    {
+      const m = /^\/assets\/([\w.-]+)\/(model\.glb|thumb\.png|LICENSE\.txt|meta\.json)$/.exec(p);
+      if (m) {
+        const file = path.join(assetDir(m[1]), m[2]);
+        if (!fs.existsSync(file)) return json(res, 404, { error: 'not found' });
+        res.writeHead(200, { 'Content-Type': m[2].endsWith('.glb') ? 'model/gltf-binary' : m[2].endsWith('.png') ? 'image/png' : m[2].endsWith('.json') ? 'application/json' : 'text/plain', 'Cache-Control': 'public, max-age=3600' });
+        return res.end(fs.readFileSync(file));
+      }
     }
     if (p === '/api/scenes' || p.startsWith('/api/scenes?')) {
       if (!session) return json(res, 401, { error: 'unauthorized' });
@@ -418,7 +476,10 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
       if (!id && method === 'POST') return json(res, 201, { project: store.create(session.user.id, await readBody(req)) });
       const project = id && store.get(id);
       if (!project || project.ownerId !== session.user.id) return json(res, 404, { error: 'not found', code: 'PROJECT_NOT_FOUND' });
-      if (method === 'GET') return json(res, 200, { project });
+      if (method === 'GET') {
+        host.flush(id); // reads see the runtime's latest world, not the debounced copy
+        return json(res, 200, { project });
+      }
       if (method === 'PATCH') {
         const body = await readBody(req);
         const patch = {};
@@ -429,7 +490,10 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
         if (Array.isArray(body.conversation)) patch.conversation = body.conversation.slice(-200);
         return json(res, 200, { project: store.update(id, patch) });
       }
-      if (method === 'DELETE') return json(res, 200, { ok: store.remove(id) });
+      if (method === 'DELETE') {
+        host.close(id);
+        return json(res, 200, { ok: store.remove(id) });
+      }
       return json(res, 405, { error: 'method' });
     }
 
@@ -444,6 +508,11 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
 
     // ---------- Static
     if (method !== 'GET' && method !== 'HEAD') return json(res, 405, { error: 'method' });
+    if (p.startsWith('/shared/')) {
+      const file = path.join(SHARED, path.normalize(decodeURIComponent(p.slice('/shared/'.length))).replace(/^(\.\.[/\\])+/, ''));
+      if (file.startsWith(SHARED) && fs.existsSync(file) && fs.statSync(file).isFile()) return sendFile(res, file);
+      return json(res, 404, { error: 'not found' });
+    }
     if (p.startsWith('/vendor/three/')) {
       const rel = path.normalize(decodeURIComponent(p.slice('/vendor/three/'.length))).replace(/^(\.\.[/\\])+/, '');
       const file = path.join(VENDOR_THREE, rel);
@@ -463,15 +532,18 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
       json(res, err.status || 500, { error: err.message || 'internal' });
     });
   });
-  return { server, sessions, store, config };
+  return { server, sessions, store, config, host };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const args = process.argv.slice(2);
   const portIdx = args.indexOf('--port');
   const port = Number(portIdx >= 0 ? args[portIdx + 1] : process.env.PORT || 5180);
-  const { server } = createApp();
+  const log = (m) => console.log(`[cinemap] ${m}`);
+  const planner = llmFromEnv({ log });
+  const { server } = createApp({ planner, log });
   server.listen(port, '127.0.0.1', () => {
     console.log(`cinemap replica listening on http://localhost:${port}/login`);
+    console.log(planner ? `agent planner: ${planner.name} @ ${planner.baseUrl} default ${planner.model}` : 'agent planner: rules (set CINEMAP_LLM_KEY / AIGW_API_KEY or --llm-key-file for a model)');
   });
 }

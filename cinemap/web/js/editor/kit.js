@@ -1,6 +1,7 @@
 // White-model kit: every placeable thing is a THREE.Group built from primitives. Paper white
 // walls, pale roofs, sage trees, chalk-blue water — the same palette as the login world.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0, ...extra });
 export const MATS = {
   wall: mat(0xf6f5f2),
@@ -189,5 +190,30 @@ export function build(kind, seed = 1) {
   g.traverse((o) => {
     if (o.isMesh) o.userData.root = g;
   });
+  return g;
+}
+
+// Imported assets (SimReady → GLB): loaded once, cloned per placement, drawn as white model.
+const gltfCache = new Map();
+const loader = new GLTFLoader();
+export function buildAsset(id) {
+  const g = new THREE.Group();
+  g.userData.kind = `asset:${id}`;
+  const placeholder = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), MATS.ghost);
+  placeholder.position.y = 0.5;
+  g.add(placeholder);
+  if (!gltfCache.has(id)) gltfCache.set(id, loader.loadAsync(`/assets/${id}/model.glb`).then((gltf) => gltf.scene));
+  gltfCache.get(id).then((scene) => {
+    g.remove(placeholder);
+    const inst = scene.clone(true);
+    inst.traverse((o) => {
+      if (o.isMesh) {
+        o.material = MATS.wall;
+        o.castShadow = o.receiveShadow = true;
+        o.userData.root = g;
+      }
+    });
+    g.add(inst);
+  }).catch(() => (placeholder.material = MATS.accent));
   return g;
 }

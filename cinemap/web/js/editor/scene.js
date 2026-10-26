@@ -2,7 +2,8 @@
 // hill, roads, and a registry of item groups with picking.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { build, MATS } from './kit.js';
+import { build, buildAsset, MATS } from './kit.js';
+import { groundY as sharedGroundY, riverX } from '/shared/worldgen.js';
 
 export function createStage(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -58,7 +59,7 @@ export function createStage(canvas) {
     waterMesh = null;
     if (env.water) {
       const wm = new THREE.MeshStandardMaterial({ color: 0xbfd7e6, roughness: 0.55, metalness: 0.05, transparent: true, opacity: 0.92 });
-      if (env.water.axis === 'x') {
+      if (env.water.kind === 'sea') {
         const w = half + env.water.at;
         const sea = new THREE.Mesh(new THREE.BoxGeometry(w, 1.2, size), wm);
         sea.position.set(-half + w / 2, 0.2, 0);
@@ -77,9 +78,9 @@ export function createStage(canvas) {
           pile.position.set(env.water.at - 4 - i * 6, 0.6, 22.5 + (i % 2) * 3);
           world.add(pile);
         }
-      } else if (env.water.river) {
+      } else if (env.water.kind === 'river') {
         const pts = [];
-        for (let z = -half; z <= half; z += 8) pts.push(new THREE.Vector3(env.water.x(z), 0.3, z));
+        for (let z = -half; z <= half; z += 8) pts.push(new THREE.Vector3(riverX(env.water, z), 0.3, z));
         const curve = new THREE.CatmullRomCurve3(pts);
         const geo = new THREE.TubeGeometry(curve, 80, env.water.w, 6, false);
         geo.scale(1, 0.12, 1);
@@ -87,12 +88,12 @@ export function createStage(canvas) {
         river.position.y = 0.4;
         world.add(river);
         waterMesh = river;
-      } else if (env.water.lake) {
+      } else if (env.water.kind === 'lake') {
         const lake = new THREE.Mesh(new THREE.CylinderGeometry(env.water.r, env.water.r, 1, 40), wm);
         lake.position.set(env.water.x, 0.2, env.water.z);
         world.add(lake);
         waterMesh = lake;
-      } else if (env.water.island) {
+      } else if (env.water.kind === 'island') {
         const sea = new THREE.Mesh(new THREE.BoxGeometry(size, 1.2, size), wm);
         sea.position.y = 0.3;
         world.add(sea);
@@ -131,18 +132,9 @@ export function createStage(canvas) {
       }
     }
   }
-  const groundY = (x, z, env) => {
-    let y = 0;
-    if (env?.hill) {
-      const d = Math.hypot(x - env.hill.x, z - env.hill.z);
-      if (d < env.hill.r) y = Math.max(y, env.hill.h * (1 - d / env.hill.r) - 0.5);
-    }
-    if (env?.water?.island) y = Math.hypot(x, z) < env.water.r ? 2.1 : 0.9;
-    if (env?.water?.axis === 'x' && x < env.water.at) y = 0.8;
-    return y;
-  };
+  const groundY = (x, z, env) => sharedGroundY(x, z, env);
   function addItem(it, env) {
-    const g = build(it.kind, hashId(it.id));
+    const g = it.kind.startsWith('asset:') ? buildAsset(it.kind.slice(6)) : build(it.kind, hashId(it.id));
     g.position.set(it.x, groundY(it.x, it.z, env), it.z);
     g.rotation.y = it.rot || 0;
     g.scale.setScalar(it.scale || 1);
@@ -156,6 +148,22 @@ export function createStage(canvas) {
     if (!g) return;
     itemsGroup.remove(g);
     items.delete(id);
+  }
+  // full snapshots come from the server: add what is new, drop what is gone, move what changed
+  function applyItems(list, env) {
+    const seen = new Set();
+    for (const it of list) {
+      seen.add(it.id);
+      const g = items.get(it.id);
+      if (!g) addItem(it, env);
+      else {
+        g.userData.item = it;
+        g.position.set(it.x, groundY(it.x, it.z, env), it.z);
+        g.rotation.y = it.rot || 0;
+        g.scale.setScalar(it.scale || 1);
+      }
+    }
+    for (const id of [...items.keys()]) if (!seen.has(id)) removeItem(id);
   }
   const hashId = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 11);
   const ray = new THREE.Raycaster();
@@ -209,7 +217,7 @@ export function createStage(canvas) {
   requestAnimationFrame(loop);
   return {
     THREE, renderer, scene, camera, controls, sun, items, itemsGroup, world,
-    buildGround, addItem, removeItem, pickGround, pickItem, setClock, groundY,
+    buildGround, addItem, removeItem, applyItems, pickGround, pickItem, setClock, groundY,
     set onFrame(fn) { onFrame = fn; },
     toScreen(v) {
       const p = v.clone().project(camera);

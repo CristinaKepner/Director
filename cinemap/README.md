@@ -15,8 +15,10 @@ npm run test:cinemap     # node --test cinemap/tests
   `home.html` is the signed-in home, `app.html` → `agent.html` → `editor.html` is the workspace
   (same three-frame layering as the original); `js/editor/` is our own Three.js workshop
   (kits, per-template world generation, clock/weather lighting, placing, inspector, voice bar).
-- The assistant is a local rule planner in `server.mjs` (`planAgentTurn`); swap it for a model
-  gateway without touching the frames' message protocol (`cm:step` / `cm:result`).
+- `harness/` — the Action Registry, world runtime, planners and host that every edit goes through
+  (editor, assistant, CLI); see `docs/harness.md`. Set `CINEMAP_LLM_KEY` to plan with a model.
+- `tools/simready.mjs` + `tools/usd2glb.py` — import NVIDIA SimReady assets (CC-BY-4.0) as GLB kits.
+- `bin/cinemap.mjs` — CLI over the same actions.
 - `docs/teardown.md` — how the original client is put together and what this replica mirrors.
 
 Nothing from the original deployment is copied: shaders, fonts, images and copy are our own.

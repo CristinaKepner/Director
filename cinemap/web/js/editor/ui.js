@@ -1,7 +1,7 @@
 // Editor chrome: the left rail and its panels, placing kits with a ghost, the inspector,
 // the world clock and settings, the voice bar, help and share.
-import { KINDS, build, MATS } from './kit.js';
-export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onAsk, onVoice, saveNow }) {
+import { KINDS, build, buildAsset, MATS } from './kit.js';
+export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onSetting, onAsk, onVoice, saveNow }) {
   const $ = (s) => document.querySelector(s);
   const panels = { d5: $('#d5-panel'), insp: $('#insp'), settings: $('#settings'), help: $('#helpPanel'), share: $('#sharePanel') };
   const closeAll = (except) => {
@@ -20,6 +20,7 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
     terrain: () => kitPanel('terrain', t('Terrain', '地形')),
     build: () => kitPanel('build', t('Buildings', '建筑')),
     people: () => kitPanel('people', t('People', '人物')),
+    assets: () => assetPanel(),
     script: () => listPanel(t('Script', '剧本'), [[t('Scene 1 · Arrival', '第 1 场 · 到达'), t('2 people · 1 camera', '2 人 · 1 机位')], [t('Scene 2 · The lighthouse', '第 2 场 · 灯塔'), t('Draft', '草稿')]], t('Scenes are a sketch in this replica: the real product plans blocking, cameras and lines per scene.', '复刻版里的场只是示意：原版会按场安排动线、机位和台词。')),
     actor: () => listPanel(t('Actor', '人'), [[t('Pick a person, then give them a line', '点一个人，给他排戏'), 'E']], t('Click a person on the stage to select them.', '点场景里的人来选中。')),
     path: () => listPanel(t('Path', '动线'), [[t('Click the ground to add waypoints', '点地面加路点'), 'E'], [t('Finish', '完成'), 'Enter']], t('Paths are drawn as a sketch here.', '这里的动线只画示意。')),
@@ -77,6 +78,25 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
       body.append(extra);
     }
   }
+  function assetPanel() {
+    $('#d5-title').textContent = t('Assets', '素材');
+    body.innerHTML = `<p class="hint">${t('Imported SimReady assets (CC-BY-4.0). Pick one to place it; import more from the home page → Assets.', '已导入的 SimReady 素材（CC-BY-4.0）。点一个放进场景；在首页 → 素材 里导入更多。')}</p><div class="tiles"></div>`;
+    const tiles = body.querySelector('.tiles');
+    if (!state.assets.length) tiles.innerHTML = `<p class="hint">${t('Nothing imported yet.', '还没有导入素材。')}</p>`;
+    for (const a of state.assets) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tile asset';
+      b.innerHTML = `<img alt=""><span></span>`;
+      b.querySelector('img').src = a.thumb || '';
+      b.querySelector('span').textContent = a.name;
+      b.onclick = () => {
+        for (const x of tiles.children) x.classList.toggle('on', x === b);
+        startPlacing(`asset:${a.id}`);
+      };
+      tiles.append(b);
+    }
+  }
   const ICON = { house: 'ic-house', shed: 'ic-export', tower: 'ic-house', lighthouse: 'ic-house', lamp: 'ic-sun', bench: 'ic-ground', tree: 'ic-terrain', pine: 'ic-terrain', rock: 'ic-ground', bush: 'ic-terrain', boat: 'ic-path', person: 'ic-actor', car: 'ic-camera' };
   function listPanel(title, rows, hint, onPick) {
     $('#d5-title').textContent = title;
@@ -99,12 +119,14 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
   let placing = null;
   function startPlacing(kind) {
     cancelPlacing();
-    const ghost = build(kind, 1);
+    const ghost = kind.startsWith('asset:') ? buildAsset(kind.slice(6)) : build(kind, 1);
     ghost.traverse((o) => o.isMesh && (o.material = MATS.ghost));
+    if (kind.startsWith('asset:')) ghost.userData.ghostAsset = true;
     stage.scene.add(ghost);
     placing = { kind, ghost };
     document.body.classList.add('placing');
-    say(t(`Click to place a ${KINDS[kind].en.toLowerCase()} · Esc to cancel`, `单击放下${KINDS[kind].zh} · Esc 取消`), 0);
+    const nm = KINDS[kind] ? t(KINDS[kind].en.toLowerCase(), KINDS[kind].zh) : state.assets.find((a) => `asset:${a.id}` === kind)?.name || kind;
+    say(t(`Click to place ${nm} · Esc to cancel`, `单击放下${nm} · Esc 取消`), 0);
   }
   function cancelPlacing() {
     if (!placing) return;
@@ -129,7 +151,7 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
     if (hit && !drag) {
       cap.hidden = false;
       const it = hit.userData.item;
-      cap.textContent = t(KINDS[it.kind]?.en ?? it.kind, KINDS[it.kind]?.zh ?? it.kind);
+      cap.textContent = nameOf(it.kind);
       const [x, y] = stage.toScreen(hit.position.clone().setY(hit.position.y + 4));
       cap.style.left = `${x}px`;
       cap.style.top = `${y}px`;
@@ -163,6 +185,7 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
     }
   }, { passive: false });
 
+  const nameOf = (kind) => (KINDS[kind] ? t(KINDS[kind].en, KINDS[kind].zh) : state.assets.find((a) => `asset:${a.id}` === kind)?.name || kind);
   // ---- inspector
   let selected = null;
   function select(g) {
@@ -174,29 +197,39 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
     const it = g.userData.item;
     closeAll('insp');
     panels.insp.hidden = false;
-    $('#insp-title').textContent = t(KINDS[it.kind]?.en ?? it.kind, KINDS[it.kind]?.zh ?? it.kind);
+    $('#insp-title').textContent = nameOf(it.kind);
     $('#insp-dim').textContent = `${it.base ? t('From the template', '模板自带') : t('Placed by you', '你放的')} · x ${it.x.toFixed(0)} · z ${it.z.toFixed(0)}`;
     $('#insp-rot').value = ((it.rot * 180) / Math.PI + 360) % 360;
     $('#insp-rot-o').textContent = `${Math.round($('#insp-rot').value)}°`;
     $('#insp-scale').value = it.scale || 1;
     $('#insp-scale-o').textContent = (it.scale || 1).toFixed(2);
   }
+  let inspTimer;
+  const commit = (patch) => {
+    clearTimeout(inspTimer);
+    inspTimer = setTimeout(() => selected && onChange(selected.userData.item, patch), 220);
+  };
   $('#insp-rot').oninput = () => {
     if (!selected) return;
-    const it = selected.userData.item;
-    it.rot = ($('#insp-rot').value * Math.PI) / 180;
-    selected.rotation.y = it.rot;
+    const rot = ($('#insp-rot').value * Math.PI) / 180;
+    selected.rotation.y = rot;
     $('#insp-rot-o').textContent = `${Math.round($('#insp-rot').value)}°`;
-    onChange(it);
+    commit({ rot });
   };
   $('#insp-scale').oninput = () => {
     if (!selected) return;
-    const it = selected.userData.item;
-    it.scale = +$('#insp-scale').value;
-    selected.scale.setScalar(it.scale);
-    $('#insp-scale-o').textContent = it.scale.toFixed(2);
-    onChange(it);
+    const scale = +$('#insp-scale').value;
+    selected.scale.setScalar(scale);
+    $('#insp-scale-o').textContent = scale.toFixed(2);
+    commit({ scale });
   };
+  // after a snapshot the selected group may have been replaced
+  function refreshSelection() {
+    if (!selected) return;
+    const g = stage.items.get(selected.userData.item.id);
+    if (!g) select(null);
+    else if (g !== selected) selected = g;
+  }
   panels.insp.addEventListener('click', (e) => {
     const a = e.target.closest('[data-a]')?.dataset.a;
     if (!a || !selected) return;
@@ -204,7 +237,7 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
     if (a === 'del') {
       onRemove(it);
       select(null);
-    } else if (a === 'dup') onPlace(it.kind, it.x + 6, it.z + 2, it.rot, it.scale);
+    } else if (a === 'dup') onPlace(it.kind, it.x + 6, it.z + 2, it.rot, it.scale || 1);
     else if (a === 'focus') stage.controls.target.copy(selected.position);
   });
 
@@ -249,13 +282,7 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
   $('#st-auto').onclick = () => setBackdrop('auto');
   $('#st-sizes').onclick = (e) => {
     const s = e.target.closest('[data-size]')?.dataset.size;
-    if (s) {
-      state.env.size = +s;
-      stage.buildGround(state.env, state.settings);
-      stage.recentre(state.env.size);
-      paintClock();
-      onChange();
-    }
+    if (s) onSetting('size', +s).then(() => stage.recentre(+s));
   };
   for (const tab of panels.settings.querySelectorAll('[role=tab]'))
     tab.onclick = () => {
@@ -266,36 +293,28 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
     const l = e.target.closest('[data-lang]')?.dataset.lang;
     if (l) onAsk?.setLang?.(l);
   };
+  let hourTimer;
   function setHour(h) {
-    state.settings.hour = Math.max(5, Math.min(23, h));
-    stage.setClock(state.settings.hour, state.settings.weather);
-    paintClock();
-    onChange();
+    h = Math.max(5, Math.min(23, h));
+    stage.setClock(h, state.settings.weather); // preview at once, commit debounced
+    $('#st-time').textContent = fmt(h);
+    clockBtn.querySelector('.wc-t').textContent = fmt(h);
+    clearTimeout(hourTimer);
+    hourTimer = setTimeout(() => onSetting('hour', +h.toFixed(2)), 200);
   }
-  function setWeather(w) {
-    state.settings.weather = w;
-    stage.setClock(state.settings.hour, w);
-    paintClock();
-    onChange();
-  }
-  function setBackdrop(bg) {
-    state.settings.backdrop = bg;
-    stage.buildGround(state.env, state.settings);
-    stage.setClock(state.settings.hour, state.settings.weather);
-    paintClock();
-    onChange();
-  }
+  const setWeather = (w) => onSetting('weather', w);
+  const setBackdrop = (bg) => onSetting('backdrop', bg);
 
   // ---- corner controls
   $('[data-cc=save]').onclick = () => saveNow().then(() => say(t('Saved', '已保存')));
   $('[data-cc=history]').onclick = () => say(t('Version history is kept with the project; the viewer is not in this replica.', '版本记录随项目保存；复刻版没做查看器。'));
-  $('[data-cc=library]').onclick = () => setTool('build');
   $('[data-cc=share]').onclick = () => {
     closeAll('share');
     panels.share.hidden = false;
     $('#shareUrl').value = `${location.origin}/share/${btoa(state.projectId).replace(/=/g, '').padEnd(16, 'x')}`;
   };
   $('#shareCopy').onclick = () => navigator.clipboard?.writeText($('#shareUrl').value).then(() => say(t('Link copied', '已复制链接')));
+  $('[data-cc=library]').onclick = () => setTool('assets');
   $('#help').onclick = () => {
     const open = panels.help.hidden;
     closeAll('help');
@@ -386,5 +405,5 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onA
     a.click();
   }
   paintClock();
-  return { paintClock, select, setTool, cancelPlacing, closeAll, setHour, setWeather, setBackdrop };
+  return { paintClock, select, setTool, cancelPlacing, closeAll, setHour, setWeather, setBackdrop, refreshSelection };
 }

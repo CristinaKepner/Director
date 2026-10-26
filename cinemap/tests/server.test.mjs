@@ -138,13 +138,79 @@ test('catalog, prefs, scenes and the local agent planner', async () => {
     assert.equal(patched.project.conversation.length, 1);
 
     const plan = await (await fetch(`${base}/api/agent`, { method: 'POST', headers: h, body: JSON.stringify({ prompt: '在湖边放三棵树和一栋小房子，黄昏', lang: 'zh' }) })).json();
-    assert.deepEqual(plan.steps.map((s) => [s.op, s.kind ?? s.hour, s.count ?? null]), [['place', 'house', 1], ['place', 'tree', 3], ['time', 18.5, null]]);
-    assert.equal(plan.steps[1].near, 'water');
+    assert.deepEqual(plan.steps.map((s) => [s.action, s.payload.kind ?? s.payload.hour, s.payload.count ?? null]), [['world.place', 'tree', 3], ['world.place', 'house', 1], ['world.time', 18.5, null]]);
+    assert.equal(plan.steps[1].payload.near, 'water');
 
     const three = await fetch(`${base}/vendor/three/three.module.js`);
     assert.equal(three.status, 200);
     const escape = await fetch(`${base}/vendor/three/..%2F..%2Fpackage.json`);
     assert.notEqual(escape.status, 200);
+  } finally {
+    await close();
+  }
+});
+
+test('harness: capabilities, actions with validation, undo, events and the agent modes', async () => {
+  const { base, close } = await listen();
+  try {
+    const inter = await (await fetch(`${base}/api/tapnow/sso/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'interactive', returnTo: '/' }) })).json();
+    const allow = await fetch(`${base}/mock-tapnow/authorize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: inter.state, decision: 'allow' }) });
+    const h = { 'Content-Type': 'application/json', cookie: cookieOf(allow) };
+    const caps = await (await fetch(`${base}/api/capabilities`)).json();
+    assert.ok(caps.some((c) => c.name === 'world.place' && c.undoable));
+    assert.ok(caps.some((c) => c.name === 'agent.confirm'));
+    const { project } = await (await fetch(`${base}/api/projects`, { method: 'POST', headers: h, body: JSON.stringify({ name: 'H', starter: 'harbor_town' }) })).json();
+    const act = (action, payload = {}, meta = {}) => fetch(`${base}/api/projects/${project.id}/actions`, { method: 'POST', headers: h, body: JSON.stringify({ action, payload, meta }) }).then((r) => r.json());
+    const ctx0 = await (await fetch(`${base}/api/projects/${project.id}/context`, { headers: h })).json();
+    const baseCount = ctx0.items.length;
+    assert.ok(baseCount > 20);
+    const bad = await act('world.place', { kind: 'dragon' });
+    assert.equal(bad.ok, false);
+    assert.equal(bad.error, 'UNKNOWN_KIND');
+    const dry = await act('world.place', { kind: 'tree', count: 2 }, { dryRun: true });
+    assert.equal(dry.dryRun, true);
+    const placed = await act('world.place', { kind: 'tree', count: 2, near: 'water' });
+    assert.equal(placed.ok, true);
+    assert.equal(placed.ids.length, 2);
+    const moved = await act('world.move', { id: placed.ids[0], x: 5, z: 5 });
+    assert.equal(moved.ok, true);
+    const ctx1 = await (await fetch(`${base}/api/projects/${project.id}/context`, { headers: h })).json();
+    assert.equal(ctx1.items.length, baseCount + 2);
+    const evt = ctx1.events.find((e) => e.id === moved.eventId);
+    assert.equal(evt.source, 'human');
+    assert.equal(evt.after.x, 5);
+    assert.notEqual(evt.before.x, 5);
+    assert.equal((await act('project.undo')).ok, true);
+    assert.equal((await act('project.undo')).ok, true);
+    const ctx2 = await (await fetch(`${base}/api/projects/${project.id}/context`, { headers: h })).json();
+    assert.equal(ctx2.items.length, baseCount);
+    // collaborative: plan waits, confirm with a skip executes the rest
+    await act('agent.set-mode', { mode: 'collaborative' });
+    const run = await (await fetch(`${base}/api/projects/${project.id}/agent`, { method: 'POST', headers: h, body: JSON.stringify({ text: '放两盏路灯和一棵树，黄昏' }) })).json();
+    assert.equal(run.pending, true);
+    assert.equal(run.plan.length, 3);
+    const confirmed = await act('agent.confirm', { skip: [1] });
+    assert.equal(confirmed.okCount, 2);
+    assert.equal(confirmed.skipped, 1);
+    const ctx3 = await (await fetch(`${base}/api/projects/${project.id}/context`, { headers: h })).json();
+    assert.equal(ctx3.items.filter((i) => i.kind === 'lamp' && !i.base).length, 2);
+    assert.equal(ctx3.settings.hour, 18.5);
+    assert.ok(ctx3.agent.messages.some((m) => m.role === 'tool' && m.tool.action === 'world.place' && m.tool.ok));
+    // lead mode executes at once; clearing everything asks for confirmation unless forced
+    await act('agent.set-mode', { mode: 'lead' });
+    const lead = await (await fetch(`${base}/api/projects/${project.id}/agent`, { method: 'POST', headers: h, body: JSON.stringify({ text: '清掉所有东西' }) })).json();
+    assert.equal(lead.pending, true);
+    assert.equal((await act('agent.cancel')).ok, true);
+    const forced = await (await fetch(`${base}/api/projects/${project.id}/agent`, { method: 'POST', headers: h, body: JSON.stringify({ text: '清掉所有东西', force: true }) })).json();
+    assert.equal(forced.pending, false);
+    const ctx4 = await (await fetch(`${base}/api/projects/${project.id}/context`, { headers: h })).json();
+    assert.equal(ctx4.items.filter((i) => !i.base).length, 0);
+    // questions are answered from a read
+    const ask = await (await fetch(`${base}/api/projects/${project.id}/agent`, { method: 'POST', headers: h, body: JSON.stringify({ text: '场景里有什么？' }) })).json();
+    assert.ok(ask.reads?.[0]?.counts);
+    // persisted across runtime close/open
+    const saved = await (await fetch(`${base}/api/projects/${project.id}`, { headers: h })).json();
+    assert.equal(saved.project.world.settings.hour, 18.5);
   } finally {
     await close();
   }

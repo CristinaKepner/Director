@@ -1,9 +1,10 @@
-// Base layout for each starting point: deterministic from (starter, seed). Returns the base
-// items and the environment (shore line, roads, hill) the editor and the agent reason about.
+// Base layout for each starting point: deterministic from (starter, seed). Shared by the
+// server (authoritative world) and the editor (rendering). Everything returned is plain data.
 const seeded = (seed) => {
   let s = (seed * 2654435761) >>> 0 || 1;
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 };
+export const riverX = (w, z) => w.base + z * w.slope + w.amp * Math.sin(z * w.freq);
 export function generate(starter, seed, size = 512) {
   const r = seeded(seed + 17);
   const items = [];
@@ -28,7 +29,7 @@ export function generate(starter, seed, size = 512) {
   switch (starter) {
     case 'tutorial':
     case 'harbor_town': {
-      env.water = { axis: 'x', at: -20, side: -1 }; // sea where x < -20
+      env.water = { kind: 'sea', at: -20 };
       env.roads.push({ from: [-14, -half + 20], to: [-14, half - 20], w: 5 });
       row('house', -4, -60, -4, 70, 9, 3);
       row('house', 10, -70, 10, 80, 10, 4);
@@ -46,13 +47,14 @@ export function generate(starter, seed, size = 512) {
       break;
     }
     case 'valley_village': {
-      env.water = { river: true, x: (z) => 10 + Math.sin(z * 0.02) * 18, w: 6 };
+      env.water = { kind: 'river', base: 10, slope: 0, amp: 18, freq: 0.02, w: 6 };
       env.hill = { x: -120, z: 120, r: 110, h: 40 };
-      scatter('pine', -80, 90, 70, 26, (x, z) => Math.abs(x - env.water.x(z)) < 10);
-      scatter('tree', 50, 0, 90, 24, (x, z) => Math.abs(x - env.water.x(z)) < 10);
+      const rx = (z) => riverX(env.water, z);
+      scatter('pine', -80, 90, 70, 26, (x, z) => Math.abs(x - rx(z)) < 10);
+      scatter('tree', 50, 0, 90, 24, (x, z) => Math.abs(x - rx(z)) < 10);
       row('house', 40, -50, 44, 50, 6, 6);
       row('house', 70, -30, 74, 40, 4, 6);
-      scatter('rock', 0, 0, 120, 10, (x, z) => Math.abs(x - env.water.x(z)) < 8);
+      scatter('rock', 0, 0, 120, 10, (x, z) => Math.abs(x - rx(z)) < 8);
       row('person', 36, -20, 36, 30, 3, 2);
       break;
     }
@@ -65,7 +67,7 @@ export function generate(starter, seed, size = 512) {
       row('house', 34, -80, 40, 10, 6, 5);
       add('tower', 6, 50, 0.3);
       row('lamp', -3, -110, 3, 30, 7, 0);
-      scatter('tree', 0, -140, 60, 12, (x, z) => Math.abs(x) < 20);
+      scatter('tree', 0, -140, 60, 12, (x) => Math.abs(x) < 20);
       scatter('bush', 0, 0, 90, 14, (x) => Math.abs(x) < 12);
       row('person', 0, -80, 0, 20, 5, 4);
       break;
@@ -107,7 +109,7 @@ export function generate(starter, seed, size = 512) {
     }
     case 'snow_village': {
       env.snow = true;
-      env.water = { lake: true, x: 60, z: -40, r: 70 };
+      env.water = { kind: 'lake', x: 60, z: -40, r: 70 };
       scatter('pine', -60, 60, 90, 30, (x, z) => Math.hypot(x - 60, z + 40) < 75);
       row('house', -70, -20, -20, 20, 7, 5);
       row('house', -30, 40, 30, 60, 5, 5);
@@ -125,7 +127,7 @@ export function generate(starter, seed, size = 512) {
       break;
     }
     case 'island': {
-      env.water = { island: true, r: 150 };
+      env.water = { kind: 'island', r: 150 };
       env.hill = { x: 0, z: 0, r: 70, h: 30 };
       scatter('pine', 0, 0, 60, 16);
       scatter('tree', 0, 0, 120, 20, (x, z) => Math.hypot(x, z) < 55);
@@ -164,3 +166,23 @@ export function generate(starter, seed, size = 512) {
   }
   return { items, env };
 }
+// height of the ground at (x, z) for an env — the same on server and client
+export function groundY(x, z, env) {
+  let y = 0;
+  if (env?.hill) {
+    const d = Math.hypot(x - env.hill.x, z - env.hill.z);
+    if (d < env.hill.r) y = Math.max(y, env.hill.h * (1 - d / env.hill.r) - 0.5);
+  }
+  if (env?.water?.kind === 'island') y = Math.hypot(x, z) < env.water.r ? 2.1 : 0.9;
+  if (env?.water?.kind === 'sea' && x < env.water.at) y = 0.8;
+  return y;
+}
+export const onWater = (x, z, env) => {
+  const w = env?.water;
+  if (!w) return false;
+  if (w.kind === 'sea') return x < w.at;
+  if (w.kind === 'lake') return Math.hypot(x - w.x, z - w.z) < w.r;
+  if (w.kind === 'island') return Math.hypot(x, z) > w.r;
+  if (w.kind === 'river') return Math.abs(x - riverX(w, z)) < w.w;
+  return false;
+};
