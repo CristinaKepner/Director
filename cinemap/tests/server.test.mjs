@@ -106,3 +106,46 @@ test('static files never escape the web root', async () => {
     await close();
   }
 });
+
+test('catalog, prefs, scenes and the local agent planner', async () => {
+  const { base, close } = await listen();
+  try {
+    const templates = await (await fetch(`${base}/api/templates`)).json();
+    assert.ok(templates.length >= 10);
+    assert.ok(templates.some((t) => t.id === 'blank'));
+    const cover = await fetch(`${base}/api/templates/harbor_town/media/cover?v=1`);
+    assert.equal(cover.status, 200);
+    assert.match(cover.headers.get('content-type'), /svg/);
+    assert.match(await cover.text(), /<svg/);
+
+    const inter = await (await fetch(`${base}/api/tapnow/sso/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'interactive', returnTo: '/' }) })).json();
+    const allow = await fetch(`${base}/mock-tapnow/authorize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: inter.state, decision: 'allow' }) });
+    const cookie = cookieOf(allow);
+    const h = { 'Content-Type': 'application/json', cookie };
+    assert.equal((await fetch(`${base}/api/prefs?key=x`)).status, 401);
+    await fetch(`${base}/api/prefs`, { method: 'POST', headers: h, body: JSON.stringify({ key: 'home.beta.dismissed', value: 1 }) });
+    const pref = await (await fetch(`${base}/api/prefs?key=home.beta.dismissed`, { headers: h })).json();
+    assert.equal(pref.value, 1);
+
+    const created = await (await fetch(`${base}/api/scenes`, { method: 'POST', headers: h, body: JSON.stringify({ name: 'Valley', starter: 'valley_village' }) })).json();
+    assert.equal(created.data.starter, 'valley_village');
+    const one = await (await fetch(`${base}/api/scenes?id=${created.data.id}`, { headers: h })).json();
+    assert.equal(one.data.name, 'Valley');
+    const missing = await fetch(`${base}/api/scenes?id=nope`, { headers: h });
+    assert.equal(missing.status, 404);
+    const patched = await (await fetch(`${base}/api/projects/${created.data.id}`, { method: 'PATCH', headers: h, body: JSON.stringify({ world: { placed: [{ id: 'p1', kind: 'tree', x: 1, z: 2 }] }, conversation: [{ role: 'user', text: 'hi' }] }) })).json();
+    assert.equal(patched.project.world.placed.length, 1);
+    assert.equal(patched.project.conversation.length, 1);
+
+    const plan = await (await fetch(`${base}/api/agent`, { method: 'POST', headers: h, body: JSON.stringify({ prompt: '在湖边放三棵树和一栋小房子，黄昏', lang: 'zh' }) })).json();
+    assert.deepEqual(plan.steps.map((s) => [s.op, s.kind ?? s.hour, s.count ?? null]), [['place', 'house', 1], ['place', 'tree', 3], ['time', 18.5, null]]);
+    assert.equal(plan.steps[1].near, 'water');
+
+    const three = await fetch(`${base}/vendor/three/three.module.js`);
+    assert.equal(three.status, 200);
+    const escape = await fetch(`${base}/vendor/three/..%2F..%2Fpackage.json`);
+    assert.notEqual(escape.status, 200);
+  } finally {
+    await close();
+  }
+});

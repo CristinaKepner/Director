@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>White Model Workshop</title>
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/ui.css">
+<link rel="stylesheet" href="/css/editor.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.js","three/addons/":"/vendor/three/addons/"}}</script>
+</head>
+<body>
+<canvas class="world-cv" id="world"></canvas>
+
+<div class="wc-center"><button type="button" class="wc" id="worldClock" aria-label="World time" title="World time"><i class="wc-sun"></i><b class="wc-t">12:00</b><i class="cm-g cm-g-chevron-down s12"></i></button></div>
+<div id="status" class="pill" hidden></div>
+<div id="corner-controls">
+  <button type="button" class="cc" data-cc="save" aria-label="Save" title="Save"><i class="ic ic-save"></i></button>
+  <button type="button" class="cc" data-cc="history" aria-label="Version history" title="Version history"><i class="ic ic-history"></i><span class="badge" hidden>1</span></button>
+  <button type="button" class="cc" data-cc="library" aria-label="Library" title="Library"><i class="ic ic-library"></i></button>
+  <button type="button" class="cc" data-cc="share" aria-label="Share" title="Share"><i class="ic ic-share"></i></button>
+  <button type="button" class="cc" data-cc="settings" aria-label="Settings" title="Settings" aria-expanded="false"><i class="ic ic-gear"></i></button>
+</div>
+
+<nav id="dock" class="d5" aria-label="Tools">
+  <div class="d5-group"><span class="d5-h">Build</span>
+    <button type="button" class="d5-b" data-tool="terrain" aria-label="Terrain" title="Terrain"><i class="ic ic-terrain"></i></button>
+    <button type="button" class="d5-b" data-tool="build" aria-label="Buildings" title="Buildings"><i class="ic ic-house"></i></button>
+    <button type="button" class="d5-b" data-tool="people" aria-label="People" title="People"><i class="ic ic-people"></i></button>
+  </div>
+  <div class="d5-group"><span class="d5-h">Direct</span>
+    <button type="button" class="d5-b" data-tool="script" aria-label="Script" title="Script"><i class="ic ic-book"></i></button>
+    <button type="button" class="d5-b on" data-tool="select" aria-label="Select" title="Select"><i class="ic ic-cursor"></i><kbd>⌥1</kbd></button>
+    <button type="button" class="d5-b" data-tool="actor" aria-label="Actor" title="Actor"><i class="ic ic-actor"></i><kbd>⌥2</kbd></button>
+    <button type="button" class="d5-b" data-tool="path" aria-label="Path" title="Path"><i class="ic ic-path"></i><kbd>⌥3</kbd></button>
+    <button type="button" class="d5-b" data-tool="camera" aria-label="Camera" title="Camera"><i class="ic ic-camera"></i><kbd>⌥4</kbd></button>
+  </div>
+  <div class="d5-group"><span class="d5-h">Export</span>
+    <button type="button" class="d5-b" data-tool="export" aria-label="Export" title="Export"><i class="ic ic-export"></i></button>
+  </div>
+  <button type="button" class="d5-b d5-more" data-tool="more" aria-label="More" title="More"><i class="ic ic-more"></i></button>
+</nav>
+<button type="button" id="help" class="help" aria-label="Help" title="Help">?<i class="help-dot"></i></button>
+
+<section id="d5-panel" class="panel side" hidden>
+  <header><button type="button" class="back" data-a="close"><i class="cm-g cm-g-back s16"></i></button><h2 id="d5-title"></h2><span class="sp"></span><button type="button" class="x" data-a="close" aria-label="Close"><i class="cm-g cm-g-close s16"></i></button></header>
+  <div id="d5-body"></div>
+</section>
+<section id="insp" class="panel side right" hidden>
+  <header><h2 id="insp-title"></h2><span class="sp"></span><button type="button" class="x" data-a="close" aria-label="Close"><i class="cm-g cm-g-close s16"></i></button></header>
+  <div class="dim" id="insp-dim"></div>
+  <div class="row"><label>Rotate</label><input type="range" id="insp-rot" min="0" max="360" step="1"><output id="insp-rot-o">0°</output></div>
+  <div class="row"><label>Scale</label><input type="range" id="insp-scale" min="0.5" max="2.5" step="0.05"><output id="insp-scale-o">1.0</output></div>
+  <div class="actions"><button type="button" class="chip" data-a="dup">Duplicate</button><button type="button" class="chip" data-a="focus">Look at</button><button type="button" class="chip danger" data-a="del">Delete</button></div>
+</section>
+<section id="settings" class="panel side right wide" hidden>
+  <div class="seg" role="tablist"><button role="tab" aria-selected="true" data-tab="world">World</button><button role="tab" aria-selected="false" data-tab="prefs">Preferences</button></div>
+  <div data-pane="world">
+    <div class="grp"><span class="grp-t"><i class="ic ic-sun"></i>Light</span><b id="st-time">12:00</b></div>
+    <input type="range" id="st-hour" min="5" max="23" step="0.25" value="12" aria-label="Time of day">
+    <div class="seg presets"><button data-hour="7">Morning</button><button data-hour="12">Noon</button><button data-hour="15.5">Afternoon</button><button data-hour="18.5">Dusk</button></div>
+    <div class="grp"><span class="grp-t"><i class="ic ic-cloud"></i>Weather</span><b id="st-weather-label"></b></div>
+    <div class="grid4" id="st-weather">
+      <button data-w="clear" class="on"><i class="ic ic-sun"></i>Clear</button><button data-w="cloudy"><i class="ic ic-cloud"></i>Cloudy</button><button data-w="overcast"><i class="ic ic-overcast"></i>Overcast</button><button data-w="rain"><i class="ic ic-rain"></i>Rain</button>
+      <button data-w="storm"><i class="ic ic-storm"></i>Storm</button><button data-w="snow"><i class="ic ic-snow"></i>Snow</button><button data-w="fog"><i class="ic ic-fog"></i>Fog</button><button data-w="agent"><i class="ic ic-spark"></i>Ask the agent</button>
+    </div>
+    <div class="grp"><span class="grp-t"><i class="ic ic-backdrop"></i>Backdrop</span><span class="chip-sm" id="st-auto">Auto</span></div>
+    <div class="grid5" id="st-backdrop">
+      <button data-bg="grass" style="--sw:#d8e5c6">Grass</button><button data-bg="forest" style="--sw:#c6d8c0">Forest</button><button data-bg="sand" style="--sw:#e7dcc3">Sand</button><button data-bg="clay" style="--sw:#e6cfc0">Clay</button><button data-bg="snow" style="--sw:#eef1f0">Snow</button>
+      <button data-bg="water" style="--sw:#c6dbe8">Water</button><button data-bg="city" style="--sw:#e3e3df">City</button><button data-bg="warm" style="--sw:#f1ebe0">Warm white</button><button data-bg="white" style="--sw:#f7f7f4">White</button><button data-bg="grey" style="--sw:#e0e1de">Light grey</button>
+    </div>
+    <div class="grp"><span class="grp-t"><i class="ic ic-ground"></i>Ground</span><b id="st-size">1 km</b></div>
+    <div class="seg presets" id="st-sizes"><button data-size="512" class="on">1 km</button><button data-size="1024">2 km</button><button data-size="2048">4 km</button></div>
+  </div>
+  <div data-pane="prefs" hidden>
+    <div class="grp"><span class="grp-t">Language</span></div>
+    <div class="seg lang-seg" id="st-lang"><button data-lang="en">English</button><button data-lang="zh">中文</button><button data-lang="ja">日本語</button><button data-lang="ko">한국어</button></div>
+    <div class="grp"><span class="grp-t">Sound</span></div>
+    <div class="row"><label>Effects</label><input type="range" min="0" max="1" step="0.05" value="0.6"><output>60%</output></div>
+    <div class="row"><label>Ambience</label><input type="range" min="0" max="1" step="0.05" value="0.4"><output>40%</output></div>
+    <div class="grp"><span class="grp-t">Quality</span></div>
+    <div class="seg presets" id="st-quality"><button data-q="low">Low</button><button data-q="auto" class="on">Auto</button><button data-q="high">High</button></div>
+  </div>
+</section>
+<section id="helpPanel" class="panel side" hidden>
+  <header><h2>Shortcuts</h2><span class="sp"></span><button type="button" class="x" data-a="close" aria-label="Close"><i class="cm-g cm-g-close s16"></i></button></header>
+  <dl class="keys">
+    <dt><kbd>Space</kbd></dt><dd>Hold to talk</dd>
+    <dt><kbd>/</kbd></dt><dd>Type a request</dd>
+    <dt><kbd>⌥1</kbd>–<kbd>⌥4</kbd></dt><dd>Select · Actor · Path · Camera</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Cancel placing, close panels</dd>
+    <dt><kbd>⌘Z</kbd></dt><dd>Undo</dd>
+    <dt><kbd>Shift</kbd></dt><dd>Keep placing after a drop</dd>
+    <dt><kbd>Drag</kbd></dt><dd>Orbit · Right drag pans · Wheel zooms</dd>
+  </dl>
+</section>
+<section id="sharePanel" class="panel side right" hidden>
+  <header><h2>Share</h2><span class="sp"></span><button type="button" class="x" data-a="close" aria-label="Close"><i class="cm-g cm-g-close s16"></i></button></header>
+  <p class="hint">A read-only link to this world. Anyone with the link can look around.</p>
+  <label class="share-url"><input id="shareUrl" readonly><button type="button" class="chip" id="shareCopy">Copy</button></label>
+</section>
+
+<div class="coach" id="coach" hidden><i class="ic ic-spark"></i><span id="coachText"></span><button type="button" class="x" aria-label="Dismiss"><i class="cm-g cm-g-close s12"></i></button></div>
+<form class="voicebar" id="voicebar">
+  <button type="button" class="vb-plus" id="vbPlus" aria-label="Attach"><i class="cm-g cm-g-plus s16"></i></button>
+  <div class="vb-hint" id="vbHint"><span class="vb-hold">Hold</span><kbd>Space</kbd><span class="vb-say">to talk ·</span><kbd>/</kbd><span>to type</span></div>
+  <input class="vb-input" id="vbInput" placeholder="Describe what to place…" autocomplete="off" hidden>
+  <div class="vb-listen" id="vbListen" hidden><span class="vb-wave"><i></i><i></i><i></i><i></i><i></i></span><span>Listening…</span></div>
+  <button type="button" class="vb-live" id="vbLive"><span class="vb-bars"><i></i><i></i><i></i></span>Live</button>
+</form>
+<button type="button" class="compass" id="compass" aria-label="Recentre" title="Recentre"><i class="ic ic-compass"></i></button>
+<div class="label" id="caption" hidden></div>
+<div class="cm-toast-lane" id="toasts"></div>
+<script type="module" src="/js/editor/main.js"></script>
+</body>
+</html>

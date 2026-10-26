@@ -6,11 +6,34 @@
 <title>Cinemap — Build 3D worlds from words</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/tokens.css">
-<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/ui.css">
+<link rel="stylesheet" href="/css/workspace.css">
 </head>
 <body>
-<div id="workspace"></div>
-<div id="toast" role="status" hidden></div>
+<section id="workspace">
+  <iframe id="studio" title="Cinemap studio" allow="microphone; camera; autoplay"></iframe>
+  <div class="project-pill">
+    <button id="projectHome" aria-label="Back to projects" data-en-aria-label="Back to projects"><i class="cm-g cm-g-back" aria-hidden="true"></i></button>
+    <button id="projectTitle" aria-label="Rename project" data-en-aria-label="Rename project"></button>
+    <span id="saveStatus" role="status"></span>
+  </div>
+  <div class="editor-account"><button class="avatar" data-account aria-label="Account and project menu" aria-expanded="false"><img alt="" referrerpolicy="no-referrer"></button></div>
+  <div id="accountMenu" class="account-menu" hidden>
+    <div class="account-heading"><span class="avatar small" id="menuAvatar"><img alt="" referrerpolicy="no-referrer"></span><div><strong id="accountName"></strong><small id="accountEmail"></small></div></div>
+    <div class="menu-divider"></div>
+    <button data-menu="projects"><i class="cm-g cm-g-folder s16"></i>All projects</button>
+    <button data-menu="new"><i class="cm-g cm-g-new s16"></i>New project</button>
+    <div class="menu-divider"></div>
+    <button data-menu="rename"><i class="cm-g cm-g-new s16"></i>Rename project</button>
+    <button data-menu="copy"><i class="cm-g cm-g-templates s16"></i>Save a copy</button>
+    <button data-menu="activity"><i class="cm-g cm-g-clock s16"></i>Activity history</button>
+    <div class="menu-divider"></div>
+    <button data-menu="logout"><i class="cm-g cm-g-signout s16"></i>Sign out of Cinemap</button>
+  </div>
+  <div id="loading" class="loading-screen"><span class="loader"></span><h2 id="loadingTitle">Opening your world</h2><p id="loadingDetail">Preparing your 3D canvas…</p><button id="cancelLoad" class="text-button">Back to projects</button></div>
+  <dialog id="activityDialog" aria-labelledby="activityTitle"><h2 id="activityTitle">Activity history</h2><p class="muted">Edits and conversations, saved with this project.</p><div id="activityList" class="activity-list"></div><footer><button type="button" id="activityClose" class="ghost">Close</button></footer></dialog>
+  <div id="toast" role="status" hidden></div>
+</section>
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>

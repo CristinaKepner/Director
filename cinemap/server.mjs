@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.join(ROOT, 'web');
 const DATA = path.join(ROOT, 'data');
+const VENDOR_THREE = path.join(ROOT, '..', 'web', 'vendor', 'three');
+import { TEMPLATES, coverSvg } from './templates.mjs';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -142,12 +144,15 @@ class ProjectStore {
       id: crypto.randomUUID(),
       ownerId,
       name: String(name || 'Untitled world').slice(0, 100),
-      starter,
+      starter: TEMPLATES.some((t) => t.id === starter) ? starter : 'blank',
       prompt: String(prompt || '').slice(0, 4000),
       createdAt: now,
       updatedAt: now,
+      seed: Math.floor(Math.random() * 1e9),
       scene: null,
+      world: null,
       activity: [],
+      conversation: [],
     };
     this.projects.set(project.id, project);
     this.save();
@@ -167,6 +172,49 @@ class ProjectStore {
   }
 }
 
+// A tiny local stand-in for the assistant: it turns a sentence into editor actions so the
+// workspace feels alive without any model. Real deployments route this to a model gateway.
+const KINDS = [
+  { re: /灯塔|lighthouse/i, kind: 'lighthouse', zh: '灯塔', en: 'lighthouse' },
+  { re: /房子|房屋|小屋|house|cabin|home/i, kind: 'house', zh: '房子', en: 'house' },
+  { re: /树|tree/i, kind: 'tree', zh: '树', en: 'tree' },
+  { re: /船|boat|ship/i, kind: 'boat', zh: '船', en: 'boat' },
+  { re: /(?<!灯)塔(?!楼?灯)|(?<!light)tower/i, kind: 'tower', zh: '塔', en: 'tower' },
+  { re: /人|居民|person|people|character/i, kind: 'person', zh: '人', en: 'person' },
+  { re: /路灯|lamp/i, kind: 'lamp', zh: '路灯', en: 'lamp' },
+  { re: /石头|岩石|rock|stone/i, kind: 'rock', zh: '石头', en: 'rock' },
+];
+const hhmm = (h) => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+const NUM = { 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 几: 3 };
+export function planAgentTurn({ prompt = '', lang = 'zh', world = null } = {}) {
+  const text = String(prompt).slice(0, 2000);
+  const actions = [];
+  for (const k of KINDS) {
+    if (!k.re.test(text)) continue;
+    const at = text.search(k.re);
+    const before = text.slice(Math.max(0, at - 8), at);
+    const m = /(\d+|[一两二三四五六七八九十几])\s*(?:棵|座|栋|个|艘|盏|块|名|位)?\s*[^\s，,。；;]{0,3}$/.exec(before);
+    const n = Math.min(12, m ? (Number(m[1]) || NUM[m[1]] || 1) : 1);
+    const near = /湖|水|岸|海|lake|shore|sea|water/i.test(text) ? 'water' : /路|街|road|street/i.test(text) ? 'road' : /山|坡|hill|mountain/i.test(text) ? 'hill' : 'open';
+    actions.push({ op: 'place', kind: k.kind, count: n, near });
+  }
+  if (/删|去掉|清空|remove|clear|delete/i.test(text)) actions.unshift({ op: 'clear', kind: KINDS.find((k) => k.re.test(text))?.kind ?? 'all' });
+  if (/(早上|清晨|morning)/i.test(text)) actions.push({ op: 'time', hour: 7 });
+  if (/(中午|正午|noon)/i.test(text)) actions.push({ op: 'time', hour: 12 });
+  if (/(黄昏|傍晚|日落|sunset|dusk)/i.test(text)) actions.push({ op: 'time', hour: 18.5 });
+  if (/(晚上|夜|night)/i.test(text)) actions.push({ op: 'time', hour: 22 });
+  if (/(雨|rain)/i.test(text)) actions.push({ op: 'weather', value: 'rain' });
+  if (/(雪|snow)/i.test(text)) actions.push({ op: 'weather', value: 'snow' });
+  if (/(雾|fog)/i.test(text)) actions.push({ op: 'weather', value: 'fog' });
+  const zh = lang === 'zh';
+  const summary = actions.length
+    ? actions.map((a) => (a.op === 'place' ? `${zh ? '放' : 'Place'} ${a.count} ${zh ? KINDS.find((k) => k.kind === a.kind).zh : KINDS.find((k) => k.kind === a.kind).en}${a.near !== 'open' ? (zh ? `（${{ water: '靠水边', road: '沿路', hill: '在坡上' }[a.near]}）` : ` near ${a.near}`) : ''}` : a.op === 'time' ? (zh ? `把时间拨到 ${hhmm(a.hour)}` : `Set time to ${hhmm(a.hour)}`) : a.op === 'weather' ? (zh ? `天气换成${{ rain: '雨', snow: '雪', fog: '雾' }[a.value]}` : `Weather: ${a.value}`) : zh ? '清掉' : 'Clear')).join(zh ? '；' : '; ')
+    : zh
+      ? '我没听出要摆什么。试试「在湖边放三棵树和一栋小房子」。'
+      : 'I could not tell what to place. Try "three trees and a cabin by the lake".';
+  return { ok: true, steps: actions.map((a, i) => ({ i, ...a })), say: summary, cost: 0 };
+}
+
 export function createApp({ config = createConfig(), dataDir = DATA, webDir = WEB } = {}) {
   const sessions = new Map(); // sid -> user
   const pending = new Map(); // sso state -> { returnTo, mode, createdAt }
@@ -183,6 +231,7 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
     balance: 1200,
   };
 
+  const prefs = new Map(); // userId -> { key: value }
   const sessionOf = (req) => {
     const sid = parseCookies(req.headers.cookie)[SESSION_COOKIE];
     return sid && sessions.get(sid) ? { sid, user: sessions.get(sid) } : null;
@@ -300,6 +349,65 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
       return json(res, 204, {});
     }
 
+    // ---------- Catalog and account surface (mirrors the shapes the home page reads)
+    if (p === '/api/templates') return json(res, 200, TEMPLATES);
+    {
+      const m = /^\/api\/templates\/([\w-]+)\/media\/(cover|poster|preview|preview-sm)$/.exec(p);
+      if (m) {
+        const t = TEMPLATES.find((x) => x.id === m[1]);
+        if (!t) return json(res, 404, { error: 'not found' });
+        res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' });
+        return res.end(coverSvg(t));
+      }
+    }
+    if (p === '/api/share-status') return json(res, 200, { available: true, live: true });
+    if (p === '/api/library') {
+      if (!session) return json(res, 401, { error: 'unauthorized' });
+      return json(res, 200, { data: [], next: null, usage: { bytes: 0, count: 0, quota: 1073741824 } });
+    }
+    if (p === '/api/tapnow/generation/wallet') return json(res, 200, { data: { available: String(session?.user.balance ?? 0), onHold: '0', total: String(session?.user.balance ?? 0) } });
+    if (p === '/api/tapnow/generation/transactions') return json(res, 200, { data: [], page: 1, page_size: 10, total: 0 });
+    if (p === '/api/tapnow/teams') {
+      if (!session) return json(res, 401, { error: 'unauthorized' });
+      return json(res, 200, { data: { current_org_id: session.user.orgId, tapnow_current_org_id: session.user.orgId, teams: [{ avatar_url: null, name: `${session.user.name} 的团队`, org_id: session.user.orgId, role: 'owner', type: 'individual' }] } });
+    }
+    if (p === '/api/prefs') {
+      if (!session) return json(res, 401, { error: 'unauthorized' });
+      const bag = prefs.get(session.user.id) || prefs.set(session.user.id, {}).get(session.user.id);
+      if (method === 'GET') {
+        const key = url.searchParams.get('key');
+        return json(res, 200, key ? { key, value: bag[key] ?? null } : { prefs: bag });
+      }
+      if (method === 'POST') {
+        const body = await readBody(req);
+        if (typeof body.key !== 'string') return json(res, 400, { error: 'key required' });
+        bag[body.key] = body.value;
+        return json(res, 200, { ok: true });
+      }
+    }
+    if (p === '/api/agent' && method === 'POST') {
+      if (!session) return json(res, 401, { error: 'unauthorized' });
+      const body = await readBody(req);
+      return json(res, 200, planAgentTurn(body));
+    }
+    if (p === '/api/scenes' || p.startsWith('/api/scenes?')) {
+      if (!session) return json(res, 401, { error: 'unauthorized' });
+      const id = url.searchParams.get('id');
+      if (method === 'GET' && id) {
+        const sc = store.get(id);
+        if (!sc || sc.ownerId !== session.user.id) return json(res, 404, { error: 'Project not found or unavailable to this account.' });
+        return json(res, 200, { data: sc });
+      }
+      if (method === 'GET') {
+        const list = store.list(session.user.id);
+        return json(res, 200, { data: list, next: null, total: list.length });
+      }
+      if (method === 'POST') {
+        const body = await readBody(req);
+        return json(res, 201, { data: store.create(session.user.id, body) });
+      }
+    }
+
     // ---------- Projects (session required)
     if (p.startsWith('/api/projects')) {
       if (!session) return json(res, 401, { error: 'unauthorized' });
@@ -316,7 +424,9 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
         const patch = {};
         if (typeof body.name === 'string') patch.name = body.name.slice(0, 100);
         if (body.scene !== undefined) patch.scene = body.scene;
+        if (body.world !== undefined) patch.world = body.world;
         if (Array.isArray(body.activity)) patch.activity = body.activity.slice(-500);
+        if (Array.isArray(body.conversation)) patch.conversation = body.conversation.slice(-200);
         return json(res, 200, { project: store.update(id, patch) });
       }
       if (method === 'DELETE') return json(res, 200, { ok: store.remove(id) });
@@ -334,6 +444,12 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
 
     // ---------- Static
     if (method !== 'GET' && method !== 'HEAD') return json(res, 405, { error: 'method' });
+    if (p.startsWith('/vendor/three/')) {
+      const rel = path.normalize(decodeURIComponent(p.slice('/vendor/three/'.length))).replace(/^(\.\.[/\\])+/, '');
+      const file = path.join(VENDOR_THREE, rel);
+      if (file.startsWith(VENDOR_THREE) && fs.existsSync(file) && fs.statSync(file).isFile()) return sendFile(res, file);
+      return json(res, 404, { error: 'not found' });
+    }
     const rel = path.normalize(decodeURIComponent(p)).replace(/^(\.\.[/\\])+/, '');
     const file = path.join(webDir, rel);
     if (!file.startsWith(webDir)) return json(res, 403, { error: 'forbidden' });

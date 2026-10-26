@@ -1,16 +1,130 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-home="horizon">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cinemap — Build 3D worlds from words</title>
+<meta name="theme-color" content="#f7f8f6">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/ui.css">
 <link rel="stylesheet" href="/css/home.css">
+<link rel="modulepreload" href="/js/i18n.js">
 </head>
 <body>
-<div id="home" data-view="home"></div>
-<div id="toast" role="status" hidden></div>
+<main id="home">
+  <header class="home-header">
+    <a class="brand" href="/" aria-label="Cinemap home" data-en-aria-label="Cinemap home"><svg class="brand-globe" viewBox="0 0 21 21" aria-hidden="true"><use href="#cm-globe"/></svg><span class="brand-word"><span class="brand-text">cinemap</span></span></a>
+    <nav class="home-nav">
+      <a id="tutorialLink" href="#tutorial">Tutorial</a>
+      <a id="assetsLink" href="#assets">Assets</a>
+      <button class="avatar" data-account aria-label="Account menu" aria-expanded="false" data-en-aria-label="Account menu"><img alt="" referrerpolicy="no-referrer"></button>
+    </nav>
+  </header>
+
+  <section id="horizon" class="hz hz-attend" data-testid="horizon">
+    <canvas class="hz-valley" aria-hidden="true"></canvas>
+    <div class="hz-band" aria-hidden="true"></div>
+    <div class="hz-mon turning" data-testid="horizon-monitor" aria-hidden="true"><canvas class="hz-tt"></canvas></div>
+    <div class="hz-track" role="listbox" tabindex="0" aria-orientation="horizontal" data-testid="horizon-track" aria-label="Starting point" data-en-aria-label="Starting point"></div>
+    <svg class="hz-dot" viewBox="0 0 4 4" aria-hidden="true"><path d="M1 0h2v1H1zM0 1h4v2H0zM1 3h2v1H1z"/></svg>
+    <div class="hz-tips" aria-hidden="true"></div>
+    <button type="button" class="hz-label l" data-testid="horizon-all-projects"><svg class="hz-chev l" viewBox="0 0 7 5" aria-hidden="true"><path d="M0 0h1v1H0zM1 1h1v1H1zM2 2h1v1H2zM1 3h1v1H1zM0 4h1v1H0z"/><path d="M4 0h1v1H4zM5 1h1v1H5zM6 2h1v1H6zM5 3h1v1H5zM4 4h1v1H4z"/></svg><span class="t">All projects</span><span class="n">0</span></button>
+    <button type="button" class="hz-label r" data-testid="horizon-all-templates"><span class="t">All templates</span><span class="n">0</span><svg class="hz-chev r" viewBox="0 0 7 5" aria-hidden="true"><path d="M0 0h1v1H0zM1 1h1v1H1zM2 2h1v1H2zM1 3h1v1H1zM0 4h1v1H0z"/><path d="M4 0h1v1H4zM5 1h1v1H5zM6 2h1v1H6zM5 3h1v1H5zM4 4h1v1H4z"/></svg></button>
+    <div class="hz-say">
+      <p class="hz-why" id="createHeading">What world should we create?</p>
+      <form id="createForm" class="home-composer">
+        <div id="composeTop" class="compose-top"><div id="referenceImages" class="reference-images" hidden></div></div>
+        <div class="hz-line">
+          <div class="hz-mirror ph" aria-hidden="true">Describe a world you’d like to build…</div>
+          <textarea id="worldPrompt" rows="1" maxlength="8000" placeholder="Describe a world you’d like to build…" aria-label="Describe your world"></textarea>
+          <i class="hz-caret" aria-hidden="true"></i>
+        </div>
+        <div class="compose-toolbar">
+          <div class="compose-tools">
+            <button type="button" id="attachReference" class="compose-icon" aria-label="Add images or a document" title="Add images or a document"><i class="cm-g cm-g-plus s20" aria-hidden="true"></i></button>
+            <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+            <button type="button" id="selectedStarter" class="starter-control" aria-controls="templatePicker" aria-expanded="false"><span>Starting point<i class="cm-g cm-g-chevron-down s12" aria-hidden="true"></i></span><strong id="selectedStarterName" data-tpl="blank">Blank</strong></button>
+          </div>
+          <div class="compose-tools">
+            <button type="button" class="hz-mic" data-testid="horizon-mic" aria-label="Voice input" data-en-aria-label="Voice input"><i class="cm-g cm-g-mic s20" aria-hidden="true"></i><span class="hz-stop" aria-hidden="true"></span><span class="hz-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
+            <button id="createWorld" type="submit" class="create-submit" aria-label="Create world" data-en-aria-label="Create world"><span class="hz-go-label">Start</span><i class="cm-g cm-g-forward s20" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <p id="composeMessage" role="status" hidden></p>
+      </form>
+    </div>
+    <aside class="beta-card" id="betaCard" hidden>
+      <span class="beta-kicker"><i></i>Cinemap Beta</span>
+      <h2>Welcome, early creator</h2>
+      <ul>
+        <li><i class="cm-g cm-g-star s20"></i><div><strong>Free during the beta</strong><small>Creating does not spend Tapies right now</small></div></li>
+        <li><i class="cm-g cm-g-film s20"></i><div><strong>Everything you make is kept</strong><small>Beta worlds stay in your account</small></div></li>
+        <li><i class="cm-g cm-g-clock s20"></i><div><strong>Metered later</strong><small>Priced by task difficulty, announced ahead of launch</small></div></li>
+      </ul>
+      <button type="button" id="betaStart" class="beta-go">Start creating</button>
+    </aside>
+  </section>
+
+  <section class="hz-all" id="allView" hidden>
+    <div class="hz-all-veil"></div>
+    <div class="hz-all-in">
+      <button type="button" class="hz-all-back" id="allBack"><i class="cm-g cm-g-back s16"></i><span>Home</span></button>
+      <div class="hz-all-head">
+        <h2 class="hz-all-title"><span id="allTitle">All templates</span><span class="n" id="allCount">0</span></h2>
+        <div class="library-tabs" id="allTabs" role="tablist" hidden>
+          <button role="tab" id="projectsTab" aria-selected="true">Projects<span id="projectCount"></span></button>
+          <button role="tab" id="savedTemplatesTab" aria-selected="false">My templates<span id="savedTemplateCount"></span></button>
+          <button role="tab" id="assetsTab" aria-selected="false">Assets<span id="assetCount"></span></button>
+        </div>
+        <label class="search-control hz-all-search"><i class="cm-g cm-g-search s16"></i><input type="search" id="allSearch" placeholder="Search templates" aria-label="Search templates"></label>
+        <div class="view-controls" role="group" aria-label="Library view"><button id="listView" aria-label="List view" aria-pressed="false"><i class="cm-g cm-g-list s16"></i></button><button id="gridView" class="active" aria-label="Grid view" aria-pressed="true"><i class="cm-g cm-g-grid s16"></i></button></div>
+      </div>
+      <div class="template-filters hz-all-cats" id="allFilters" role="group" aria-label="Filter starting templates"></div>
+      <div class="hz-all-body"><ul class="hz-all-items grid" id="allItems"></ul><p class="hz-all-empty" id="allEmpty" hidden>No templates found. Try a place or landscape.</p></div>
+    </div>
+  </section>
+
+  <div id="accountMenu" class="account-menu" hidden>
+    <div class="account-heading"><span class="avatar small" id="menuAvatar"><img alt="" referrerpolicy="no-referrer"></span><div><strong id="accountName"></strong><small id="accountEmail"></small></div></div>
+    <div id="menuCredits" class="menu-credits" data-i18n-ignore><span class="menu-credits-icon"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 8.2l1.8 1.8 3.4-3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span><strong id="menuCreditsValue">0</strong><button type="button" id="menuCreditsBeta" class="menu-beta">Free for now</button></div>
+    <div class="menu-divider"></div>
+    <button data-menu="projects"><i class="cm-g cm-g-folder s16"></i>All projects</button>
+    <button data-menu="new"><i class="cm-g cm-g-new s16"></i>New project</button>
+    <button data-menu="templates"><i class="cm-g cm-g-templates s16"></i>My templates</button>
+    <button data-menu="assets"><i class="cm-g cm-g-library s16"></i>Asset library</button>
+    <div class="menu-divider"></div>
+    <div class="menu-lang"><span>Language</span><div class="lang-seg" role="group" aria-label="Language"><button type="button" data-lang="en" lang="en">English</button><button type="button" data-lang="zh" lang="zh-CN">中文</button><button type="button" data-lang="ja" lang="ja">日本語</button><button type="button" data-lang="ko" lang="ko">한국어</button></div></div>
+    <div class="menu-divider"></div>
+    <button data-menu="feedback" id="feedbackMenu"><i class="cm-g cm-g-feedback s16"></i>Send feedback</button>
+    <button data-menu="switch" id="switchAccount">Switch account</button>
+    <button data-menu="logout"><i class="cm-g cm-g-signout s16"></i>Sign out of Cinemap</button>
+  </div>
+
+  <dialog id="previewDialog" class="hz-pv-card" aria-labelledby="previewTitle">
+    <div class="hz-pv-top"><img id="pvImage" class="hz-pv-still" alt=""><button type="button" class="hz-pv-nav l" id="pvPrev" aria-label="Previous template"><i class="cm-g cm-g-chevron-left s16"></i></button><button type="button" class="hz-pv-nav r" id="pvNext" aria-label="Next template"><i class="cm-g cm-g-chevron-right s16"></i></button><button type="button" class="hz-pv-x" id="pvClose" aria-label="Close preview"><i class="cm-g cm-g-close s16"></i></button></div>
+    <div class="hz-pv-info"><div class="hz-pv-text"><p class="hz-pv-kicker" id="pvKicker"></p><h2 class="hz-pv-name" id="previewTitle"></h2><p class="hz-pv-desc" id="pvDesc"></p><p class="hz-pv-facts" id="pvFacts"></p></div><button type="button" class="hz-pv-go" id="pvSelect">Select</button><button type="button" class="hz-pv-go" id="pvEnter">Enter<i class="cm-g cm-g-forward s16" aria-hidden="true"></i></button></div>
+  </dialog>
+  <dialog id="nameDialog" aria-labelledby="nameHeading">
+    <form id="nameForm" method="dialog">
+      <h2 id="nameHeading">Name your world</h2>
+      <p id="nameHint" class="muted">A small beginning. A world of possibilities.</p>
+      <label>Project name<input id="projectName" maxlength="100" autocomplete="off" placeholder="Untitled world"></label>
+      <p id="nameError" class="muted" role="alert" hidden></p>
+      <footer><button type="button" id="nameCancel" class="ghost">Cancel</button><button type="submit" id="nameSubmit" class="primary">Create world →</button></footer>
+    </form>
+  </dialog>
+  <dialog id="feedbackDialog" aria-labelledby="feedbackHeading">
+    <form id="feedbackForm" method="dialog">
+      <h2 id="feedbackHeading">Send feedback</h2>
+      <p class="muted">Tell us what went wrong or what you expected.</p>
+      <label>What happened?<textarea id="feedbackText" rows="4" placeholder="Describe what happened…"></textarea></label>
+      <footer><button type="button" class="ghost" id="feedbackCancel">Cancel</button><button type="submit" class="primary" id="feedbackSubmit">Send</button></footer>
+    </form>
+  </dialog>
+  <div id="toast" role="status" hidden></div>
+</main>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="cm-globe" viewBox="0 0 21 21"><path d="M7 0h7v1H7zM5 1h2v1H5zM14 1h2v1h-2zM3 2h2v1H3zM16 2h2v1h-2zM2 3h1v1H2zM18 3h1v1h-1zM1 4h1v1H1zM19 4h1v1h-1zM1 5h1v1H1zM19 5h1v1h-1zM0 6h1v1H0zM20 6h1v1h-1zM0 7h1v1H0zM20 7h1v1h-1zM0 8h1v1H0zM20 8h1v1h-1zM0 9h1v1H0zM20 9h1v1h-1zM0 10h21v1H0zM0 11h1v1H0zM20 11h1v1h-1zM0 12h1v1H0zM20 12h1v1h-1zM0 13h1v1H0zM20 13h1v1h-1zM0 14h1v1H0zM20 14h1v1h-1zM1 15h1v1H1zM19 15h1v1h-1zM1 16h1v1H1zM19 16h1v1h-1zM2 17h1v1H2zM18 17h1v1h-1zM3 18h2v1H3zM16 18h2v1h-2zM5 19h2v1H5zM14 19h2v1h-2zM7 20h7v1H7zM10 1h1v19h-1zM5 3h1v15H5zM15 3h1v15h-1zM3 5h1v1H3zM17 5h1v1h-1zM2 6h1v9H2zM18 6h1v9h-1zM3 15h1v1H3zM17 15h1v1h-1z"/></symbol></defs></svg>
 <script type="module" src="/js/home.js"></script>
 </body>
 </html>

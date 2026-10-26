@@ -1,0 +1,23 @@
+/* Workspace shell: the studio iframe fills the viewport; the project pill and the account avatar float over it. */
+html,body{height:100%;margin:0;overflow:hidden;background:#e9eaec}
+#workspace{position:fixed;inset:0}
+#studio{position:absolute;inset:0;width:100%;height:100%;border:0}
+.project-pill{position:absolute;left:12px;top:12px;z-index:5;display:flex;align-items:center;gap:2px;height:40px;padding:0 10px 0 4px;border-radius:999px;background:rgba(255,255,255,.88);backdrop-filter:blur(22px);box-shadow:var(--cm-e1)}
+.project-pill button{height:32px;border:0;border-radius:999px;background:transparent;font:var(--cm-fw-bold) var(--cm-fs-menu)/1 var(--font-ui);color:var(--cm-ink);cursor:pointer;padding:0 8px}
+.project-pill button:hover{background:var(--cm-ghost)}
+#projectHome{display:grid;place-items:center;width:32px;padding:0;color:var(--cm-sub)}
+#saveStatus{padding:0 6px 0 4px;color:var(--cm-faint);font-size:var(--cm-fs-sm);white-space:nowrap}
+#saveStatus:empty{display:none}
+.editor-account{position:absolute;right:12px;top:12px;z-index:5}
+.editor-account .avatar{width:40px;height:40px;box-shadow:var(--cm-e1)}
+.account-menu{top:60px;right:12px}
+.loading-screen{position:absolute;inset:0;z-index:9;display:grid;place-content:center;justify-items:center;gap:6px;background:var(--cm-ground);color:var(--cm-ink);text-align:center}
+.loading-screen[hidden]{display:none}
+.loading-screen h2{margin:14px 0 0;font-size:20px;font-weight:500}
+.loading-screen p{margin:0;color:var(--cm-sub)}
+.loader{width:28px;height:28px;border-radius:999px;border:2px solid var(--cm-track);border-top-color:var(--cm-sub);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(1turn)}}
+.text-button{margin-top:18px;height:36px;padding:0 16px;border:0;border-radius:999px;background:var(--cm-tile);font:var(--cm-fw-mid) var(--cm-fs-md)/1 var(--font-ui);color:var(--cm-ink);cursor:pointer}
+.activity-list{display:grid;gap:6px;max-height:50vh;overflow:auto;font-size:13px}
+.activity-list .row{display:flex;gap:10px;padding:8px 10px;border-radius:10px;background:var(--cm-tile)}
+.activity-list .row time{flex:none;color:var(--cm-faint);font-variant-numeric:tabular-nums}

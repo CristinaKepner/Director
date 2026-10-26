@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cinemap · Assistant</title>
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/ui.css">
+<link rel="stylesheet" href="/css/agent.css">
+</head>
+<body class="ag-collapsed ag-shell">
+<div id="stage"><iframe id="ws" title="Cinemap editor" allow="microphone; camera; autoplay"></iframe></div>
+<aside id="agentPanel" aria-label="Assistant">
+  <div class="ag-head"><h1>Assistant</h1><span class="ag-conn ok"><i></i><span>Connected</span></span><span class="sp"></span><button class="ag-icon" data-a="collapse" title="Collapse" aria-label="Collapse"><i class="cm-g cm-g-chevron-right s16"></i></button></div>
+  <div class="ag-opts">
+    <label class="ag-auto" title="Do locally-certain hits at once; hand the rest to the right assistant tier"><input type="checkbox" data-k="auto" checked> Auto</label>
+    <div class="ag-seg" data-k="mode"><button data-v="ask">Ask</button><button data-v="agent" class="on">Let the agent do it</button></div>
+    <select data-k="model" title="Tier"><option value="strong" selected>Strong</option><option value="standard">Standard</option><option value="fast">Fast</option><option value="deep">Deep</option></select>
+    <select data-k="effort" title="Reasoning"><option value="none">None</option><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+    <label title="Faster first action, double price"><input type="checkbox" data-k="fast">Fast</label>
+    <label data-show="agent" title="Let the assistant batch tool calls"><input type="checkbox" data-k="ptc">Batch calls</label>
+    <label data-show="ask" title="Send the current view along"><input type="checkbox" data-k="withView">With view</label>
+  </div>
+  <div class="ag-feed"><div class="ag-empty"><b>Ask</b>: questions about the scene (the assistant reads the scene data and the current view).<br><b>Let the agent do it</b>: one sentence, optionally with a reference image; it places things directly.<br>Send another line while it runs to interrupt. ⌘Z steps back, or press “Undo this”.</div></div>
+  <div class="ag-foot"><span class="ag-cost">This session $0</span><span class="sp"></span><button class="ag-link" data-a="undo" disabled>Undo this</button><button class="ag-link" data-a="new">New chat</button></div>
+  <div class="ag-compose"><div class="ag-box">
+    <div class="ag-thumbs"></div>
+    <textarea rows="2" placeholder="e.g. three trees and a cabin by the lake"></textarea>
+    <div class="ag-bar"><button class="ag-attach" data-a="attach" title="Attach a reference image or document" aria-label="Attach"><i class="cm-g cm-g-plus s16"></i></button><span class="hint"></span><span class="sp"></span><button class="ag-btn stop" data-a="stop">Stop</button><button class="ag-btn go" data-a="go" disabled>Start</button></div>
+  </div><input type="file" accept="image/*,.pdf,.md,.txt" multiple hidden></div>
+</aside>
+<button id="agOpen"><span class="dot"></span>Assistant</button>
+<script type="module" src="/js/agent.js"></script>
+</body>
+</html>
