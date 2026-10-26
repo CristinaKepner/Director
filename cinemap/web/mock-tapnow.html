@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TapNow (local mock) — Authorize Cinemap</title>
+<link rel="stylesheet" href="/css/tokens.css">
+<style>
+body{margin:0;min-height:100svh;display:grid;place-items:center;background:#f3f4f1;font-family:var(--cm-font);color:var(--cm-ink)}
+.card{width:min(92vw,400px);background:#fff;border-radius:20px;padding:32px;box-shadow:var(--cm-e2)}
+h1{font-size:20px;font-weight:600;margin:0 0 6px}
+p{margin:0 0 20px;color:var(--cm-sub);font-size:14px;line-height:1.5}
+label{display:grid;gap:8px;font-size:13px;font-weight:500;margin-bottom:18px}
+input{height:44px;padding:0 14px;border:1px solid var(--cm-ring);border-radius:10px;font:inherit}
+.row{display:flex;gap:10px}
+button{flex:1;height:46px;border-radius:999px;border:1px solid var(--cm-ring);background:#fff;font:inherit;font-weight:550;cursor:pointer}
+button.allow{background:var(--cm-brand);border-color:var(--cm-brand);color:#fff}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--cm-new-soft);color:var(--cm-new-ink);margin-bottom:14px}
+</style>
+</head>
+<body>
+<form class="card" id="f">
+  <span class="badge">local mock · no real TapNow account is used</span>
+  <h1>Authorize Cinemap</h1>
+  <p>Cinemap wants to sign you in with your TapNow account. This page stands in for app.tapnow.ai on localhost.</p>
+  <label>Display name<input id="name" value="Local Creator" maxlength="60"></label>
+  <div class="row">
+    <button type="button" id="deny">Cancel</button>
+    <button type="submit" class="allow">Continue</button>
+  </div>
+</form>
+<script>
+const state = new URLSearchParams(location.search).get('state') || '';
+async function decide(decision){
+  const r = await fetch('/mock-tapnow/authorize', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state, decision, name: document.getElementById('name').value})});
+  const d = await r.json().catch(()=>({}));
+  location.assign(d.next || '/login?auth_error=TAPNOW_SSO_EXPIRED');
+}
+document.getElementById('f').onsubmit = e => { e.preventDefault(); decide('allow'); };
+document.getElementById('deny').onclick = () => decide('deny');
+</script>
+</body>
+</html>

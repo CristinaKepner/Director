@@ -30,7 +30,9 @@
     "test:harness": "node --test server/tests/harness.test.mjs",
     "build:creation": "npm --prefix creation-ui run build",
     "check:creation": "creation-ui/node_modules/.bin/eslint -c creation-ui/eslint.config.mjs core/creation*.js web/js/creation-*.js creation-ui/src tests/creation.test.mjs tests/creation-agent.test.mjs && npm run build:creation",
-    "check:workflow": "creation-ui/node_modules/.bin/eslint -c creation-ui/eslint.config.mjs server/src/planner-reads.mjs tests/planner-context.test.mjs core/workflow-compose.js core/workflow-runtime-actions.js server/src/workflow-*.mjs tests/workflow-agent.test.mjs tests/workflow-runner.test.mjs tests/workflow-service.test.mjs && npm run check:creation"
+    "check:workflow": "creation-ui/node_modules/.bin/eslint -c creation-ui/eslint.config.mjs server/src/planner-reads.mjs tests/planner-context.test.mjs core/workflow-compose.js core/workflow-runtime-actions.js server/src/workflow-*.mjs tests/workflow-agent.test.mjs tests/workflow-runner.test.mjs tests/workflow-service.test.mjs && npm run check:creation",
+    "cinemap": "node cinemap/server.mjs --port 5180",
+    "test:cinemap": "node --test cinemap/tests/server.test.mjs"
   },
   "engines": {
     "node": ">=18"

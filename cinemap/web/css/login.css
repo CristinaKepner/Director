@@ -1,0 +1,104 @@
+/* Login page: two-column grid (copy panel left, world art behind), TapNow sign-in, language pills, legal footer. */
+button{cursor:pointer;border:1px solid #dedfdb;border-radius:10px;padding:11px 16px;background:#fff;color:inherit;transition:background .16s,transform .16s,box-shadow .16s}
+button:hover{background:#f0f1ee}
+button:focus-visible,a:focus-visible{outline:2px solid #7a8980;outline-offset:4px}
+button:disabled{opacity:.5;cursor:wait}
+input{width:100%;padding:13px 14px;border:1px solid #d9ddd7;border-radius:10px;background:#fff;color:inherit;outline:none}
+input:focus{border-color:#8c9b91;box-shadow:0 0 0 3px #8c9b9115}
+label{display:grid;gap:9px;font-size:13px;font-weight:500}
+h1,h2,h3,p{margin-top:0}
+p{line-height:1.6}
+.muted,.foot{font-size:14px;color:#808780}
+.primary{background:#303b34;color:#fff;border-color:#303b34}
+.primary:hover{background:#46554a}
+.brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:550;letter-spacing:-.4px}
+.brand-globe{flex-shrink:0;width:30px;height:30px;shape-rendering:crispEdges;fill:#0e3723}
+.brand-word{display:inline-flex;align-items:center;position:relative;font-family:var(--font-ui);font-weight:500;letter-spacing:-.6px;color:#0e3723}
+.brand-text{font-size:1em;letter-spacing:-.02em}
+#toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);z-index:220;max-width:90vw;border:1px solid #dde2d4;border-radius:11px;padding:13px 20px;background:#fff;box-shadow:0 7px 30px #1b281722;font-size:12px}
+
+main#login{position:relative;box-sizing:border-box;width:100%;max-width:none;min-height:100svh;margin:0;padding:64px clamp(40px,7vw,112px) 72px;display:grid;grid-template-columns:minmax(280px,380px) 1fr;align-items:center}
+main#login .login-panel{position:relative;z-index:1;min-width:0}
+main#login .brand{font-size:25px;gap:10px;width:max-content}
+main#login .brand .brand-globe{width:1.2075em;height:1.2075em}
+main#login .login-copy{margin-top:48px}
+main#login h1{font-family:var(--font-display);font-weight:420;font-size:48px;line-height:1.12;letter-spacing:-1.5px;margin:0;text-wrap:balance}
+html:is([data-ui-lang="zh"],[data-ui-lang="ja"],[data-ui-lang="ko"]) main#login h1{font-variation-settings:normal;font-weight:600;font-size:40px;line-height:1.3;letter-spacing:0}
+html[data-ui-lang="ja"] main#login h1{font-size:34px}
+html[data-ui-lang="ko"] main#login h1{word-break:keep-all}
+main#login form{display:grid;gap:16px;margin-top:36px}
+main#login #tnAccountNote{font-size:16px;margin:36px 0 0;color:var(--cm-text)}
+main#login label{font-size:15px;gap:10px;color:#3a403b}
+main#login input{height:56px;padding:0 18px;font-size:17px;border-radius:14px;border-color:#dcdfd8}
+main#login input:focus{border-color:#8fa092;box-shadow:0 0 0 4px #8fa09222}
+main#login #submit{height:58px;font-size:18px;border-radius:14px;padding:0 22px;display:flex;align-items:center;justify-content:center;gap:10px}
+main#login #tnLoginExtra{display:grid;gap:16px}
+main#login #tnLoginExtra:has(#tnInviteField[hidden]){display:none}
+main#login #tnRegistration{font-size:15px;margin:2px 0 0;color:var(--cm-text);text-align:center}
+main#login #tnRegistration a{color:#303b34;text-decoration:underline;text-underline-offset:3px}
+main#login #legacySignIn{display:grid;gap:inherit}
+
+/* TapNow primary: pill, brand green, mark + pixel arrow reveal on hover */
+main#login #tapnowSignIn{position:relative;display:flex;align-items:center;justify-content:center;gap:12px;width:100%;height:52px;min-height:46px;border-radius:999px;background:#0e3723;border:1px solid #0e3723;color:#fff;font-size:16px;font-weight:550;letter-spacing:0;padding:0 24px;transition:background .18s,transform .18s}
+main#login #tapnowSignIn:hover{background:#204a34}
+main#login #tapnowSignIn:active{transform:scale(.985)}
+main#login #tapnowSignIn:disabled{opacity:.65;cursor:wait}
+#tapnowSignIn>span{text-align:left;overflow-wrap:anywhere}
+#tapnowSignIn .tn-mark{vertical-align:-3px;width:0;height:18px;opacity:0;scale:.5;transition:.22s cubic-bezier(.2,0,0,1);transition-property:width,margin,opacity,scale}
+#tapnowSignIn .px-arrow{position:absolute;right:22px;top:18px;width:14px;opacity:0;translate:-6px 0;transition:.18s steps(3,end);transition-property:opacity,translate}
+#tapnowSignIn:is(:hover,:focus-visible):not(:disabled) .tn-mark{width:18px;margin-right:6px;opacity:1;scale:1}
+#tapnowSignIn:is(:hover,:focus-visible):not(:disabled) .px-arrow{opacity:1;translate:0;animation:login-px-hop 1s steps(1,end) .3s infinite}
+@keyframes login-px-hop{50%{transform:translateX(2px)}}
+main#login #tnInviteSubmit{display:flex;align-items:center;justify-content:center;width:100%;height:var(--cm-h-lg);padding:0 var(--cm-s8);border:0;border-radius:var(--cm-r-btn);background:var(--cm-ink);color:var(--cm-on-ink);font-size:var(--cm-fs-xl);font-weight:var(--cm-fw-mid);cursor:pointer;transition:background var(--cm-t-hover) var(--cm-ease),transform 90ms var(--cm-ease)}
+main#login #tnInviteSubmit:active{transform:scale(.98)}
+main#login #tnInviteSubmit:disabled{background:var(--cm-track);color:var(--cm-sub);cursor:wait}
+main#login button:focus-visible,main#login a:focus-visible{outline:3px solid #7e9d87;outline-offset:4px}
+main#login #loginMessage{font-size:13px;line-height:1.6;margin:16px 0 0;min-height:0;overflow-wrap:anywhere;color:#926657}
+main#login #loginMessage:empty{display:none}
+
+/* Language pills with a sliding highlight (clip-path) */
+.lang-seg{display:inline-flex;padding:2px;border-radius:9px;background:#f1f3ee;border:1px solid #e6e9e2}
+.lang-seg button{width:auto;border:0;background:transparent;padding:5px 10px;border-radius:7px;font-size:11.5px;color:#7a8374;line-height:1.2}
+.lang-seg button[aria-pressed=true]{background:#fff;color:#2f3a2b;box-shadow:0 1px 2px #1d2a1a14}
+main#login .login-lang{position:relative;margin-top:40px;background:transparent;border:0;padding:0;gap:4px}
+main#login .login-lang :is(button,span span){font-size:12px;line-height:18px;padding:6px 10px}
+main#login .login-lang button{color:var(--cm-text);box-shadow:none;background:transparent}
+main#login .login-lang button[aria-pressed=true],.lang-hl{background:#e9ede5;color:#263e2e}
+.lang-hl{position:absolute;inset:0;display:flex;gap:4px;pointer-events:none;border-radius:8px;clip-path:inset(0 100% 0 0 round 8px);transition:clip-path .26s cubic-bezier(.645,.045,.355,1)}
+.lang-hl span{border-radius:8px}
+main#login .lang-motion button[aria-pressed=true]{background:transparent}
+
+main#login .login-legal{position:absolute;z-index:1;left:clamp(40px,7vw,112px);bottom:20px;display:flex;gap:0 20px;font-size:var(--cm-fs-sm)}
+main#login .login-legal a{white-space:nowrap;display:inline-flex;align-items:center;min-height:24px;color:color-mix(in srgb,var(--cm-text) 80%,transparent);text-decoration:none}
+main#login .login-legal a:is(:hover,:focus-visible){color:var(--cm-ink);text-decoration:underline 1px;text-underline-offset:3px}
+
+/* The world behind the copy: a static gradient first, then the poster still, then the live canvas */
+.login-art{position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(100deg,var(--cm-ground) calc(7vw + 330px),transparent calc(7vw + 640px)),linear-gradient(180deg,#eef1ee 0%,#e4ebe0 48%,#dde6d6 100%) 50% 44%/cover var(--cm-ground)}
+.login-motion{position:absolute;inset:0}
+.login-motion canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;opacity:0;transition:opacity .7s}
+.login-motion-ready .login-still,.login-world-ready .login-motion canvas{opacity:1}
+.login-busy .login-motion canvas{filter:saturate(.9)}
+
+#embedLoading{display:none}
+html[data-embed="tapnow"]:not([data-embed-page="form"]) main#login,html[data-embed="tapnow"]:not([data-embed-page="form"]) #toast{display:none}
+html[data-embed="tapnow"] main#login .login-lang,html[data-embed="tapnow"] main#login .login-legal{display:none}
+html[data-embed="tapnow"]:not([data-embed-page="form"]) #embedLoading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:0 var(--cm-s8);text-align:center}
+#embedLoading .embed-spinner{width:var(--cm-h-xs);height:var(--cm-h-xs);box-sizing:border-box;border-radius:var(--cm-r-full);border:2px solid var(--cm-track);border-top-color:var(--cm-sub);animation:embed-spin .8s linear infinite}
+#embedFailed{display:none;flex-direction:column;align-items:center;gap:var(--cm-s6);margin:0;font-size:var(--cm-fs-md);color:var(--cm-sub)}
+#embedLoading[data-state] .embed-spinner{display:none}
+#embedLoading[data-state] #embedFailed{display:flex}
+#embedRetry{height:var(--cm-h-md);padding:0 var(--cm-s8);border:0;border-radius:var(--cm-r-btn);background:var(--cm-ink);color:var(--cm-on-ink);font:inherit;font-weight:var(--cm-fw-mid);white-space:nowrap;cursor:pointer}
+@keyframes embed-spin{to{transform:rotate(1turn)}}
+
+@media(max-width:760px){
+  .login-art{background:linear-gradient(color-mix(in srgb,var(--cm-ground) 90%,transparent) 45%,transparent 80%),linear-gradient(180deg,#eef1ee,#dde6d6) 42% 68%/cover var(--cm-ground)}
+  main#login{max-width:440px;padding:48px 28px 148px;grid-template-columns:1fr;align-content:safe center}
+  main#login .brand{font-size:24px}
+  main#login .login-copy{margin-top:40px}
+  main#login h1{font-size:42px}
+  html:is([data-ui-lang="zh"],[data-ui-lang="ja"],[data-ui-lang="ko"]) main#login h1{font-size:clamp(28px,8vw,36px)}
+  html[data-ui-lang="ja"] main#login h1{font-size:clamp(24px,7.3vw,30px)}
+  main#login .login-lang{margin-top:32px}
+  main#login .login-legal{left:28px;right:28px;bottom:16px;flex-wrap:wrap;gap:0 14px}
+}
+@media(prefers-reduced-motion:reduce){.px-arrow{animation:none!important}*{transition:none!important}}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cinemap — Build 3D worlds from words</title>
+<meta name="theme-color" content="#f7f8f6">
+<meta name="description" content="Describe a world in words. An AI agent builds it in 3D — cities, landscapes and film sets, ready to explore and film.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="modulepreload" href="/js/locales.js">
+<link rel="modulepreload" href="/js/lang.js">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/login.css">
+<script>
+// Embed bootstrap: when the page is framed by the TapNow shell (?embed=tapnow) the login
+// chrome stays hidden and a spinner is shown until the silent sign-in settles.
+(function(){var q=new URLSearchParams(location.search),a=q.get('embed')==='tapnow',d=document.documentElement.dataset;try{var s=sessionStorage;if(a)s.setItem('cinemap.embed','tapnow');a=a||s.getItem('cinemap.embed')==='tapnow'}catch(e){}if(!a)return;d.embed='tapnow';if(['CINEMAP_INVITE_REQUIRED','CINEMAP_INVITE_INVALID'].indexOf(q.get('auth_error'))>=0)d.embedPage='form';else d.tapnowSignIn='pending'})()
+</script>
+</head>
+<body>
+<main id="login" data-login-frame="tapnow">
+  <section class="login-panel">
+    <a class="brand" href="/">
+      <svg class="brand-globe" viewBox="0 0 21 21" aria-hidden="true"><use href="#cm-globe"/></svg>
+      <span class="brand-word"><span class="brand-text">cinemap</span></span>
+    </a>
+    <div class="login-copy">
+      <h1>Every world starts<br>with an idea.</h1>
+    </div>
+    <p id="tnAccountNote" class="muted" data-i18n-ignore="true" hidden></p>
+    <form id="loginForm" data-testid="auth-form">
+      <button type="button" id="tapnowSignIn" class="primary sso-primary" data-testid="auth-tapnow" data-i18n-ignore="true">
+        <span>Continue with <span class="tn"><svg class="tn-mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="#fff"/><path d="M5 6h8v2h-3v6H8V8H5z" fill="#0e3723"/></svg>TapNow</span></span>
+        <svg class="px-arrow" viewBox="0 0 7 7" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 0h1v1H3zM4 1h1v1H4zM5 2h1v1H5zM0 3h7v1H0zM5 4h1v1H5zM4 5h1v1H4zM3 6h1v1H3z"/></svg>
+      </button>
+      <div id="tnLoginExtra" data-i18n-ignore="true" hidden>
+        <label id="tnInviteField" hidden><span id="tnInviteLabel"></span><input id="tnInvite" autocomplete="off" maxlength="200"></label>
+        <button type="button" id="tnInviteSubmit" class="primary" data-testid="auth-invite-submit" hidden>Enter Cinemap</button>
+      </div>
+      <div id="legacySignIn" hidden>
+        <label>Account or email<input data-testid="auth-email" id="email" type="text" autocomplete="username" required disabled></label>
+        <label>Password<input data-testid="auth-password" id="password" type="password" autocomplete="current-password" required disabled></label>
+        <button class="primary" id="submit" data-testid="auth-submit" disabled>Continue <i class="cm-g cm-g-forward s20" aria-hidden="true"></i></button>
+      </div>
+      <p id="tnRegistration" class="muted" data-i18n-ignore="true" hidden></p>
+    </form>
+    <p id="loginMessage" role="status"></p>
+    <div class="lang-seg login-lang" role="group" aria-label="Language">
+      <button type="button" data-testid="locale-en" data-lang="en" lang="en">English</button>
+      <button type="button" data-testid="locale-zh" data-lang="zh" lang="zh-CN">中文</button>
+      <button type="button" data-testid="locale-ja" data-lang="ja" lang="ja">日本語</button>
+      <button type="button" data-testid="locale-ko" data-lang="ko" lang="ko">한국어</button>
+      <span class="lang-hl" aria-hidden="true"><span lang="en">English</span><span lang="zh-CN">中文</span><span lang="ja">日本語</span><span lang="ko">한국어</span></span>
+    </div>
+  </section>
+  <nav class="login-legal" aria-label="Legal" data-testid="login-legal">
+    <a href="/legal/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+    <a href="/legal/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+    <a href="/legal/community" target="_blank" rel="noopener noreferrer">Community Guidelines</a>
+    <a href="/legal/license" target="_blank" rel="noopener noreferrer">Generated Content License</a>
+  </nav>
+  <div class="login-art" id="loginArt" aria-hidden="true"><div class="login-motion"></div></div>
+</main>
+<div id="embedLoading" data-testid="embed-loading" role="status" aria-busy="true" aria-label="Loading…" data-i18n-ignore="true">
+  <span class="embed-spinner" aria-hidden="true"></span>
+  <p id="embedFailed"><span id="embedFailedText">Couldn't load</span><button type="button" id="embedRetry" data-testid="embed-retry">Retry</button></p>
+</div>
+<div id="toast" role="status" hidden></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Original pixel globe: 21×21 grid, meridians + equator band. -->
+    <symbol id="cm-globe" viewBox="0 0 21 21">
+      <path d="M7 0h7v1H7zM5 1h2v1H5zM14 1h2v1h-2zM3 2h2v1H3zM16 2h2v1h-2zM2 3h1v1H2zM18 3h1v1h-1zM1 4h1v1H1zM19 4h1v1h-1zM1 5h1v1H1zM19 5h1v1h-1zM0 6h1v1H0zM20 6h1v1h-1zM0 7h1v1H0zM20 7h1v1h-1zM0 8h1v1H0zM20 8h1v1h-1zM0 9h1v1H0zM20 9h1v1h-1zM0 10h21v1H0zM0 11h1v1H0zM20 11h1v1h-1zM0 12h1v1H0zM20 12h1v1h-1zM0 13h1v1H0zM20 13h1v1h-1zM0 14h1v1H0zM20 14h1v1h-1zM1 15h1v1H1zM19 15h1v1h-1zM1 16h1v1H1zM19 16h1v1h-1zM2 17h1v1H2zM18 17h1v1h-1zM3 18h2v1H3zM16 18h2v1h-2zM5 19h2v1H5zM14 19h2v1h-2zM7 20h7v1H7zM10 1h1v19h-1zM5 3h1v15H5zM15 3h1v15h-1zM3 5h1v1H3zM17 5h1v1h-1zM2 6h1v9H2zM18 6h1v9h-1zM3 15h1v1H3zM17 15h1v1h-1z"/>
+    </symbol>
+  </defs>
+</svg>
+<script type="module" src="/js/login.js"></script>
+</body>
+</html>

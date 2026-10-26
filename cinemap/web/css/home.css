@@ -1,0 +1,11 @@
+/* Project overview (placeholder until the signed-in surface is captured). */
+body{background:var(--cm-ground);color:var(--cm-ink)}
+#home{max-width:1100px;margin:0 auto;padding:40px clamp(24px,5vw,64px)}
+.home-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:32px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:550;font-size:20px;color:var(--cm-brand)}
+.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.card{display:grid;gap:8px;padding:16px;border-radius:var(--cm-r-xl);background:#fff;box-shadow:var(--cm-e1);text-decoration:none;color:inherit}
+.card strong{font-weight:550}
+.card small{color:var(--cm-sub)}
+.new{display:flex;align-items:center;justify-content:center;min-height:120px;border:1px dashed var(--cm-track);border-radius:var(--cm-r-xl);cursor:pointer;background:transparent;font-weight:500}
+.pill{height:36px;padding:0 16px;border-radius:999px;border:1px solid var(--cm-ring);background:#fff;font:inherit;cursor:pointer}

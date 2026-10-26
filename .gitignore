@@ -59,3 +59,6 @@ design/director-console-ux.html
 
 # 打包时取回来的 ffmpeg（tools/fetch-ffmpeg.mjs）。二进制不进仓库，校验和进（ffmpeg.lock.json）
 desktop/build/bin/*/
+
+# cinemap replica local state
+cinemap/data/

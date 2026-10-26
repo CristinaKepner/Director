@@ -1,0 +1,6 @@
+/* Workspace shell (placeholder until the signed-in surface is captured). */
+body{background:var(--cm-ground);color:var(--cm-ink)}
+#workspace{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px}
+#workspace h1{font-weight:500;font-size:22px;margin:0 0 8px}
+#workspace p{color:var(--cm-sub);margin:0}
+#workspace a{display:inline-block;margin-top:20px;padding:10px 18px;border-radius:999px;background:var(--cm-ink);color:#fff}
