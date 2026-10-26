@@ -215,3 +215,22 @@ test('harness: capabilities, actions with validation, undo, events and the agent
     await close();
   }
 });
+
+test('desktop session: the loopback token signs the window in without TapNow', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cinemap-test-'));
+  const app = createApp({ config: createConfig(), dataDir, desktopToken: 'tok_test' });
+  await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${app.server.address().port}`;
+  try {
+    const bad = await fetch(`${base}/desktop/session?token=nope`, { redirect: 'manual' });
+    assert.equal(bad.status, 403);
+    const ok = await fetch(`${base}/desktop/session?token=tok_test&next=%2F%23projects`, { redirect: 'manual' });
+    assert.equal(ok.status, 302);
+    assert.equal(ok.headers.get('location'), '/#projects');
+    const me = await (await fetch(`${base}/api/session`, { headers: { cookie: cookieOf(ok) } })).json();
+    assert.equal(me.signedIn, true);
+    assert.equal(me.id, 'u_desktop');
+  } finally {
+    await new Promise((r) => app.server.close(r));
+  }
+});

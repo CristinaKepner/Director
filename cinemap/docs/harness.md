@@ -86,6 +86,22 @@ node cinemap/bin/cinemap.mjs agent <projectId> "在路边放两盏路灯，黄�
 node cinemap/bin/cinemap.mjs context <projectId>
 ```
 
+## 桌面客户端
+
+`cinemap/desktop/` 用 Electron 把同一套服务端、harness 和 web 客户端包成 Cinemap.app（无签名 DMG，arm64 + x64）。
+
+- 应用自己启动后端：`server.mjs --port <空闲端口> --data <数据目录>`，用 Electron 自带的 Node 跑（`ELECTRON_RUN_AS_NODE`），
+  源码整体放在 `Contents/Resources/app-src/cinemap`（含 `vendor/three`，不含 `data/`、`tests/`）。
+- 登录：后端收到一次性口令（`CINEMAP_DESKTOP_TOKEN` 环境变量，不进命令行），窗口打开
+  `/desktop/session?token=…&next=/`，只接受回环地址，写入本机用户 `u_desktop` 的会话后跳转。桌面版不经过 TapNow。
+- 密钥：`~/Library/Application Support/Cinemap/keys/{mosshub,ark,aigw}.key`（0600），
+  `⌘,` 偏好设置里填写/清除，并可改 MossHub 地址、默认规划模型和数据目录；保存即重启后端。
+  开发者家目录里的 `~/.mosshub-key` / `~/.ark-key` 作为兜底也会被读取。
+- 数据：`…/Cinemap/data/`（projects.json、media/、assets/）；`backend.log` 是后端的 stdout/stderr。
+- 菜单：项目（首页 ⌘1、新建 ⌘N、全部项目 ⌘O、模板库、素材库、新手教程）走 `/#…` 深链接；
+  帮助里能打开本文档、数据目录、后端日志，或在浏览器里打开同一后端。
+- 构建：`cd cinemap/desktop && npm ci && npm run icon && npm run dist`；`npm start` 直接跑未打包版本。
+
 ## 素材：NVIDIA SimReady
 
 `huggingface.co/datasets/nvidia/simready-assets`：2,575 个 USD 资产，每个资产目录自带 CC-BY-4.0 许可，

@@ -1,0 +1,53 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>偏好设置</title>
+<style>
+  :root{color-scheme:light}
+  body{margin:0;padding:22px 24px;font:13px/1.6 -apple-system,"PingFang SC",system-ui,sans-serif;background:#f7f8f6;color:#0f0f10}
+  h1{font-size:15px;margin:0 0 4px;font-weight:600}
+  p.sub{margin:0 0 16px;color:rgba(0,0,0,.53);font-size:12px}
+  label{display:block;margin:14px 0 5px;color:rgba(0,0,0,.72);font-size:12px}
+  input,select{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid #e4e5e7;background:#fff;color:#0f0f10;font:12px ui-monospace,SFMono-Regular,monospace}
+  select{font-family:inherit}
+  .hint{color:rgba(0,0,0,.44);font-size:11px;margin-top:5px}
+  .row{display:flex;gap:10px;justify-content:flex-end;margin-top:22px}
+  .pick{display:flex;gap:8px}
+  button{padding:7px 16px;border-radius:999px;border:1px solid #e4e5e7;background:#fff;color:#0f0f10;font-size:12px;cursor:pointer}
+  button.primary{background:#0e3723;color:#fff;border-color:#0e3723;font-weight:600}
+  .ok{color:#3f7d58}.warn{color:#b04a31}
+</style></head><body>
+<h1>密钥与规划模型</h1>
+<p class="sub">密钥只保存在本机 <code id="dir"></code>，随后端进程启动，不进工程文件。</p>
+<label>MossHub 密钥 <span id="mossState"></span></label>
+<input id="mosshub" placeholder="sk-api-…（留空表示不改动）" autocomplete="off" spellcheck="false">
+<div class="hint">规划（Claude / GPT / DeepSeek / Grok）、出图（Seedream Pro、GPT Image、Moss Image）和出片（Seedance）都从这里走。</div>
+<label>MossHub 地址</label>
+<input id="mosshubBase" placeholder="留空使用 https://api.mosshub.cn/v1" autocomplete="off" spellcheck="false">
+<label>火山引擎 Ark 密钥 <span id="arkState"></span></label>
+<input id="ark" placeholder="ark-…（留空表示不改动）" autocomplete="off" spellcheck="false">
+<div class="hint">直连 Seedance 2.5 / 2.0 和 Seedream 5.0。</div>
+<label>AIGW 规划密钥（可选） <span id="llmState"></span></label>
+<input id="llm" placeholder="sk-…（没有 MossHub 时用它规划）" autocomplete="off" spellcheck="false">
+<label>默认规划模型</label>
+<select id="model"></select>
+<label>数据目录（项目、出片结果、导入的素材）</label>
+<div class="pick"><input id="dataDir" readonly><button id="pickDir" type="button">选择…</button></div>
+<div class="row">
+  <button id="clear">清除密钥</button>
+  <button id="cancel">取消</button>
+  <button id="save" class="primary">保存并重启后端</button>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  window.prefsApi.load().then((s) => {
+    $('dir').textContent = s.keysDir;
+    $('mossState').innerHTML = s.hasMosshub ? '<span class="ok">已配置 ' + s.mosshub + '</span>' : '<span class="warn">未配置</span>';
+    $('arkState').innerHTML = s.hasArk ? '<span class="ok">已配置 ' + s.ark + '</span>' : '<span class="warn">未配置</span>';
+    $('llmState').innerHTML = s.hasLlm ? '<span class="ok">已配置 ' + s.llm + '</span>' : '<span class="warn">未配置</span>';
+    $('mosshubBase').value = s.mosshubBase || '';
+    $('model').replaceChildren(new Option('默认（后端决定）', ''), ...s.models.map((m) => new Option(m, m, false, m === s.llmModel)));
+    $('dataDir').value = s.dataDir;
+  });
+  $('pickDir').onclick = async () => { const d = await window.prefsApi.pickDataDir(); if (d) $('dataDir').value = d; };
+  $('cancel').onclick = () => window.prefsApi.close();
+  $('save').onclick = () => { $('save').disabled = true; $('save').textContent = '重启后端…'; window.prefsApi.save({ mosshub: $('mosshub').value, mosshubBase: $('mosshubBase').value.trim(), ark: $('ark').value, llm: $('llm').value, llmModel: $('model').value, dataDir: $('dataDir').value }); };
+  $('clear').onclick = () => window.prefsApi.save({ clear: true, llmModel: '' });
+</script></body></html>

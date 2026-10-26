@@ -1,0 +1,46 @@
+{
+  "name": "cinemap-desktop",
+  "productName": "Cinemap",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Cinemap client replica as a macOS app: the same local server, harness and white-model editor in a native window.",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "icon": "node build/make-icon.mjs && sh build/make-icns.sh",
+    "pack": "electron-builder --mac --dir",
+    "dist": "electron-builder --mac",
+    "dist:arm64": "electron-builder --mac --arm64"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "ai.cinemap.replica",
+    "productName": "Cinemap",
+    "copyright": "Cinemap client replica",
+    "npmRebuild": false,
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.mjs", "preload.cjs", "prefs.html", "package.json"],
+    "extraResources": [
+      { "from": "..", "to": "app-src/cinemap", "filter": ["**/*", "!data/**", "!desktop/**", "!node_modules/**", "!tests/**"] }
+    ],
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "icon": "build/icon.icns",
+      "darkModeSupport": true,
+      "minimumSystemVersion": "11.0",
+      "identity": null,
+      "gatekeeperAssess": false,
+      "extendInfo": { "CFBundleName": "Cinemap", "CFBundleDisplayName": "Cinemap", "LSMinimumSystemVersion": "11.0" },
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }, { "target": "zip", "arch": ["arm64", "x64"] }]
+    },
+    "dmg": {
+      "title": "Cinemap ${version} ${arch}",
+      "backgroundColor": "#f7f8f6",
+      "contents": [{ "x": 150, "y": 190, "type": "file" }, { "x": 420, "y": 190, "type": "link", "path": "/Applications" }]
+    }
+  }
+}

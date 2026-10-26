@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.join(ROOT, 'web');
-const DATA = path.join(ROOT, 'data');
+const DATA = process.env.CINEMAP_DATA || path.join(ROOT, 'data');
 // Three.js (MIT) ships with the replica so it runs outside the Director checkout too
 const VENDOR_THREE = [path.join(ROOT, 'vendor', 'three'), path.join(ROOT, '..', 'web', 'vendor', 'three')].find((d) => fs.existsSync(path.join(d, 'three.module.js'))) || path.join(ROOT, 'vendor', 'three');
 import { TEMPLATES, coverSvg } from './templates.mjs';
@@ -241,7 +241,7 @@ export function llmFromEnv(opts = {}) {
   return servicesFromEnv(opts).then((s) => s.planner);
 }
 
-export function createApp({ config = createConfig(), dataDir = DATA, webDir = WEB, planner = null, generation = null, log = () => {} } = {}) {
+export function createApp({ config = createConfig(), dataDir = DATA, webDir = WEB, planner = null, generation = null, desktopToken = null, log = () => {} } = {}) {
   const sessions = new Map(); // sid -> user
   const pending = new Map(); // sso state -> { returnTo, mode, createdAt }
   const store = new ProjectStore(path.join(dataDir, 'projects.json'));
@@ -316,6 +316,13 @@ export function createApp({ config = createConfig(), dataDir = DATA, webDir = WE
     const method = req.method || 'GET';
     const session = sessionOf(req);
 
+    // ---------- Desktop shell: the app knows a token, exchanges it for a session (loopback only)
+    if (p === '/desktop/session' && desktopToken) {
+      const ok = url.searchParams.get('token') === desktopToken && /^(127\.0\.0\.1|::1|localhost)$/.test(req.socket.remoteAddress?.replace(/^::ffff:/, '') || '');
+      if (!ok) return json(res, 403, { error: 'forbidden' });
+      const user = { ...mockUser, id: 'u_desktop', name: '本机', email: 'local@cinemap.desktop', picture: null };
+      return redirect(res, safeReturnTo(url.searchParams.get('next') || '/'), { 'Set-Cookie': setSession(res, user) });
+    }
     // ---------- JSON API
     if (p === '/api/config') return json(res, 200, config);
     if (p === '/api/session') {
@@ -612,8 +619,9 @@ if (__main) await (async () => {
   const portIdx = args.indexOf('--port');
   const port = Number(portIdx >= 0 ? args[portIdx + 1] : process.env.PORT || 5180);
   const log = (m) => console.log(`[cinemap] ${m}`);
-  const { planner, generation } = await servicesFromEnv({ log });
-  const { server } = createApp({ planner, generation, log });
+  const dataDir = argOf('--data') ? path.resolve(argOf('--data')) : DATA;
+  const { planner, generation } = await servicesFromEnv({ log, mediaDir: path.join(dataDir, 'media') });
+  const { server } = createApp({ planner, generation, dataDir, desktopToken: argOf('--desktop-token') || process.env.CINEMAP_DESKTOP_TOKEN || null, log });
   server.listen(port, '127.0.0.1', () => {
     console.log(`cinemap replica listening on http://localhost:${port}/login`);
     console.log(planner ? `agent planner: ${planner.name} @ ${planner.baseUrl} default ${planner.model} (${planner.models.join(', ')})` : 'agent planner: rules (set MOSSHUB_API_KEY / AIGW_API_KEY or --mosshub-key-file / --llm-key-file for a model)');

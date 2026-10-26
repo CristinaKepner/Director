@@ -461,4 +461,5 @@ if (location.hash === '#templates') openAll('templates');
 else if (location.hash === '#projects') openAll('projects');
 else if (location.hash === '#assets') openAll('assets');
 else if (location.hash === '#tutorial') startCreate('tutorial', '');
+else if (location.hash === '#new') startCreate('blank', '');
 document.documentElement.dataset.homeReady = '';
