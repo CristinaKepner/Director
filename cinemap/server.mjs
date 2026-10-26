@@ -202,18 +202,19 @@ export async function servicesFromEnv({ log = () => {}, mediaDir = path.join(DAT
   const arkKey = readKey('ARK_API_KEY', '--ark-key-file');
   const adapters = [];
   if (mossKey) {
-    let chat = [], media = [];
+    let chat = [], list = [];
     try {
       const r = await fetch(`${mossBase.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${mossKey}` }, signal: AbortSignal.timeout(15000) });
-      const list = (await r.json()).data || [];
+      list = (await r.json()).data || [];
       chat = list.filter((m) => (m.protocols || []).includes('chat_completions') || (m.supported_endpoints || []).includes('/chat/completions')).map((m) => m.id);
-      media = list.filter((m) => !chat.includes(m.id)).map((m) => m.id);
-      log(`mosshub: chat ${chat.join(', ') || '-'} · media ${media.join(', ') || '-'}`);
+      log(`mosshub: chat ${chat.join(', ') || '-'} · media ${list.filter((m) => !chat.includes(m.id)).map((m) => m.id).join(', ') || '-'}`);
     } catch (err) {
       log(`mosshub: model discovery failed (${err.message}); using defaults`);
     }
-    if (chat.length) out.planner = createLlmPlanner({ apiKey: mossKey, baseUrl: mossBase, model: process.env.LLM_MODEL || argOf('--llm-model') || chat[0], models: chat, log });
-    adapters.push(createMosshubAdapter({ apiKey: mossKey, baseUrl: mossBase, mediaDir, log, available: media.length ? media : null, getJob: (id) => jobLookup(id) }));
+    // default planning model: the one the user asked for, else the first Claude, else the first chat model
+    const preferred = process.env.LLM_MODEL || argOf('--llm-model') || chat.find((m) => /^claude/.test(m)) || chat[0];
+    if (chat.length) out.planner = createLlmPlanner({ apiKey: mossKey, baseUrl: mossBase, model: preferred, models: chat, log });
+    adapters.push(createMosshubAdapter({ apiKey: mossKey, baseUrl: mossBase, mediaDir, log, catalog: list, getJob: (id) => jobLookup(id) }));
   }
   if (!out.planner && aigwKey) out.planner = createLlmPlanner({ apiKey: aigwKey, baseUrl: process.env.LLM_BASE_URL || argOf('--llm-base') || undefined, model: process.env.LLM_MODEL || argOf('--llm-model') || undefined, log });
   if (arkKey) adapters.push(createArkAdapter({ apiKey: arkKey, baseUrl: process.env.ARK_BASE_URL || argOf('--ark-base') || undefined, mediaDir, log, getJob: (id) => jobLookup(id) }));

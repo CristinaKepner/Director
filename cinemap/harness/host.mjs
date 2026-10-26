@@ -74,7 +74,11 @@ export function createHost({ store, planner = null, generation = null, mediaDir 
     }
     const wantConfirm = mode === 'manual' || (mode === 'collaborative' && !force) || (p.needsConfirm && !force);
     if (wantConfirm) {
-      rt.store.patch((s) => (s.agent.pendingPlan = { ...p, mode }));
+      // a new proposal supersedes an older one still waiting: only one plan can be confirmed
+      rt.store.patch((s) => {
+        if (s.agent.pendingPlan) s.agent.messages = s.agent.messages.map((m) => (m.pending ? { ...m, pending: false, cancelled: true } : m));
+        s.agent.pendingPlan = { ...p, mode };
+      });
       rt.say('plan', p.reply || '', { plan: { steps: p.steps, notes: p.notes, needsConfirm: p.needsConfirm, model: p.model }, pending: mode !== 'manual', manual: mode === 'manual', suggest: p.suggest });
       return { results: [], okCount: 0, failed: 0, pending: true };
     }

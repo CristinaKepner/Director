@@ -129,16 +129,21 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onS
       <div id="ex-jobs" class="jobs"></div>`;
     const sel = $('#ex-provider');
     let kind = 'image';
+    const bounds = () => {
+      const P = ready.find((p) => p.id === sel.value);
+      $('#ex-seconds-row').hidden = kind !== 'video';
+      if (P?.kind === 'video') {
+        $('#ex-seconds').min = P.min;
+        $('#ex-seconds').max = P.max;
+        $('#ex-seconds').value = Math.max(P.min, Math.min(P.max, +$('#ex-seconds').value || 5));
+        $('#ex-seconds-o').textContent = `${$('#ex-seconds').value} s`;
+      }
+    };
     const fill = () => {
       const list = ready.filter((p) => p.kind === kind);
       sel.replaceChildren(...list.map((p) => Object.assign(document.createElement('option'), { value: p.id, textContent: p.name })));
       if (!list.length) sel.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: t('No model configured', '没有配置模型') }));
-      $('#ex-seconds-row').hidden = kind !== 'video';
-      const P = list.find((p) => p.id === sel.value);
-      if (P) {
-        $('#ex-seconds').min = P.min;
-        $('#ex-seconds').max = P.max;
-      }
+      bounds();
     };
     $('#ex-kind').onclick = (e) => {
       const b = e.target.closest('[data-k]');
@@ -147,7 +152,7 @@ export function mountUI({ stage, state, t, say, onPlace, onRemove, onChange, onS
       for (const x of $('#ex-kind').children) x.classList.toggle('on', x === b);
       fill();
     };
-    sel.onchange = fill;
+    sel.onchange = bounds;
     fill();
     $('#ex-seconds').oninput = () => ($('#ex-seconds-o').textContent = `${$('#ex-seconds').value} s`);
     $('#ex-prompt').value = scenePrompt();

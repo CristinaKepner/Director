@@ -110,10 +110,19 @@ SimReady 没有场景模板，只有单体资产和物理变体（PhysX / MuJoCo
 
 | provider | 上游 | 种类 |
 |---|---|---|
-| `seedream-5` | 火山 Ark `doubao-seedream-5-0-260128` | 图（2560×1440） |
-| `seedance-2.5` / `seedance-2` | 火山 Ark `doubao-seedance-2-5-260628` / `2-0` | 视频 4–30 s / 4–12 s，720p |
-| `mosshub-seedream-pro` | MossHub `doubao-seedream-5-0-pro-260628` | 图（2K） |
-| `minimax-h3` / `minimax-h3-max` | MossHub hailuo `MiniMax-H3` / `-Max` | 视频 4–15 s，768P |
+| `seedream-5` | 火山 Ark `doubao-seedream-5-0-260128` | 图（2560×1440，i2i 带当前画面） |
+| `seedance-2.5` / `seedance-2` | 火山 Ark `doubao-seedance-2-5-260628` / `2-0` | 视频 4–30 s / 4–12 s，720p，i2v 首帧 |
+| `mosshub-seedance-2.5` | MossHub `/v1/videos`（文档格式：model / prompt / duration / resolution / ratio；首帧走原生 `content[]` + `ratio: adaptive`） | 视频 4–30 s，720p |
+| `mosshub-seedream-pro` | MossHub `/v1/images/generations` `doubao-seedream-5-0-pro-260628` | 图（2K，i2i 内联参考图） |
+| `gpt-image-2.5` | MossHub `/v1/images/edits`（multipart，带当前画面）/ `generations` | 图（1536×1024） |
+| `moss-image` | MossHub `/v1/images/generations` | 图（只认文字，画面会被忽略） |
+| `minimax-h3` / `minimax-h3-max` | MossHub hailuo | 视频 4–15 s，768P（当前 key 未授权） |
+
+MossHub 的 provider 表由启动时 `/v1/models` 的 `protocols` 决定：`chat_completions` 进规划器（当前 key：
+claude-fable-5-1、claude-opus-5-5、deepseek-v4.1-flash-1017、gpt-6-astra、gpt-6.1-sol、grok-4.7），
+`images_generations` / `images_edits` / `videos` 进出图出片；没在表里的模型按协议自动归类为 `mosshub:<id>`。
+规划器会按模型协商参数：GPT 系用 `max_completion_tokens` 且不收 temperature；网关只回「rejected」不报参数名时，
+逐个去掉 temperature → json_object → max_tokens 写法 → max_tokens，最多重试 6 次，学到的写法记在内存里。
 
 密钥只从文件或环境变量读，不进日志：
 

@@ -98,12 +98,12 @@ export function createLlmPlanner(opts = {}) {
   if (!models.includes(defaultModel)) models.unshift(defaultModel);
   const log = opts.log || (() => {});
   const quirks = new Map();
-  const quirkOf = (m) => quirks.get(m) || { jsonMode: true, maxTokensKey: 'max_tokens', fixedTemperature: false, noStream: false };
+  const quirkOf = (m) => quirks.get(m) || { jsonMode: true, maxTokensKey: /^(gpt-|o\d|grok)/.test(m) ? 'max_completion_tokens' : 'max_tokens', fixedTemperature: false, noStream: false, noMaxTokens: false };
   const body = (model, messages, stream) => {
     const q = quirkOf(model);
     const b = { model, messages };
     if (stream && !q.noStream) b.stream = true;
-    b[q.maxTokensKey] = opts.maxTokens || LLM_DEFAULTS.maxTokens;
+    if (!q.noMaxTokens) b[q.maxTokensKey] = opts.maxTokens || LLM_DEFAULTS.maxTokens;
     if (!q.fixedTemperature) b.temperature = opts.temperature ?? LLM_DEFAULTS.temperature;
     if (q.jsonMode) b.response_format = { type: 'json_object' };
     return b;
@@ -112,10 +112,23 @@ export function createLlmPlanner(opts = {}) {
   const adapt = (model, txt) => {
     const q = { ...quirkOf(model) };
     let changed = false;
-    if (/max_completion_tokens/.test(txt) && q.maxTokensKey !== 'max_completion_tokens') (q.maxTokensKey = 'max_completion_tokens'), (changed = true);
-    if (/temperature[^\n]*(not support|unsupported)/i.test(txt) && !q.fixedTemperature) (q.fixedTemperature = true), (changed = true);
+    const unsupported = /unsupported_parameter|unsupported parameter|not supported/i.test(txt);
+    if ((/max_completion_tokens/.test(txt) || (unsupported && /"?max_tokens"?/.test(txt))) && q.maxTokensKey !== 'max_completion_tokens') (q.maxTokensKey = 'max_completion_tokens'), (changed = true);
+    else if (unsupported && /max_completion_tokens/.test(txt) && q.maxTokensKey === 'max_completion_tokens' && !q.noMaxTokens) (q.noMaxTokens = true), (changed = true);
+    if (/temperature/i.test(txt) && (unsupported || /does not support/i.test(txt)) && !q.fixedTemperature) (q.fixedTemperature = true), (changed = true);
     if (/response_format|json_object/i.test(txt) && q.jsonMode) (q.jsonMode = false), (changed = true);
     if (/\bstream\b[^\n]*(not support|unsupported)/i.test(txt) && !q.noStream) (q.noStream = true), (changed = true);
+    // the gateway often says only "rejected": then drop one knob per retry, most likely first
+    if (!changed && (unsupported || /upstream_rejected|invalid_request/i.test(txt))) {
+      const stage = q.stage || 0;
+      if (stage === 0 && !q.fixedTemperature) q.fixedTemperature = true;
+      else if (stage <= 1 && q.jsonMode) q.jsonMode = false;
+      else if (stage <= 2 && q.maxTokensKey === 'max_tokens') q.maxTokensKey = 'max_completion_tokens';
+      else if (stage <= 3 && !q.noMaxTokens) q.noMaxTokens = true;
+      else return false;
+      q.stage = stage + 1;
+      changed = true;
+    }
     if (changed) {
       quirks.set(model, q);
       log(`llm ${model}: adapted → ${q.maxTokensKey}${q.fixedTemperature ? ' · default temperature' : ''}${q.jsonMode ? '' : ' · no json_object'}`);
@@ -140,7 +153,7 @@ export function createLlmPlanner(opts = {}) {
         const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { authorization: `Bearer ${opts.apiKey}`, 'content-type': 'application/json' }, body: JSON.stringify(body(model, messages, wantStream)), signal: ctl.signal });
         if (res.ok) return wantStream && /event-stream/i.test(res.headers.get('content-type') || '') ? readStream(res, onDelta) : readWhole(res);
         const txt = await res.text();
-        if (res.status === 400 && attempt < 4 && adapt(model, txt)) continue;
+        if ((res.status === 400 || res.status === 422) && attempt < 6 && adapt(model, txt)) continue;
         throw Object.assign(new Error(txt.slice(0, 300)), { code: `HTTP_${res.status}` });
       } catch (err) {
         if (err?.name === 'AbortError') throw Object.assign(new Error(`规划超时（${Math.round(timeoutMs / 1000)}s）`), { code: 'LLM_TIMEOUT' });

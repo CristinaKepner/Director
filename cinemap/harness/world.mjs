@@ -12,14 +12,11 @@ const WEATHERS = ['clear', 'cloudy', 'overcast', 'rain', 'storm', 'snow', 'fog']
 const BACKDROPS = ['auto', 'grass', 'forest', 'sand', 'clay', 'snow', 'water', 'city', 'warm', 'white', 'grey'];
 const uid = (p) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
+// Built-in provider table (Ark). Gateway providers are described by their adapter at runtime.
 export const PROVIDERS = {
   'seedream-5': { name: 'Seedream 5.0 (Ark)', kind: 'image', modes: ['t2i', 'i2i'] },
   'seedance-2.5': { name: 'Seedance 2.5 (Ark)', kind: 'video', modes: ['t2v', 'i2v'], min: 4, max: 30 },
   'seedance-2': { name: 'Seedance 2.0 (Ark)', kind: 'video', modes: ['t2v', 'i2v'], min: 4, max: 12 },
-  'mosshub-seedream-pro': { name: 'Seedream 5.0 Pro (MossHub)', kind: 'image', modes: ['t2i', 'i2i'] },
-  'mosshub-gemini-image': { name: 'Gemini 3 Pro Image (MossHub)', kind: 'image', modes: ['t2i', 'i2i'] },
-  'minimax-h3': { name: 'MiniMax H3 (MossHub)', kind: 'video', modes: ['t2v', 'i2v'], min: 4, max: 15 },
-  'minimax-h3-max': { name: 'MiniMax H3 Max (MossHub)', kind: 'video', modes: ['t2v', 'i2v'], min: 5, max: 15 },
 };
 
 export function createWorldRuntime({ project, assets = () => [], generation = null, mediaDir = null }) {
@@ -235,16 +232,25 @@ export function createWorldRuntime({ project, assets = () => [], generation = nu
   // ---- generation: slow, paid, async. submit returns a job id at once; the adapter pushes
   // progress into the job record; every change broadcasts a snapshot. The frame comes from the
   // editor as a data URL and is kept on disk so the record stays small.
-  const providerOf = (p) => PROVIDERS[p];
+  const providerOf = (p) => {
+    if (PROVIDERS[p]) return PROVIDERS[p];
+    const d = generation?.describe?.(p);
+    return d ? { name: d.name, kind: d.kind, modes: d.kind === 'image' ? ['t2i', 'i2i'] : ['t2v', 'i2v'], min: d.min, max: d.max } : null;
+  };
   const ready = (p) => !!generation?.supports?.(p);
+  const allProviders = () => {
+    const out = { ...PROVIDERS };
+    for (const id of Object.keys(generation?.models || {})) if (!out[id]) out[id] = providerOf(id);
+    return out;
+  };
   register('generation.submit', {
     doc: '出片：把当前画面（或纯文字）交给生成模型。provider 见 context.generation；image 出一张静帧，video 出一条 4–30 s 短片。付费操作，需要确认',
-    params: { provider: `string (${Object.keys(PROVIDERS).join('|')})`, prompt: 'string', mode: 't2i|i2i|t2v|i2v（默认按 provider 的种类，带画面就是 i2*）', seconds: 'number (video, 4–30)', aspect: '16:9|9:16|1:1', frame: 'string (data:image/png;base64 — 编辑器当前画面，可选)' },
+    params: { provider: `string (${Object.keys(allProviders()).join('|')})`, prompt: 'string', mode: 't2i|i2i|t2v|i2v（默认按 provider 的种类，带画面就是 i2*）', seconds: 'number (video, 4–30)', aspect: '16:9|9:16|1:1', frame: 'string (data:image/png;base64 — 编辑器当前画面，可选)' },
     required: ['provider', 'prompt'],
     undoable: false,
     allowedIn: ['EDIT'],
     label: (p) => `出片 ${p.provider}`,
-    validate: ({ provider, mode, seconds }) => (!providerOf(provider) ? { error: 'UNKNOWN_PROVIDER', hint: Object.keys(PROVIDERS).join(', ') } : !ready(provider) ? { error: 'PROVIDER_NOT_CONFIGURED', hint: `${PROVIDERS[provider].name} 没有配置密钥（--ark-key-file / --mosshub-key-file）` } : mode && !providerOf(provider).modes.includes(mode) ? { error: 'BAD_MODE', hint: providerOf(provider).modes.join('/') } : seconds && providerOf(provider).kind === 'video' && (seconds < providerOf(provider).min || seconds > providerOf(provider).max) ? { error: 'BAD_SECONDS', hint: `${providerOf(provider).min}–${providerOf(provider).max}` } : null),
+    validate: ({ provider, mode, seconds }) => (!providerOf(provider) ? { error: 'UNKNOWN_PROVIDER', hint: Object.keys(allProviders()).join(', ') } : !ready(provider) ? { error: 'PROVIDER_NOT_CONFIGURED', hint: `${providerOf(provider).name} 没有配置密钥（--ark-key-file / --mosshub-key-file）` } : mode && !providerOf(provider).modes.includes(mode) ? { error: 'BAD_MODE', hint: providerOf(provider).modes.join('/') } : seconds && providerOf(provider).kind === 'video' && (seconds < providerOf(provider).min || seconds > providerOf(provider).max) ? { error: 'BAD_SECONDS', hint: `${providerOf(provider).min}–${providerOf(provider).max}` } : null),
     handler({ provider, prompt, mode, seconds, aspect = '16:9', frame }, meta) {
       const P = providerOf(provider);
       const id = uid('job');
@@ -286,7 +292,7 @@ export function createWorldRuntime({ project, assets = () => [], generation = nu
   register('context.generation', {
     doc: '可用的生成模型（出图 / 出片）和最近的任务',
     undoable: false,
-    handler: () => ({ ok: true, providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p, ready: ready(id) })), jobs: D().jobs.slice(-10).map(({ id, provider, mode, status, progress, error, result, prompt }) => ({ id, provider, mode, status, progress, error, result: result ? { kind: result.kind, url: result.url } : null, prompt: prompt.slice(0, 80) })) }),
+    handler: () => ({ ok: true, providers: Object.entries(allProviders()).map(([id, p]) => ({ id, ...p, ready: ready(id) })), jobs: D().jobs.slice(-10).map(({ id, provider, mode, status, progress, error, result, prompt }) => ({ id, provider, mode, status, progress, error, result: result ? { kind: result.kind, url: result.url } : null, prompt: prompt.slice(0, 80) })) }),
   });
   const fsWrite = (name, buf) => {
     try {
@@ -350,7 +356,7 @@ export function createWorldRuntime({ project, assets = () => [], generation = nu
       state: d.state,
       undo: R.historyInfo(),
       assets: assets().map((a) => `asset:${a.id} (${a.name})`),
-      generation: Object.keys(PROVIDERS).filter(ready),
+      generation: Object.keys(allProviders()).filter(ready),
       jobs: D().jobs.filter((j) => ['queued', 'running'].includes(j.status)).length,
     };
   }
@@ -360,7 +366,7 @@ export function createWorldRuntime({ project, assets = () => [], generation = nu
   };
   const snapshot = () => {
     const d = D();
-    return { version: store.version, state: d.state, size: d.size, env: d.env, settings: d.settings, items: d.items, agent: d.agent, jobs: d.jobs.slice(-40), events: d.events.slice(-120), history: R.historyInfo(), generation: Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p, ready: ready(id) })) };
+    return { version: store.version, state: d.state, size: d.size, env: d.env, settings: d.settings, items: d.items, agent: d.agent, jobs: d.jobs.slice(-40), events: d.events.slice(-120), history: R.historyInfo(), generation: Object.entries(allProviders()).map(([id, p]) => ({ id, ...p, ready: ready(id) })) };
   };
   return { store, R, dispatch, capabilities: R.capabilities, say, summarize, persistable, snapshot, groundY: (x, z) => groundY(x, z, D().env) };
 }
